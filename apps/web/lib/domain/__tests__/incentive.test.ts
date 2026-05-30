@@ -10,17 +10,18 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock @solar/contracts so we can spy on getLogger's warn calls.
-// The actual implementations are preserved via importOriginal.
-vi.mock("@solar/contracts", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@solar/contracts")>();
+// Mock @solar/contracts/logger so we can spy on getLogger's warn calls.
+// (logger was split out of the main contracts index to keep node:async_hooks
+// out of client bundles.)
+vi.mock("@solar/contracts/logger", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@solar/contracts/logger")>();
   return {
     ...real,
     getLogger: vi.fn(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() })),
   };
 });
 
-import * as solarContracts from "@solar/contracts";
+import * as solarContracts from "@solar/contracts/logger";
 import { finalizeForContract } from "../incentive.js";
 
 // ---------------------------------------------------------------------------
