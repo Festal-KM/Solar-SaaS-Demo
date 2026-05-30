@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "paths": {
+      "@solar/db": ["./packages/db/src/index.ts"],
+      "@solar/db/*": ["./packages/db/src/*"],
+      "@solar/contracts": ["./packages/contracts/src/index.ts"],
+      "@solar/contracts/*": ["./packages/contracts/src/*"],
+      "@solar/auth": ["./packages/auth/src/index.ts"],
+      "@solar/auth/*": ["./packages/auth/src/*"],
+      "@solar/storage": ["./packages/storage/src/index.ts"],
+      "@solar/storage/*": ["./packages/storage/src/*"],
+      "@solar/email": ["./packages/email/src/index.ts"],
+      "@solar/email/*": ["./packages/email/src/*"],
+      "@solar/ui": ["./packages/ui/src/index.ts"],
+      "@solar/ui/*": ["./packages/ui/src/*"]
+    }
+  },
+  "exclude": ["node_modules", ".next", "dist", "build", "coverage"]
+}

@@ -1,0 +1,34 @@
+# Local PostgreSQL for Solar-SaaS development.
+#
+# Port 5434 (host) -> 5432 (container). 5432 and 5433 are already taken on the
+# dev host by another local Postgres install and the `a2p-pg` container
+# respectively. Do not touch a2p-pg from this stack.
+#
+# Bring up:   docker compose -f docker-compose.dev.yml up -d
+# Tear down:  docker compose -f docker-compose.dev.yml down
+# Reset data: docker compose -f docker-compose.dev.yml down -v   (drops volume!)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: solar-saas-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: solar
+      POSTGRES_PASSWORD: solar_dev_pw
+      POSTGRES_DB: solar_saas_dev
+      # Force UTC so behavior matches Railway production.
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata-solar:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U solar -d solar_saas_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata-solar:

@@ -1,0 +1,31 @@
+{
+  "name": "@solar/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "echo \"(@solar/worker) consumed via tsx — no emit step\"",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@sentry/node": "^8.45.0",
+    "@solar/contracts": "workspace:*",
+    "@solar/db": "workspace:*",
+    "@solar/email": "workspace:*",
+    "@solar/storage": "workspace:*",
+    "graphile-worker": "^0.16.6",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  }
+}

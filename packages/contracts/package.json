@@ -1,0 +1,28 @@
+{
+  "name": "@solar/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schemas/*": "./src/schemas/*.ts",
+    "./services/*": "./src/services/*.ts",
+    "./dto/*": "./src/dto/*.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test": "echo \"(@solar/contracts) pure-function tests live under apps/web vitest suite\""
+  },
+  "dependencies": {
+    "pino": "^9.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "pino-pretty": "^11.3.0",
+    "typescript": "^5.6.3"
+  }
+}

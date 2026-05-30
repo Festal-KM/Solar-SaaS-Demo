@@ -1,0 +1,38 @@
+# Railway deployment configuration for Solar SaaS.
+#
+# Two services share this monorepo:
+#   - web    : Next.js 15 (App Router) — HTTP server on port 3000
+#   - worker : graphile-worker daemon — no inbound port required
+#
+# Railway reads this file when the repo is connected as a monorepo source.
+# Each service should point to this file AND set its own "Service name" in the
+# Railway dashboard to match the [service.*] key below.
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install --frozen-lockfile && pnpm -w run build"
+
+# ---------------------------------------------------------------------------
+# Web service  (Railway service name: "web")
+# ---------------------------------------------------------------------------
+[deploy]
+# Run pending migrations before the new instance starts receiving traffic.
+# Set this as the "Release Command" in the Railway web service settings.
+# releaseCommand is not a top-level TOML key in Railway — configure it in
+# the dashboard or via the CLI:
+#   railway service web --release-command "pnpm db:migrate:deploy"
+startCommand = "pnpm --filter @solar/web start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# ---------------------------------------------------------------------------
+# Worker service  (Railway service name: "worker")
+# ---------------------------------------------------------------------------
+# In the Railway dashboard, create a second service from the same repo and
+# override the start command:
+#   pnpm --filter @solar/worker start
+#
+# There is no HTTP listener so no healthcheck path is needed.
+# Set WORKER_CONCURRENCY and WORKER_POLL_INTERVAL_MS via env vars.

@@ -1,0 +1,20 @@
+node_modules/
+.pnpm-store/
+.next/
+out/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+pnpm-lock.yaml
+.husky/_/
+
+# Design artifacts — hand-curated tables / mermaid / ASCII wireframes.
+# Prettier would reflow markdown tables and break visual alignment.
+docs/
+product-proposal.md
+CLAUDE.md
+.claude/
+

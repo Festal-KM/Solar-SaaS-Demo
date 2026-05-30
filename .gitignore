@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build outputs
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# test artifacts
+coverage/
+playwright-report/
+playwright/.cache/
+test-results/
+
+# editor / OS
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Next.js
+.next/
+next-env.d.ts
+
+# misc
+*.local
+
+# preservation backups (旧実装の保全用 .bak。git が履歴を保持するため公開しない)
+*.bak

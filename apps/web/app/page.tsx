@@ -1,0 +1,21 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+
+export default async function HomePage() {
+  const session = await auth();
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const { roles, isSaasAdmin } = session.user;
+
+  if (isSaasAdmin) {
+    redirect("/saas-admin-dashboard");
+  }
+
+  if (roles.some((r) => r === "DEALER_ADMIN" || r === "DEALER_STAFF")) {
+    redirect("/d-dashboard");
+  }
+
+  redirect("/dashboard");
+}

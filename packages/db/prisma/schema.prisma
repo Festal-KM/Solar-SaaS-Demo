@@ -1,0 +1,1547 @@
+// Solar-SaaS — initial schema (auth / tenant / role / RLS-target tables)
+//
+// Source of truth: docs/05-program-design.md §3.2 (認証・テナント) and §3.7 (AuditLog).
+// Domain tables (master / event / customer / deal / monthly etc.) land in SP-02..06.
+// RLS DDL (docs/05 §3.9) is added in T-01-04 as a separate migration.
+//
+// Conventions (docs/05 §3.1):
+//   - PK: `id String @id @default(cuid())`. AuditLog uses BigInt for monotonic ordering.
+//   - Timestamps: every mutable row has `createdAt` / `updatedAt`.
+//   - Tenant key: `wholesalerId` for wholesaler-internal data, `relationshipId` for
+//     cross-tenant transactions, `dealerId` for dealer-internal data.
+//   - Money: `Decimal(14,2)`. Percentage: `Decimal(5,2)`. Float is forbidden.
+//   - Status: every state column is a Prisma `enum`.
+//   - Soft delete: master tables use `isActive`. Transactions are never physically deleted.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_DIRECT")
+}
+
+// ---------------------------------------------------------------------------
+// Enums — auth / tenant
+// ---------------------------------------------------------------------------
+
+enum TenantType {
+  WHOLESALER
+  DEALER
+}
+
+enum TenantPlan {
+  PILOT
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum PiiMaskingMode {
+  // MASKED  — DEALER メンバ向け既定（電話下 4 桁／市区町村まで／姓のみ）
+  // FULL    — WHOLESALER 管理者向け既定（マスク無し）
+  // PARTIAL — 電話下 4 桁可視 + 住所と氏名はマスクの中間モード
+  MASKED
+  FULL
+  PARTIAL
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum AppRole {
+  SAAS_ADMIN
+  WHOLESALER_ADMIN
+  WHOLESALER_EVENT_TEAM
+  WHOLESALER_CALL_TEAM
+  WHOLESALER_DIRECT_SALES
+  WHOLESALER_FIELD_STAFF
+  DEALER_ADMIN
+  DEALER_STAFF
+}
+
+enum RelationshipStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum DealerScope {
+  // APPOINTMENT_ONLY     — アポ取りまで
+  // FIRST_VISIT          — 初訪まで
+  // FULL_CLOSING         — 契約まで一気通貫
+  APPOINTMENT_ONLY
+  FIRST_VISIT
+  FULL_CLOSING
+}
+
+// Full AuditAction set per docs/05 §3.7. SP-01 bootstrapped the minimal subset;
+// T-06-01 completes the enum so MonthlyReport / monthly-close actions are typeable.
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  PUBLISH
+  UNPUBLISH
+  CANCEL
+  FINALIZE
+  UNLOCK
+  MANUAL_ADJUST
+  REVEAL_PII
+  ROLE_CHANGE
+  RELATION_SUSPEND
+  RELATION_RESUME
+}
+
+// ---------------------------------------------------------------------------
+// Models — auth / tenant
+// ---------------------------------------------------------------------------
+
+model Tenant {
+  id        String       @id @default(cuid())
+  type      TenantType
+  name      String
+  plan      TenantPlan? // dealer is null
+  status    TenantStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  users             User[]
+  wholesalerSetting WholesalerSettings?
+  asWholesaler      Relationship[]      @relation("Wholesaler")
+  asDealer          Relationship[]      @relation("Dealer")
+  inviteCodes       InviteCode[]
+  planHistory       TenantPlanHistory[]
+
+  @@index([type, status])
+}
+
+// Append-only audit of every Tenant.plan change. Visible only to SAAS_ADMIN
+// — twin-keyed by `tenantId` for retrieval and by `createdAt` for sort.
+// docs/02 §F-005 / docs/05 §3.2.
+//
+// `planBefore` may be null when a tenant is first transitioned out of a null
+// plan state (legacy DEALER tenants, or a wholesaler whose plan was unset).
+model TenantPlanHistory {
+  id            String      @id @default(cuid())
+  tenantId      String
+  planBefore    TenantPlan?
+  planAfter     TenantPlan
+  effectiveFrom DateTime
+  changedBy     String
+  note          String?
+  createdAt     DateTime    @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+model WholesalerSettings {
+  wholesalerId         String         @id
+  cancelDeadlineDays   Int            @default(8) // F-015
+  fiscalYearStartMonth Int            @default(4) // F-016 (1..12)
+  piiMaskingMode       PiiMaskingMode @default(MASKED) // OQ-2 default
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  // App layer enforces that wholesalerId references a WHOLESALER tenant
+  // (CHECK constraint not expressible in Prisma DSL — see docs/05 §3.9).
+  tenant Tenant @relation(fields: [wholesalerId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                String     @id @default(cuid())
+  tenantId          String
+  email             String     @unique
+  passwordHash      String? // null while INVITED
+  name              String
+  status            UserStatus @default(INVITED)
+  twoFactorRequired Boolean    @default(false)
+  sessionVersion    Int        @default(0) // bump to force logout
+  lastLoginAt       DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roles               UserRole[]
+  totpSecret          TotpSecret?
+  backupCodes         BackupCode[]
+  loginAttempts       LoginAttempt[]
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  notifications       Notification[]
+  notificationPrefs   NotificationPreference[]
+
+  @@index([tenantId, status])
+  @@index([email])
+}
+
+model UserRole {
+  userId     String
+  role       AppRole
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, role])
+  @@index([role])
+}
+
+model Relationship {
+  id           String             @id @default(cuid())
+  wholesalerId String
+  dealerId     String
+  status       RelationshipStatus @default(ACTIVE)
+  defaultScope DealerScope        @default(FULL_CLOSING)
+  note         String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  wholesaler                 Tenant                     @relation("Wholesaler", fields: [wholesalerId], references: [id])
+  dealer                     Tenant                     @relation("Dealer", fields: [dealerId], references: [id])
+  incentiveRates             IncentiveRate[]
+  eventCandidateVisibilities EventCandidateVisibility[]
+  dealerPreferences          DealerPreference[]
+  eventDealers               EventDealer[]
+  preCallNotifications       PreCallNotification[]
+  incentives                 Incentive[]
+  monthlyReports             MonthlyReport[]
+  commissionRate             DealerCommissionRate?
+
+  @@unique([wholesalerId, dealerId])
+  @@index([wholesalerId, status])
+  @@index([dealerId, status])
+}
+
+model InviteCode {
+  id           String    @id @default(cuid())
+  wholesalerId String
+  codeHash     String    @unique // 平文は発行直後に破棄
+  expiresAt    DateTime
+  maxUses      Int       @default(1)
+  usedCount    Int       @default(0)
+  createdBy    String
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  wholesaler Tenant @relation(fields: [wholesalerId], references: [id])
+
+  @@index([wholesalerId, expiresAt])
+}
+
+model UserInvitation {
+  id         String    @id @default(cuid())
+  tenantId   String
+  email      String
+  role       AppRole
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  invitedBy  String
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId, email])
+}
+
+// Password reset tokens (F-003 / docs/05 §6.10).
+//
+// Email-based password reset. The plaintext token (32 random bytes hex) is
+// embedded in the reset URL; only the argon2id hash is persisted. A token is
+// valid for 30 minutes and is single-use — `usedAt` is stamped on successful
+// reset and the row stays around for the AuditLog cross-reference.
+//
+// RLS: rows are scoped via the related `User.tenantId`. The auth layer always
+// runs under `SYSTEM_TENANT_CONTEXT` (isSaasAdmin=true) so the policy passes.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model TotpSecret {
+  userId      String    @id
+  secretEnc   String // symmetric encrypted with env key
+  activatedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String // argon2id
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  userId    String?
+  email     String
+  ip        String
+  success   Boolean
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  // F-001 lock window probe (5 failures within 15 minutes per email).
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+}
+
+// Auth.js v5 session helper (JWT verification accelerator + forced logout).
+model Session {
+  id             String   @id @default(cuid())
+  userId         String
+  sessionToken   String   @unique
+  sessionVersion Int
+  expiresAt      DateTime
+  lastSeenAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// AuditLog — docs/05 §3.7 (extended in SP-07 to cover all AuditAction values)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id          BigInt      @id @default(autoincrement())
+  actorUserId String?
+  tenantId    String
+  targetType  String
+  targetId    String
+  action      AuditAction
+  before      Json?
+  after       Json?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([targetType, targetId])
+  @@index([actorUserId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Enums — masters (SP-02 / docs/05 §3.3)
+// ---------------------------------------------------------------------------
+
+enum VenueContractType {
+  // FIXED       — 固定費型（月額・回数固定で支払）
+  // PERFORMANCE — 成果報酬型（契約獲得数や粗利の % で支払）
+  // OTHER       — その他（個別契約）
+  FIXED
+  PERFORMANCE
+  OTHER
+}
+
+// ラインイベントの契約ステータス（確認中 / 確定 / 中止）。
+enum LineEventStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+// ラインイベントのアサインステータス（確定 / 調整中）。
+enum LineAssignStatus {
+  CONFIRMED
+  ADJUSTING
+}
+
+enum ProductCategory {
+  PANEL
+  BATTERY
+  POWER_CONDITIONER
+  MOUNT
+  OTHER_PART
+  SET
+}
+
+enum IncentiveTargetType {
+  // PROJECT_PROFIT   — 案件粗利（顧客契約全体の粗利）に対する率
+  // WHOLESALE_PROFIT — 卸粗利（卸→二次店マージン）に対する率
+  // MANUAL           — 手動設定（金額直指定）
+  PROJECT_PROFIT
+  WHOLESALE_PROFIT
+  MANUAL
+}
+
+// ---------------------------------------------------------------------------
+// Models — masters (SP-02 / docs/05 §3.3)
+//
+// All five tables are wholesaler-scoped (directly via `wholesalerId` or
+// transitively via Product/Relationship). RLS policies live in the
+// `*_masters` migration and enforce `wholesalerId = current_wholesaler_id`
+// (plus `is_saas_admin` bypass and a relationship-membership branch for
+// IncentiveRate). Postgres CHECK constraints on `effectiveFrom < effectiveTo`
+// are also added there (Prisma DSL does not express CHECK).
+// ---------------------------------------------------------------------------
+
+model VenueProvider {
+  id              String             @id @default(cuid())
+  wholesalerId    String
+  name            String
+  contactName     String?
+  phone           String?
+  email           String?
+  postalCode      String?
+  address         String?
+  area            String?
+  contractType    VenueContractType?
+  // FIXED 契約の月額／回数費用（円）
+  fixedFee        Decimal?           @db.Decimal(14, 2)
+  // PERFORMANCE 契約の成果報酬率（% 0..100）
+  performanceRate Decimal?           @db.Decimal(5, 2)
+  note            String?
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  venueNegotiations VenueNegotiation[]
+
+  @@index([wholesalerId, isActive])
+}
+
+// エリアマスタ — イベントの開催エリアを卸業者ごとに管理する。
+model Area {
+  id           String   @id @default(cuid())
+  wholesalerId String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([wholesalerId, isActive])
+}
+
+// 店舗マスタ — イベント開催店舗を卸業者ごとに管理する。
+model Store {
+  id           String   @id @default(cuid())
+  wholesalerId String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([wholesalerId, isActive])
+}
+
+// ラインイベント — 懇意の場所提供元と月単位で複数開催日を契約するイベント。
+// 単発イベント（EventCandidate, 1日1件）と異なり、scheduledDates に複数の
+// 開催日（YYYY-MM-DD 文字列の配列）を保持する。
+model LineEvent {
+  id              String             @id @default(cuid())
+  wholesalerId    String
+  venueProviderId String?
+  name            String
+  // 'YYYY-MM' — 対象月。単発の EventCandidate.targetMonth と同じ運用。
+  targetMonth     String
+  area            String?
+  address         String?
+  // ISO date strings (YYYY-MM-DD) の配列。月内の開催日を保持する。
+  scheduledDates  Json
+  contractType    VenueContractType?
+  // FIXED 契約の日当たり報酬額（円）。
+  fixedFee        Decimal?           @db.Decimal(14, 2)
+  // PERFORMANCE 契約の成果報酬率（% 0..100）。
+  performanceRate Decimal?           @db.Decimal(5, 2)
+  contractNote    String?
+  status          LineEventStatus    @default(DRAFT)
+  // アサイン情報。assignMode は EventMode を再利用（SELF/DEALER/JOINT）。
+  // assignStaffIds は User.id 配列、assignDealerIds は Relationship.id 配列を
+  // JSON で保持する。
+  assignMode      EventMode?
+  assignStatus    LineAssignStatus?
+  assignStaffIds  Json?
+  assignDealerIds Json?
+  assignNote      String?
+  createdBy       String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([wholesalerId, targetMonth])
+  @@index([wholesalerId, status])
+}
+
+// 二次店レーン希望 — 二次店が月単位で、卸業者の作成したレーン(LineEvent)から
+// 参加希望を優先順位付きで提出する（F-060）。単発の DealerPreference が
+// EventCandidate に紐づくのに対し、こちらは既存レーンを優先順位で選ぶ。
+model LanePreference {
+  id             String   @id @default(cuid())
+  wholesalerId   String
+  relationshipId String
+  // 'YYYY-MM' — 対象月。
+  targetMonth    String
+  comment        String?
+  submittedAt    DateTime @default(now())
+  submittedBy    String
+
+  items LanePreferenceItem[]
+
+  // 同一二次店 × 同一月の重複提出は不可（更新扱い）。
+  @@unique([relationshipId, targetMonth])
+  @@index([wholesalerId, targetMonth])
+}
+
+// レーン希望の各選択（優先順位付き）。priority=1 が第一希望。
+model LanePreferenceItem {
+  id               String @id @default(cuid())
+  lanePreferenceId String
+  lineEventId      String
+  priority         Int
+
+  lanePreference LanePreference @relation(fields: [lanePreferenceId], references: [id], onDelete: Cascade)
+
+  @@index([lanePreferenceId])
+}
+
+model Product {
+  id            String          @id @default(cuid())
+  wholesalerId  String
+  category      ProductCategory
+  maker         String
+  name          String
+  modelNo       String?
+  // 容量（kW など。unit 列に単位を保持）
+  capacity      Decimal?        @db.Decimal(10, 2)
+  unit          String
+  // 卸の仕入値（二次店には絶対に開示しない／docs/03 §4.3）
+  purchasePrice Decimal         @db.Decimal(14, 2)
+  // 二次店向け卸値
+  dealerPrice   Decimal         @db.Decimal(14, 2)
+  // エンドユーザー向け参考売価
+  listPrice     Decimal         @db.Decimal(14, 2)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  isActive      Boolean         @default(true)
+  note          String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  createdBy     String
+
+  priceHistory ProductPriceHistory[]
+
+  @@index([wholesalerId, category, isActive])
+  @@index([wholesalerId, effectiveFrom, effectiveTo])
+}
+
+model ProductPriceHistory {
+  id        String   @id @default(cuid())
+  productId String
+  before    Json
+  after     Json
+  // User.id — append-only audit of who initiated the price change
+  changedBy String
+  changedAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, changedAt])
+}
+
+model Installer {
+  id           String   @id @default(cuid())
+  wholesalerId String
+  name         String
+  phone        String?
+  email        String?
+  contactName  String?
+  area         String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  constructions Construction[]
+
+  @@index([wholesalerId, isActive])
+}
+
+model IncentiveRate {
+  id             String              @id @default(cuid())
+  relationshipId String
+  targetType     IncentiveTargetType
+  // % (0..100)
+  rate           Decimal             @db.Decimal(5, 2)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  note           String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  createdBy      String
+
+  relationship Relationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+
+  @@index([relationshipId, effectiveFrom, effectiveTo])
+}
+
+// 手数料設定 — 二次店ごとに「トスアップ率（紹介のみ）」と「クロージング率
+// （契約完了まで）」の 2 種を保持する。`IncentiveRate` は粗利ベースの異なる概念
+// なので新規モデルで分離。1 つの relationship につき 1 件（@unique）。
+model DealerCommissionRate {
+  id              String                       @id @default(cuid())
+  wholesalerId    String
+  relationshipId  String                       @unique
+  // % (0..100)
+  tossUpRate      Decimal                      @db.Decimal(5, 2)
+  closingRate     Decimal                      @db.Decimal(5, 2)
+  applyFrom       DateTime
+  applyTo         DateTime?
+  updatedByUserId String
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  relationship    Relationship                 @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  changes         DealerCommissionRateChange[]
+
+  @@index([wholesalerId])
+}
+
+// 手数料設定の変更履歴。保存時に差分サマリを 1 行追記する。
+model DealerCommissionRateChange {
+  id              String   @id @default(cuid())
+  rateId          String
+  changedByUserId String
+  summary         String
+  createdAt       DateTime @default(now())
+
+  rate DealerCommissionRate @relation(fields: [rateId], references: [id], onDelete: Cascade)
+
+  @@index([rateId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Enums — event flow (SP-03 / docs/05 §3.4)
+// ---------------------------------------------------------------------------
+
+// VenueNegotiation lifecycle. Allowed transitions are enforced at the service
+// layer (T-03-02). See docs/05 §3.4 for the canonical state machine.
+enum VenueNegotiationStatus {
+  NOT_CONTACTED
+  CONTACTING
+  CONDITION_REVIEW
+  FEASIBLE
+  INFEASIBLE
+  FIXED
+  CANCELLED
+}
+
+// EventCandidate publication lifecycle. DRAFT → OPEN (受付中) → CLOSED (締切) →
+// DECIDED (開催体制決定) or CANCELLED (中止).
+enum EventCandidateStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  DECIDED
+  CANCELLED
+}
+
+// Event hosting mode chosen at decision time.
+//   SELF      — 自社のみ開催
+//   DEALER    — 二次店単独開催
+//   JOINT     — 共同開催
+//   CANCELLED — 中止（イベント候補のキャンセル後に Event 自体は作らないが、
+//                変更履歴用に保持されるケースがある）
+enum EventMode {
+  SELF
+  DEALER
+  JOINT
+  CANCELLED
+}
+
+enum EventStatus {
+  PLANNED
+  ONGOING
+  CLOSED
+  CANCELLED
+}
+
+// Shift role for EventShift (T-03-10).
+enum ShiftRole {
+  LEAD
+  CATCH
+  RECEPTION
+  PITCH
+  OTHER
+}
+
+enum ShiftStatus {
+  ASSIGNED
+  CHECKED_IN
+  CHECKED_OUT
+  NO_SHOW
+}
+
+// ---------------------------------------------------------------------------
+// Models — event flow (SP-03 / docs/05 §3.4)
+//
+// Tenant scoping (RLS migration mirrors these):
+//   - VenueNegotiation / EventCandidate / Event   → wholesalerId
+//   - EventCandidateVisibility / DealerPreference
+//     / EventDealer                                → relationshipId
+//   - EventShift / EventChange                     → parent Event.wholesalerId
+//                                                    (correlated EXISTS)
+//
+// docs/05 §3.4 also defines EventReport (event reporting) and Appointment /
+// Customer.sourceEvent (顧客起点). Those models land in SP-04 / SP-05 so the
+// `Event` back-relations for them are deliberately omitted here and will be
+// added in the matching migration.
+// ---------------------------------------------------------------------------
+
+model VenueNegotiation {
+  id              String                 @id @default(cuid())
+  wholesalerId    String
+  venueProviderId String
+  // ISO date strings (yyyy-mm-dd) for candidate dates the venue offered.
+  candidateDates  Json
+  decidedDate     DateTime?
+  contractType    VenueContractType?
+  fixedFee        Decimal?               @db.Decimal(14, 2)
+  performanceRate Decimal?               @db.Decimal(5, 2)
+  conditionNote   String?
+  status          VenueNegotiationStatus @default(NOT_CONTACTED)
+  nextAction      String?
+  assigneeId      String?
+  note            String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  venueProvider VenueProvider @relation(fields: [venueProviderId], references: [id])
+
+  @@index([wholesalerId, status])
+  @@index([wholesalerId, venueProviderId])
+}
+
+model EventCandidate {
+  id                 String               @id @default(cuid())
+  wholesalerId       String
+  venueProviderId    String?
+  venueNegotiationId String?
+  // 'YYYY-MM' — kept as TEXT to keep the unique-month groupby trivial.
+  targetMonth        String
+  scheduledDate      DateTime
+  storeName          String
+  address            String?
+  area               String?
+  // 二次店からの希望提出締切。アプリ層で「期限後の更新」を 409 にする。
+  deadlineAt         DateTime
+  contractType       VenueContractType?
+  fixedFee           Decimal?             @db.Decimal(14, 2)
+  performanceRate    Decimal?             @db.Decimal(5, 2)
+  // 契約条件のメモ（固定費/成果報酬それぞれの補足）。
+  contractNote       String?
+  // 卸業者内部メモ。二次店向け DTO では絶対に返さない（docs/05 §4.5）。
+  internalNote       String?
+  status             EventCandidateStatus @default(DRAFT)
+  publishedAt        DateTime?
+  createdBy          String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  visibilities EventCandidateVisibility[]
+  preferences  DealerPreference[]
+  event        Event?
+
+  @@index([wholesalerId, targetMonth, status])
+  @@index([wholesalerId, scheduledDate])
+}
+
+model EventCandidateVisibility {
+  eventCandidateId String
+  relationshipId   String
+  isVisible        Boolean   @default(true)
+  notifiedAt       DateTime?
+
+  eventCandidate EventCandidate @relation(fields: [eventCandidateId], references: [id], onDelete: Cascade)
+  relationship   Relationship   @relation(fields: [relationshipId], references: [id])
+
+  @@id([eventCandidateId, relationshipId])
+  @@index([relationshipId, isVisible])
+}
+
+model DealerPreference {
+  id               String   @id @default(cuid())
+  eventCandidateId String
+  relationshipId   String
+  targetMonth      String
+  priority         Int?
+  // ISO date string array of dates the dealer can attend.
+  availableDates   Json?
+  availablePeople  Int?
+  comment          String?
+  submittedAt      DateTime @default(now())
+  submittedBy      String
+
+  eventCandidate EventCandidate @relation(fields: [eventCandidateId], references: [id])
+  relationship   Relationship   @relation(fields: [relationshipId], references: [id])
+
+  // F-021: 同一二次店からの重複提出は不可（更新扱い）。同じ店舗に複数の二次店が
+  // 応募することは許可されるため、(eventCandidateId, relationshipId) UNIQUE のみ。
+  @@unique([eventCandidateId, relationshipId])
+  @@index([relationshipId, targetMonth])
+}
+
+model Event {
+  id               String      @id @default(cuid())
+  wholesalerId     String
+  eventCandidateId String      @unique
+  mode             EventMode
+  requiredPeople   Int?
+  decidedBy        String
+  decidedAt        DateTime    @default(now())
+  status           EventStatus @default(PLANNED)
+  note             String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  eventCandidate EventCandidate @relation(fields: [eventCandidateId], references: [id])
+  dealers        EventDealer[]
+  shifts         EventShift[]
+  reports        EventReport[]
+  changes        EventChange[]
+  appointments   Appointment[]
+  customers      Customer[]
+
+  @@index([wholesalerId, status])
+}
+
+model EventDealer {
+  eventId        String
+  relationshipId String
+  // null のときは Relationship.defaultScope を採用。
+  scopeOverride  DealerScope?
+  assignedBy     String
+  assignedAt     DateTime     @default(now())
+
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  relationship Relationship @relation(fields: [relationshipId], references: [id])
+
+  @@id([eventId, relationshipId])
+  @@index([relationshipId])
+}
+
+model EventShift {
+  id           String      @id @default(cuid())
+  eventId      String
+  userId       String
+  role         ShiftRole
+  startPlanned DateTime
+  endPlanned   DateTime
+  startActual  DateTime?
+  endActual    DateTime?
+  status       ShiftStatus @default(ASSIGNED)
+  note         String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // F-025: 同一ユーザの同時刻開始シフトは禁止。アプリ層が「終了時刻」も含めた
+  // 区間重複を事前チェックし、DB は最終ガードとして開始時刻の UNIQUE で抑える。
+  @@unique([userId, startPlanned])
+  @@index([eventId])
+  @@index([userId, startPlanned, endPlanned])
+}
+
+model EventChange {
+  id        String   @id @default(cuid())
+  eventId   String
+  before    Json
+  after     Json
+  changedBy String
+  changedAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, changedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Enums — execution: event report / customer / appointment / pre-call (SP-04)
+// ---------------------------------------------------------------------------
+
+enum EventReportType {
+  START
+  END
+  RESULT
+}
+
+enum CustomerStatus {
+  NEW
+  PRE_CALL_WAIT
+  PRE_CALL_DONE
+  VISIT_PLANNED
+  IN_NEGOTIATION
+  CONTRACTED
+  LOST
+  IN_CONSTRUCTION
+  COMPLETED
+}
+
+enum AcquisitionChannel {
+  EVENT
+  WALK_IN
+  TELE
+  REFERRAL
+  OTHER
+}
+
+enum AppointmentStatus {
+  UNCONFIRMED
+  PRE_CALL_DONE
+  VISITED
+  ABSENT
+  CANCELLED
+  RESCHEDULED
+}
+
+enum PreCallResult {
+  APPROVED
+  ABSENT
+  CALLBACK
+  CANCELLED
+  RESCHEDULED
+}
+
+enum PreCallNotificationStatus {
+  PENDING
+  SENT
+  ACKNOWLEDGED
+}
+
+// ---------------------------------------------------------------------------
+// Models — execution: event report / customer / appointment / pre-call (SP-04)
+// docs/05 §3.5
+// ---------------------------------------------------------------------------
+
+model EventReport {
+  id              String          @id @default(cuid())
+  eventId         String
+  type            EventReportType
+  reporterUserId  String
+  reporterOrgType TenantType
+  payload         Json
+  createdAt       DateTime        @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, type])
+}
+
+model Customer {
+  id                         String             @id @default(cuid())
+  wholesalerId               String
+  ownerRelationshipId        String?
+  name                       String
+  kana                       String?
+  phone                      String
+  email                      String?
+  postalCode                 String?
+  address                    String?
+  area                       String? // 顧客のエリア（エリアマスタ名を保持。未設定時は住所から導出表示）
+  housingType                String?
+  pvInstalled                Boolean?
+  batteryInstalled           Boolean?
+  electricBill               String?
+  household                  String?
+  channel                    AcquisitionChannel
+  sourceEventId              String?
+  registeredByUserId         String
+  registeredByOrgType        TenantType
+  registeredByRelationshipId String?
+  status                     CustomerStatus     @default(NEW)
+  note                       String?
+  // 顧客詳細で手動管理する 3 ステータス + 各詳細項目（自動導出ではなく手動値）。
+  contractStatus             String             @default("negotiating")
+  contractPlan               String?
+  contractExpectedDate       DateTime?
+  constructionStatus         String             @default("not_started")
+  constructionPlannedDate    DateTime?
+  constructionCompletedDate  DateTime?
+  subsidyStatus              String             @default("none")
+  subsidyType                String?
+  subsidySubmittedDate       DateTime?
+  subsidyGrantedDate         DateTime?
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+
+  appointments Appointment[]
+  deals        Deal[]
+  contracts    Contract[]
+  sourceEvent  Event?        @relation(fields: [sourceEventId], references: [id])
+  activities   CustomerActivity[]
+  tasks        CustomerTask[]
+  files        CustomerFile[]
+
+  @@index([wholesalerId, phone])
+  @@index([wholesalerId, status, createdAt])
+  @@index([ownerRelationshipId])
+}
+
+// 商談履歴（手入力のアクティビティログ）。顧客詳細の「新規記録」で作成。
+// テナント分離は Customer.wholesalerId 経由の相関 EXISTS（RLS はマイグレーション参照）。
+model CustomerActivity {
+  id              String   @id @default(cuid())
+  customerId      String
+  occurredAt      DateTime
+  category        String
+  detail          String
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  customer Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tasks    CustomerTask[]
+  files    CustomerFile[]
+
+  @@index([customerId, occurredAt])
+}
+
+// 発生タスク（商談履歴に紐づく ToDo）。タスク一覧タイルにも表示。
+model CustomerTask {
+  id              String    @id @default(cuid())
+  customerId      String
+  activityId      String?
+  content         String
+  dueDate         DateTime?
+  assigneeUserId  String?
+  done            Boolean   @default(false)
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  customer Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  activity CustomerActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, dueDate])
+  @@index([activityId])
+}
+
+// 関連ファイル（R2 にアップロードした添付）。fileKey は R2 オブジェクトキー。
+model CustomerFile {
+  id               String   @id @default(cuid())
+  customerId       String
+  activityId       String?
+  fileKey          String
+  fileName         String
+  contentType      String?
+  size             Int?
+  uploadedByUserId String
+  createdAt        DateTime @default(now())
+
+  customer Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  activity CustomerActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, createdAt])
+  @@index([activityId])
+}
+
+model Appointment {
+  id                     String            @id @default(cuid())
+  customerId             String
+  eventId                String?
+  scheduledAt            DateTime
+  location               String?
+  acquiredByUserId       String
+  acquiredOrgType        TenantType
+  acquiredRelationshipId String?
+  appointmentType        String?
+  status                 AppointmentStatus @default(UNCONFIRMED)
+  note                   String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  event    Event?   @relation(fields: [eventId], references: [id])
+  preCall  PreCall?
+
+  @@index([customerId])
+  @@index([status, scheduledAt])
+  @@index([acquiredRelationshipId])
+}
+
+model PreCall {
+  id                     String        @id @default(cuid())
+  appointmentId          String        @unique
+  calledAt               DateTime
+  visitConfirmedAt       DateTime?
+  visitConfirmedLocation String?
+  personConfirmed        Boolean       @default(false)
+  result                 PreCallResult
+  cancelRequested        Boolean       @default(false)
+  rescheduleRequested    Boolean       @default(false)
+  note                   String?
+  nextAction             String?
+  calledByUserId         String
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  appointment   Appointment           @relation(fields: [appointmentId], references: [id])
+  notifications PreCallNotification[]
+
+  @@index([calledAt])
+}
+
+model PreCallNotification {
+  id             String                    @id @default(cuid())
+  preCallId      String
+  relationshipId String
+  status         PreCallNotificationStatus @default(PENDING)
+  notifiedAt     DateTime?
+  acknowledgedAt DateTime?
+  note           String?
+
+  preCall      PreCall      @relation(fields: [preCallId], references: [id])
+  relationship Relationship @relation(fields: [relationshipId], references: [id])
+
+  @@index([relationshipId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Enums — deals / contracts / gross profit / construction / application (SP-05)
+// docs/05 §3.6
+// ---------------------------------------------------------------------------
+
+enum DealStatus {
+  VISIT_PLANNED
+  VISITED
+  PROPOSING
+  QUOTED
+  CONSIDERING
+  LIKELY_CONTRACT
+  CONTRACTED
+  LOST
+}
+
+enum ContractStatus {
+  CONTRACTED
+  CONSTRUCTING
+  DONE
+  CANCELLED
+}
+
+enum IncentiveStatus {
+  DRAFT
+  FINALIZED
+  CANCELLED
+  NEGATIVE_ADJUSTED
+}
+
+enum IncentiveAdjustmentKind {
+  MANUAL
+  JOINT_DISTRIBUTION
+  NEGATIVE_AFTER_DEADLINE
+}
+
+enum ConstructionStatus {
+  REQUEST_PENDING
+  REQUESTED
+  SURVEYED
+  CONSTRUCTING
+  DONE
+  PAUSED
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// Models — deals / contracts / gross profit / construction / application (SP-05)
+// docs/05 §3.6
+//
+// Tenant scoping (RLS mirrors these — see migration):
+//   Deal        — ownerRelationshipId (relationship-scoped via wholesaler join)
+//   Contract    — wholesalerId (direct) + ownerRelationshipId (dealer branch)
+//   ContractItem — derived from Contract.wholesalerId via correlated EXISTS
+//   GrossProfit  — derived from Contract.wholesalerId via correlated EXISTS
+//   Construction — derived from Contract.wholesalerId via correlated EXISTS
+//   Application  — derived from Contract.wholesalerId via correlated EXISTS
+//   Incentive           — relationshipId (dealer branch) + wholesalerId (wholesaler branch)
+//   IncentiveAdjustment — derived from Incentive
+//   ContractCancellation — derived from Contract.wholesalerId
+// ---------------------------------------------------------------------------
+
+model Deal {
+  id                   String     @id @default(cuid())
+  customerId           String
+  ownerType            TenantType
+  ownerUserId          String
+  ownerRelationshipId  String?
+  firstVisitAt         DateTime?
+  status               DealStatus @default(VISIT_PLANNED)
+  proposedProduct      String?
+  proposedAmount       Decimal?   @db.Decimal(14, 2)
+  expectedProfit       Decimal?   @db.Decimal(14, 2)
+  expectedContractDate DateTime?
+  lostReason           String?
+  nextAction           String?
+  note                 String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  customer Customer  @relation(fields: [customerId], references: [id])
+  contract Contract?
+
+  @@index([customerId])
+  @@index([status, createdAt])
+  @@index([ownerRelationshipId])
+}
+
+model Contract {
+  id                          String               @id @default(cuid())
+  wholesalerId                String
+  dealId                      String               @unique
+  customerId                  String
+  ownerRelationshipId         String?
+  eventModeAtContract         EventMode?
+  contractDate                DateTime
+  contractAmount              Decimal              @db.Decimal(14, 2)
+  maker                       String?
+  panelCapacity               Decimal?             @db.Decimal(10, 2)
+  hasBattery                  Boolean              @default(false)
+  hasSubsidy                  Boolean              @default(false)
+  fileKey                     String?
+  cancelDeadline              DateTime
+  incentiveRateSnapshot       Decimal?             @db.Decimal(5, 2)
+  incentiveTargetTypeSnapshot IncentiveTargetType?
+  isSelfHosted                Boolean              @default(false)
+  status                      ContractStatus       @default(CONTRACTED)
+  createdBy                   String
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+
+  deal          Deal                  @relation(fields: [dealId], references: [id])
+  customer      Customer              @relation(fields: [customerId], references: [id])
+  items         ContractItem[]
+  grossProfit   GrossProfit?
+  incentives    Incentive[]
+  cancellation  ContractCancellation?
+  constructions Construction[]
+  applications  Application[]
+
+  @@index([wholesalerId, status, contractDate])
+  @@index([ownerRelationshipId, status])
+}
+
+model ContractItem {
+  id                    String   @id @default(cuid())
+  contractId            String
+  productId             String
+  productName           String
+  maker                 String
+  modelNo               String?
+  qty                   Decimal  @db.Decimal(10, 2)
+  unit                  String
+  snapshotPurchasePrice Decimal  @db.Decimal(14, 2)
+  snapshotDealerPrice   Decimal  @db.Decimal(14, 2)
+  snapshotListPrice     Decimal  @db.Decimal(14, 2)
+  createdAt             DateTime @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+}
+
+model GrossProfit {
+  id                     String              @id @default(cuid())
+  contractId             String              @unique
+  salesPrice             Decimal             @db.Decimal(14, 2)
+  purchaseTotal          Decimal             @db.Decimal(14, 2)
+  dealerTotal            Decimal             @db.Decimal(14, 2)
+  constructionFee        Decimal             @default(0) @db.Decimal(14, 2)
+  otherCost              Decimal             @default(0) @db.Decimal(14, 2)
+  discount               Decimal             @default(0) @db.Decimal(14, 2)
+  projectProfit          Decimal             @db.Decimal(14, 2)
+  wholesaleProfit        Decimal             @db.Decimal(14, 2)
+  profitRate             Decimal             @db.Decimal(5, 4)
+  incentiveTargetProfit  Decimal             @db.Decimal(14, 2)
+  incentiveTargetType    IncentiveTargetType
+  manualAdjustedBy       String?
+  manualAdjustedAt       DateTime?
+  manualAdjustmentReason String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+}
+
+model Incentive {
+  id             String          @id @default(cuid())
+  contractId     String
+  relationshipId String
+  targetProfit   Decimal         @db.Decimal(14, 2)
+  rate           Decimal         @db.Decimal(5, 2)
+  amount         Decimal         @db.Decimal(14, 2)
+  status         IncentiveStatus @default(DRAFT)
+  settledMonth   String
+  finalizedAt    DateTime?
+  cancelledAt    DateTime?
+  note           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  contract     Contract              @relation(fields: [contractId], references: [id])
+  relationship Relationship          @relation(fields: [relationshipId], references: [id])
+  adjustments  IncentiveAdjustment[]
+
+  @@unique([contractId, relationshipId])
+  @@index([relationshipId, settledMonth, status])
+}
+
+model IncentiveAdjustment {
+  id           String                  @id @default(cuid())
+  incentiveId  String
+  kind         IncentiveAdjustmentKind
+  beforeAmount Decimal                 @db.Decimal(14, 2)
+  afterAmount  Decimal                 @db.Decimal(14, 2)
+  reason       String
+  adjustedBy   String
+  adjustedAt   DateTime                @default(now())
+  appliedMonth String?
+
+  incentive Incentive @relation(fields: [incentiveId], references: [id], onDelete: Cascade)
+
+  @@index([incentiveId])
+  @@index([appliedMonth])
+}
+
+model ContractCancellation {
+  id                    String   @id @default(cuid())
+  contractId            String   @unique
+  cancelledAt           DateTime
+  reason                String?
+  isWithinDeadline      Boolean
+  negativeAdjustmentIds String[]
+  recordedBy            String
+  createdAt             DateTime @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id])
+}
+
+model Construction {
+  id            String             @id @default(cuid())
+  contractId    String
+  installerId   String?
+  surveyDate    DateTime?
+  plannedDate   DateTime?
+  completedDate DateTime?
+  status        ConstructionStatus @default(REQUEST_PENDING)
+  fee           Decimal?           @db.Decimal(14, 2)
+  note          String?
+  fileKeys      String[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  contract  Contract   @relation(fields: [contractId], references: [id])
+  installer Installer? @relation(fields: [installerId], references: [id])
+
+  @@index([contractId])
+  @@index([plannedDate])
+}
+
+model Application {
+  id             String            @id @default(cuid())
+  contractId     String
+  type           String
+  agency         String?
+  plannedDate    DateTime?
+  submittedDate  DateTime?
+  approvedDate   DateTime?
+  status         ApplicationStatus @default(DRAFT)
+  expectedAmount Decimal?          @db.Decimal(14, 2)
+  grantedAmount  Decimal?          @db.Decimal(14, 2)
+  note           String?
+  fileKeys       String[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id])
+
+  @@index([contractId])
+}
+
+// ---------------------------------------------------------------------------
+// Enums — monthly report (SP-06 / docs/05 §3.7)
+// ---------------------------------------------------------------------------
+
+// Workflow: DRAFT → SUBMITTED (dealer提出) → REVIEWED (wholesaler確認) → FINALIZED (確定ロック)
+enum MonthlyReportStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  FINALIZED
+}
+
+// SELF=自社開催, DEALER=二次店単独, JOINT=共同開催, ALL=合計
+enum MonthlyScope {
+  SELF
+  DEALER
+  JOINT
+  ALL
+}
+
+// ---------------------------------------------------------------------------
+// Model — monthly report (SP-06 / docs/05 §3.7)
+// ---------------------------------------------------------------------------
+
+model MonthlyReport {
+  id             String              @id @default(cuid())
+  wholesalerId   String
+  targetMonth    String // 'YYYY-MM'
+  scope          MonthlyScope
+  // null for SELF / ALL scope; populated for DEALER / JOINT scope
+  relationshipId String?
+  aggregated     Json // 集計値スナップショット
+  comments       Json? // 成果・課題・翌月施策（dealer / wholesaler コメント）
+  status         MonthlyReportStatus @default(DRAFT)
+  submittedAt    DateTime?
+  reviewedAt     DateTime?
+  finalizedAt    DateTime?
+  // User.id of wholesaler_admin who finalized
+  finalizedBy    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  relationship Relationship? @relation(fields: [relationshipId], references: [id])
+
+  @@unique([wholesalerId, targetMonth, scope, relationshipId])
+  @@index([wholesalerId, targetMonth])
+}
+
+// ---------------------------------------------------------------------------
+// Enums — notifications (SP-07 / docs/05 §3.7)
+// ---------------------------------------------------------------------------
+
+enum NotificationType {
+  DEALER_PREFERENCE_SUBMITTED
+  DEALER_PREFERENCE_MISSING
+  EVENT_DECISION_PENDING
+  EVENT_SHIFT_SHORTAGE
+  EVENT_START_REPORTED
+  EVENT_END_REPORTED
+  EVENT_RESULT_REPORTED
+  CUSTOMER_NEW
+  PRE_CALL_PENDING
+  PRE_CALL_NOTIFICATION_PENDING
+  PRE_CALL_RESULT_SHARED
+  DEAL_STATUS_TO_CONTRACT
+  MONTHLY_REPORT_SUBMITTED
+  MONTHLY_REPORT_REVIEW_PENDING
+  GROSS_PROFIT_PENDING
+  INCENTIVE_PENDING
+  INCENTIVE_FINALIZED
+  CONSTRUCTION_UPCOMING
+  APPLICATION_DEADLINE
+  EVENT_PUBLISHED
+  EVENT_PREFERENCE_DEADLINE
+  EVENT_ASSIGNED
+  EVENT_DAY_BEFORE
+  CONTRACT_CONTRACTED
+  SHIFT_ASSIGNED
+  SHIFT_CHANGED
+  REPORT_PENDING
+}
+
+// IN_APP and EMAIL are active in Phase 1; LINE is reserved for Phase 2.
+enum DeliveryChannel {
+  IN_APP
+  EMAIL
+  LINE
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// Models — notifications (SP-07 / docs/05 §3.7)
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id              String           @id @default(cuid())
+  recipientUserId String
+  tenantId        String // receiver tenant; used for tenant-level queries
+  type            NotificationType
+  title           String
+  body            String
+  payload         Json
+  readAt          DateTime?
+  // Optional dedup guard: ${type}:${userId}:${targetId} — prevents duplicate
+  // notifications within the same hour (docs/05 OQ-6).
+  dedupKey        String?          @unique
+  createdAt       DateTime         @default(now())
+
+  user       User                   @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([recipientUserId, readAt, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+model NotificationDelivery {
+  id             String          @id @default(cuid())
+  notificationId String
+  channel        DeliveryChannel
+  status         DeliveryStatus  @default(PENDING)
+  attemptedCount Int             @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@index([status, channel])
+}
+
+// Per-user opt-in/out for each notification type × channel combination.
+// Absence of a row = system default (enabled). An explicit row with
+// enabled=false means the user has opted out.
+model NotificationPreference {
+  userId  String
+  type    NotificationType
+  channel DeliveryChannel
+  enabled Boolean          @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type, channel])
+}

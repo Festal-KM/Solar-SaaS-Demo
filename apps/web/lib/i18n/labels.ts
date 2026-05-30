@@ -1,0 +1,3616 @@
+// Centralised Japanese UI labels.
+//
+// Every user-facing string rendered by the role-group layouts and the
+// authentication pages must live here (docs/CLAUDE.md "i18n 辞書 1 箇所
+// 集約" rule). Component files import this object and read keyed strings;
+// they never hard-code Japanese text.
+
+export const labels = {
+  brand: "Solar SaaS",
+  brandTagline: "太陽光卸・二次店営業管理 SaaS",
+
+  // Role-group navigation (SP-02+ で実体を入れる前提の最小 stub)
+  groups: {
+    saasAdmin: "SaaS 運営者",
+    wholesaler: "卸業者本部",
+    field: "現場要員",
+    dealer: "二次店",
+    common: "共通",
+    onboarding: "オンボーディング",
+    auth: "認証",
+  },
+
+  // Common navigation labels
+  nav: {
+    dashboard: "ダッシュボード",
+    notifications: "通知",
+    profile: "プロフィール",
+    signOut: "サインアウト",
+    menu: "メニュー",
+  },
+
+  // Auth — S-001 sign-in (docs/04 §4.1)
+  signIn: {
+    title: "サインイン",
+    subtitle: "メールアドレスとパスワードでサインインしてください",
+    emailLabel: "メールアドレス",
+    emailPlaceholder: "you@example.com",
+    passwordLabel: "パスワード",
+    passwordPlaceholder: "パスワード",
+    submit: "サインイン",
+    submitting: "サインイン中…",
+    forgotPassword: "パスワードを忘れた方",
+    dealerInviteCode: "招待コード入力（新規二次店）",
+    invalidCredentials: "メールアドレスまたはパスワードが正しくありません",
+    lockedTitle: "アカウントは一時的にロックされています",
+    lockedSuffix: "後に再度お試しください",
+    suspended: "このアカウントは利用停止中です。管理者にお問い合わせください",
+    invited: "招待メール内のリンクからアカウント開設を完了してください",
+    unknownError: "予期しないエラーが発生しました。時間を置いて再度お試しください",
+  },
+
+  // Auth — S-002 MFA challenge
+  mfa: {
+    title: "2 段階認証コードを入力",
+    subtitle: "認証アプリに表示されている 6 桁のコードを入力してください",
+    codeLabel: "認証コード",
+    codePlaceholder: "123456",
+    submit: "検証",
+    submitting: "検証中…",
+    backupCodeLink: "バックアップコードを使用",
+    invalidCode: "コードが一致しません",
+    unknownError: "予期しないエラーが発生しました。時間を置いて再度お試しください",
+  },
+
+  // Auth — S-003 MFA setup
+  mfaSetup: {
+    title: "2 段階認証の初回セットアップ",
+    subtitle: "認証アプリで QR コードをスキャンし、表示されたコードを入力してください",
+    manualSecretLabel: "手動入力用シークレット",
+    backupCodesTitle: "バックアップコード（8 個）",
+    backupCodesNotice:
+      "このコードはこの画面でしか表示されません。安全な場所に保存してください。1 度使うと無効になります。",
+    downloadBackupCodes: "バックアップコードをダウンロード",
+    verifyTitle: "認証コードで動作確認",
+    codeLabel: "6 桁の確認コード",
+    submit: "セットアップを完了",
+    submitting: "セットアップ中…",
+    loading: "QR コードを生成しています…",
+    initError: "セットアップ情報の取得に失敗しました。ページを再読込してください",
+    success: "2 段階認証のセットアップが完了しました",
+  },
+
+  // Auth — S-006 lock screen
+  locked: {
+    title: "アカウントは一時的にロックされています",
+    body: "ログインの失敗回数が上限に達しました。15 分後に再度お試しください。",
+    countdownPrefix: "再試行可能まで残り ",
+    backToSignIn: "サインインへ戻る",
+    support: "解除のお問い合わせはサポートまでご連絡ください",
+  },
+
+  // Common form / action labels
+  common: {
+    save: "保存",
+    saving: "保存中…",
+    cancel: "キャンセル",
+    back: "戻る",
+    create: "新規作成",
+    edit: "編集",
+    disable: "無効化",
+    disabling: "無効化中…",
+    delete: "削除",
+    search: "検索",
+    yes: "はい",
+    no: "いいえ",
+    optional: "（任意）",
+    required: "必須",
+    notSet: "未設定",
+    active: "有効",
+    inactive: "無効",
+    unknownError: "予期しないエラーが発生しました。時間を置いて再度お試しください",
+    saved: "保存しました",
+    disabled: "無効化しました",
+    notFound: "対象が見つかりません",
+    forbidden: "この情報にアクセスできません",
+    forbiddenBack: "前のページへ戻る",
+    actions: "操作",
+    currencySuffix: "円",
+    comingSoon: "この画面は準備中です。",
+  },
+
+  // 準備中（coming-soon）プレースホルダ画面のタイトル。
+  // メッセージ本文は labels.common.comingSoon を共用する。
+  comingSoon: {
+    appointments: "アポイント一覧",
+    contracts: "契約一覧",
+    venueNegotiations: "場所取り対応状況",
+    bi: "BIダッシュボード",
+    biAnalysis: "市況分析",
+    masters: "マスタ管理",
+    members: "メンバー管理",
+    relationships: "取引先管理",
+    auditLogs: "監査ログ",
+  },
+
+  // S-018 — 卸業者ダッシュボード (T-02-11 / docs/04 §1.3).
+  //
+  // 卸業者全ロール (admin / event_team / call_team / direct_sales /
+  // field_staff) の共通ホーム。5 KPI カード + 直近イベント + 売上推移。
+  dashboard: {
+    title: "ホーム",
+    subtitle: "主要な成績指標と直近のアクティビティを確認できます",
+    breadcrumbHome: "ホーム",
+    kpi: {
+      contractCount: "今月の契約件数",
+      revenueGrossProfit: "今月の売上 / 粗利",
+      grossProfitLabel: "粗利",
+      weeklyEvents: "今週のイベント開催件数",
+      weeklyEventsHint: "今週（月〜日）に開催されるイベント",
+      weeklyAppointments: "今週のアポ件数",
+      appointmentCompleted: "実績",
+      appointmentScheduled: "見込み",
+      notificationsAlert: "通知 / アラート",
+      unreadCount: "未読 {n} 件",
+      noNotifications: "通知はありません",
+      countUnit: "件",
+      prevMonth: "前月",
+      revenue: "今月売上",
+      incentive: "インセンティブ見込み",
+    },
+    sections: {
+      recentEvents: {
+        title: "直近イベント",
+        viewAll: "すべて見る →",
+        empty: "直近のイベントはありません",
+        cols: { date: "日付", name: "イベント名", mode: "体制", status: "ステータス" },
+      },
+      notificationStatus: {
+        title: "通達状況",
+        viewAll: "すべて見る →",
+        unread: "未読通知",
+        pendingPreference: "希望未提出二次店",
+        pendingPrecall: "マエカク未対応",
+      },
+      salesTrend: {
+        title: "売上推移（過去 12 ヶ月）",
+        viewDetail: "BI ダッシュボードを開く →",
+      },
+      weekendEvents: {
+        title: "今週末のイベント一覧",
+        empty: "今週末に予定されているイベントはありません",
+        cols: {
+          date: "日付",
+          name: "イベント名",
+          venue: "場所",
+          mode: "体制",
+          dealers: "担当二次店数",
+        },
+      },
+    },
+  },
+
+  // S-052 — マスタ管理ハブ (T-02-10 / docs/04 §1.3).
+  // 卸業者本部の `wholesaler_admin` 専用ナビゲーション。shadcn Tabs で
+  // 5 タブ（二次店関係 / 施工業者 / インセンティブ率 / キャンセル期限 /
+  // 年度開始月）を統合表示する。各タブの中身は T-02-05〜T-02-07 の既存
+  // 画面コンテンツを埋め込む。場所提供元 (S-019/S-020) と商品・価格
+  // (S-042/S-043) は S-052 のスコープ外（独立画面 /masters/venue-providers
+  // /masters/products で実装済）。
+  masters: {
+    title: "マスタ管理",
+    subtitle: "業務で参照する各種マスタを一覧・編集できます",
+    sectionTitle: "マスタ一覧",
+    summary: {
+      count: "登録件数",
+      lastUpdated: "最終更新",
+      neverUpdated: "未登録",
+      activeOnly: "（有効分のみ）",
+    },
+    tabs: {
+      dealerRelationships: {
+        label: "二次店関係",
+        description: "二次店との関係 / 招待コード / スコープデフォルト（後続スプリントで実装）",
+      },
+      installers: {
+        label: "施工業者",
+        description: "契約後の施工をアサインする業者マスタ",
+      },
+      areas: {
+        label: "エリア",
+        description: "イベント候補登録時に選択するエリアのマスタ",
+      },
+      stores: {
+        label: "店舗",
+        description: "イベント候補登録時に選択する店舗のマスタ",
+      },
+      incentiveRates: {
+        label: "インセンティブ率",
+        description: "二次店ごとのインセンティブ率（粗利配分）マスタ",
+      },
+      cancelDeadline: {
+        label: "キャンセル期限",
+        description: "契約成立日から何日以内をキャンセル受付期間とするかの卸業者単位設定",
+      },
+      fiscalYear: {
+        label: "年度開始月",
+        description: "年度集計の起点月（月次集計は暦月固定）",
+      },
+    },
+    dealerRelationshipsPlaceholder: {
+      title: "二次店関係マスタは後続スプリントで実装予定です",
+      description:
+        "F-009（関係一覧 / スコープデフォルト）と F-010（招待コード発行）は SP-03 以降で実装されます。本タブは現時点ではプレースホルダです。",
+      currentCount: "現在の関係数",
+    },
+    embedded: {
+      goToDetail: "詳細を開く",
+      openFullPage: "一覧画面を開く",
+      moreInstallers: "他 {n} 件の施工業者は施工業者一覧画面でご確認ください。",
+      moreIncentiveRates: "他 {n} 件の関係は インセンティブ率一覧画面でご確認ください。",
+    },
+    actions: {
+      open: "開く",
+    },
+  },
+
+  // S-019 / S-020 — F-011 場所提供元マスタ
+  venueProvider: {
+    title: "場所提供元マスタ",
+    listTitle: "場所提供元一覧",
+    new: "場所提供元を新規登録",
+    edit: "場所提供元を編集",
+    empty: "場所提供元未登録",
+    emptyCta: "最初の場所提供元を登録しましょう",
+    searchByName: "名称で検索",
+    searchByArea: "エリアで検索",
+    fields: {
+      name: "名称",
+      contactName: "担当者",
+      phone: "電話",
+      email: "メール",
+      postalCode: "郵便番号",
+      address: "住所",
+      area: "エリア",
+      contractType: "契約形態",
+      fixedFee: "固定費（円）",
+      performanceRate: "成果報酬率（%）",
+      note: "備考",
+      isActive: "有効",
+      updatedAt: "最終更新",
+    },
+    contractTypes: {
+      FIXED: "固定費型",
+      PERFORMANCE: "成果報酬型",
+      OTHER: "その他",
+    },
+    sections: {
+      basic: "基本情報",
+      contact: "連絡先",
+      address: "住所",
+      contract: "契約条件",
+      note: "備考",
+      history: "変更履歴",
+    },
+    historyPlaceholder: "変更履歴は後続スプリントで対応予定です。",
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+      disable: "このマスタを無効化",
+      disableConfirm: "無効化すると新規イベント候補から選択できなくなります。続行しますか？",
+    },
+    errors: {
+      nameRequired: "名称を入力してください",
+      fixedFeeRequired: "固定費型では固定費金額が必須です",
+      performanceRateRequired: "成果報酬型では成果報酬率が必須です",
+    },
+  },
+
+  // S-021 / S-022 — F-017 場所提供元対応 (venue negotiation)
+  venueNegotiation: {
+    title: "場所提供元対応",
+    listTitle: "場所提供元対応一覧",
+    detailTitle: "場所提供元対応詳細",
+    new: "対応を新規起票",
+    empty: "対応未登録",
+    emptyCta: "最初の場所提供元と調整を始めましょう",
+    searchByStoreName: "場所提供元名で検索",
+    filterByStatus: "ステータスで絞り込み",
+    allStatuses: "すべてのステータス",
+    fields: {
+      venueProvider: "場所提供元",
+      candidateDates: "実施候補日",
+      decidedDate: "確定日",
+      contractType: "契約形態",
+      fixedFee: "固定費（円）",
+      performanceRate: "成果報酬率（%）",
+      conditionNote: "条件メモ",
+      status: "ステータス",
+      nextAction: "次回アクション",
+      assigneeId: "担当者",
+      note: "備考・履歴メモ",
+      area: "エリア",
+      updatedAt: "最終更新",
+      reason: "変更理由",
+    },
+    statuses: {
+      NOT_CONTACTED: "未連絡",
+      CONTACTING: "調整中",
+      CONDITION_REVIEW: "条件確認中",
+      FEASIBLE: "実施可",
+      INFEASIBLE: "実施不可",
+      FIXED: "確定",
+      CANCELLED: "中止",
+    },
+    sections: {
+      basic: "基本情報",
+      candidateDates: "実施候補日",
+      contract: "契約条件",
+      condition: "条件メモ",
+      status: "ステータス",
+      history: "対応履歴",
+      promote: "イベント候補に昇格",
+    },
+    timeline: {
+      empty: "対応履歴はまだありません",
+    },
+    promote: {
+      title: "イベント候補に昇格",
+      description:
+        "確定した場所提供元対応をイベント候補として登録します。回答期限までに二次店の希望を募集します。",
+      targetMonth: "対象年月（YYYY-MM）",
+      scheduledDate: "実施予定日",
+      storeName: "店舗名",
+      address: "住所",
+      area: "エリア",
+      deadlineAt: "回答期限",
+      submit: "イベント候補として登録",
+      requiresFixed: "ステータスを「確定」にしてからご利用ください",
+    },
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+      changeStatus: "ステータスを変更",
+      changing: "変更中…",
+      promote: "イベント候補に昇格",
+      promoting: "登録中…",
+    },
+    errors: {
+      venueProviderRequired: "場所提供元を選択してください",
+      candidateDateRequired: "候補日を 1 件以上入力してください",
+      invalidStateTransition: "この状態からその状態への変更はできません",
+      promoteRequiresFixed: "場所提供元対応が「確定」のときのみイベント候補に昇格できます",
+      storeNameRequired: "店舗名を入力してください",
+      targetMonthFormat: "対象年月は YYYY-MM 形式で入力してください",
+    },
+  },
+
+  // S-023 / S-024 — F-018 イベント候補登録・編集
+  //
+  // 卸業者本部 (wholesaler_admin / wholesaler_event_team) 専用画面。
+  // 内部メモ・固定費・成果報酬率は二次店から不可視（DTO 物理除外、T-03-03）。
+  eventCandidate: {
+    title: "イベント候補",
+    listTitle: "イベント候補一覧",
+    detailTitle: "イベント候補詳細",
+    new: "イベント候補を新規登録",
+    empty: "イベント候補未登録",
+    emptyCta: "場所提供元対応からイベント化、または直接新規登録できます",
+    filterByStatus: "ステータスで絞り込み",
+    filterByTargetMonth: "対象年月で絞り込み",
+    allStatuses: "すべてのステータス",
+    internalOnlyNotice: "このセクションは卸業者専用です（二次店には公開されません）",
+    fields: {
+      venueProvider: "場所提供元",
+      venueNegotiation: "場所提供元対応",
+      targetMonth: "対象年月（YYYY-MM）",
+      scheduledDate: "実施予定日",
+      storeName: "店舗名",
+      address: "住所",
+      area: "エリア",
+      deadlineAt: "回答期限",
+      contractType: "場所提供元との契約形態",
+      fixedFee: "固定費（円・内部）",
+      performanceRate: "成果報酬率（%・内部）",
+      internalNote: "卸業者内部メモ",
+      status: "ステータス",
+      publishedAt: "公開日時",
+      updatedAt: "最終更新",
+      reason: "変更理由",
+      perDayFee: "日当たりの報酬額（円）",
+      revenueRate: "売上に対する報酬率（%）",
+      contractNote: "メモ",
+    },
+    statuses: {
+      DRAFT: "下書き",
+      OPEN: "希望受付中",
+      CLOSED: "希望受付終了",
+      DECIDED: "開催体制決定済み",
+      CANCELLED: "中止",
+    },
+    sections: {
+      basic: "基本情報",
+      schedule: "対象月・実施日・期限",
+      contract: "場所提供元との契約条件",
+      internal: "卸業者内部メモ",
+      status: "ステータス",
+      visibility: "二次店共有設定",
+      history: "対応履歴",
+    },
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+      publish: "希望受付を開始（公開）",
+      publishing: "公開中…",
+      closePreference: "希望受付を終了",
+      closing: "終了処理中…",
+      reopen: "期限延長（再受付）",
+      cancel: "イベント候補を中止",
+      cancelConfirm: "中止すると元には戻せません（編集不可になります）。続行しますか？",
+      cancelling: "中止処理中…",
+    },
+    visibility: {
+      heading: "二次店共有設定",
+      description:
+        "公開する二次店をチェックして「公開する」ボタンを押すと、対象の二次店にイベント候補が表示されます。固定費・成果報酬率・卸業者内部メモは二次店には公開されません。",
+      draftDisabledNotice:
+        "下書き状態では公開できません。先にイベント候補を「希望受付を開始（公開）」してください。",
+      noRelationships:
+        "アクティブな二次店関係がありません。先に二次店を登録・関係を有効化してください。",
+      tableHeaderSelect: "選択",
+      tableHeaderDealer: "二次店",
+      tableHeaderStatus: "現在の公開状態",
+      published: "公開中",
+      notPublished: "未公開",
+      revoked: "公開取消済み",
+      bulkSelectAll: "すべて選択",
+      bulkClear: "選択を解除",
+      publishSelected: "公開する",
+      publishing: "公開処理中…",
+      unpublishSelected: "公開取消",
+      unpublishing: "公開取消処理中…",
+      publishedToast: "対象の二次店に公開しました",
+      unpublishedToast: "公開を取り消しました",
+      selectAtLeastOne: "対象の二次店を 1 件以上選択してください",
+    },
+    errors: {
+      targetMonthRequired: "対象年月を入力してください",
+      targetMonthFormat: "対象年月は YYYY-MM 形式で入力してください",
+      scheduledDateRequired: "実施予定日を入力してください",
+      storeNameRequired: "店舗名を入力してください",
+      deadlineAtRequired: "回答期限を入力してください",
+      invalidStateTransition: "この状態からその状態への変更はできません",
+      nonDraftEditForbidden: "公開後は回答期限と内部メモのみ編集できます",
+    },
+  },
+
+  // S-025 / S-026 — F-022 二次店希望状況確認 (T-03-07 / docs/04 §1.3).
+  //
+  // 卸業者本部 (wholesaler_admin / wholesaler_event_team) 専用の集計画面。
+  // 「二次店別」「店舗別」の 2 ビュー。期限超過の未提出二次店は `destructive`
+  // バッジで強調表示する（docs/02 §F-022 受入基準）。
+  eventCandidatePreferences: {
+    title: "二次店希望状況",
+    subtitle: "公開対象の二次店ごとに提出状況を一覧表示します。",
+    backToCandidate: "イベント候補詳細へ戻る",
+    deadlineLine: "回答期限",
+    deadlinePassedBanner: "回答期限を過ぎました。未提出の二次店は提出できません。",
+    storeLine: "対象店舗",
+    targetMonthLine: "対象年月",
+    scheduledDateLine: "実施予定日",
+    totals: {
+      visible: "公開対象",
+      submitted: "提出済み",
+      pending: "未提出（期限内）",
+      overdue: "未提出（期限超過）",
+    },
+    tabs: {
+      byDealer: "二次店別",
+      byStore: "店舗別",
+    },
+    byDealer: {
+      heading: "二次店別 提出状況",
+      empty: "公開対象の二次店がありません。先にイベント候補詳細から二次店共有を行ってください。",
+      columns: {
+        dealer: "二次店",
+        status: "提出状況",
+        priority: "優先順位",
+        availablePeople: "対応可能人数",
+        availableDates: "対応可能日",
+        submittedAt: "提出日時",
+        comment: "コメント",
+      },
+    },
+    byStore: {
+      heading: "店舗別 提出状況",
+      description:
+        "1 つのイベント候補は 1 店舗に対応します。複数店舗の比較は対象年月単位の月次サマリ（実装予定）で確認してください。",
+      columns: {
+        store: "店舗名",
+        scheduledDate: "実施予定日",
+        submitted: "提出済み",
+        pending: "未提出（期限内）",
+        overdue: "未提出（期限超過）",
+      },
+    },
+    statuses: {
+      SUBMITTED: "提出済み",
+      PENDING: "未提出",
+      OVERDUE: "期限超過",
+    },
+    none: "—",
+  },
+
+  // S-059 — F-020 二次店向けイベント候補閲覧 (T-03-05 / docs/04 §1.5).
+  //
+  // 二次店メンバ (dealer_admin / dealer_staff) のみが参照する画面。卸業者の
+  // 内部情報 (固定費 / 成果報酬率 / 内部メモ / 他社二次店の希望状況) は
+  // `EventCandidateForDealerDto` で物理除外しているため、表示する文字列も
+  // 卸業者画面と完全に分離する（同じ "イベント候補" でも視点が異なるため）。
+  eventCandidateDealer: {
+    title: "公開中のイベント候補",
+    subtitle:
+      "卸業者から公開されているイベント候補です。希望提出ボタンから対象店舗を選んで応募できます。",
+    filterByTargetMonth: "対象年月で絞り込み",
+    filterByWholesaler: "卸業者で絞り込み",
+    allWholesalers: "すべての卸業者",
+    empty: "現在、公開中のイベント候補はありません",
+    emptyHint: "卸業者から新しい候補が公開されると、ここに表示されます。",
+    monthGroupPrefix: "対象年月：",
+    fields: {
+      wholesaler: "卸業者",
+      scheduledDate: "実施予定日",
+      storeName: "店舗名",
+      area: "エリア",
+      address: "住所",
+      deadlineAt: "希望提出期限",
+      publishedAt: "公開日時",
+    },
+    submitPreference: "希望提出",
+    deadlinePassed: "希望提出期限を過ぎています",
+  },
+
+  // S-060 — F-021 二次店希望店舗回答 (T-03-06 / docs/04 §1.5).
+  //
+  // 二次店 (dealer_admin / dealer_staff) が公開中イベント候補に対して希望を
+  // 提出するフォーム。本画面は単一 EventCandidate に対する希望の submit /
+  // update / withdraw に責務を限定し、F-021 「1 件以上の候補」要件は複数候補
+  // を順に経由する形で UI 側で担保する。期限超過 / 候補 status NOT OPEN 時は
+  // 入力 UI を disabled 表示するが、サーバ側 (`submitPreferenceAction`) でも
+  // 必ず再検証する。
+  dealerPreference: {
+    title: "希望回答",
+    subtitle:
+      "このイベント候補に対する優先度・対応可能日・対応可能人数などを入力してください。期限内であれば何度でも更新できます。",
+    candidateHeader: "対象イベント候補",
+    deadlineLine: "回答期限",
+    scheduledDateLine: "実施予定日",
+    targetMonthLine: "対象年月",
+    storeNameLine: "店舗名",
+    areaLine: "エリア",
+    addressLine: "住所",
+    wholesalerLine: "卸業者",
+    deadlinePassedBanner: "回答期限を過ぎました。希望の新規提出・編集・取り下げはできません。",
+    candidateClosedBanner:
+      "このイベント候補は希望受付中ではありません。提出・取り下げはできません。",
+    existingHeader: "現在の提出内容",
+    notSubmittedYet: "まだ希望を提出していません。",
+    submittedAtLabel: "最終提出日時",
+    formHeader: "希望内容を入力",
+    fields: {
+      priority: "優先順位（任意、0〜3）",
+      availableDates: "対応可能日（任意、改行で区切る YYYY-MM-DD）",
+      availableDatesHint: "例: 2026-06-15",
+      staffCount: "対応可能人数（任意、人）",
+      note: "コメント（任意）",
+    },
+    actions: {
+      submit: "希望を提出",
+      submitting: "提出中…",
+      update: "希望を更新",
+      updating: "更新中…",
+      withdraw: "提出を取り下げる",
+      withdrawing: "取り下げ中…",
+      withdrawConfirm: "提出済みの希望を取り下げます。よろしいですか？",
+    },
+    feedback: {
+      submitted: "希望を提出しました",
+      updated: "希望を更新しました",
+      withdrawn: "希望を取り下げました",
+      deadlinePassed: "回答期限を過ぎているため操作できません",
+      invalidDate: "日付の形式が正しくありません（YYYY-MM-DD で入力）",
+      invalidPriority: "優先順位は 0 以上の整数で入力してください",
+      invalidStaffCount: "対応可能人数は 0 以上の整数で入力してください",
+    },
+  },
+
+  // S-042 / S-043 — F-012 商品・価格マスタ
+  product: {
+    title: "商品・価格マスタ",
+    listTitle: "商品一覧",
+    new: "商品を新規登録",
+    edit: "商品情報を編集",
+    revise: "価格改定",
+    history: "価格改定履歴",
+    empty: "商品未登録",
+    emptyCta: "最初の商品を登録しましょう",
+    searchByMaker: "メーカーで検索",
+    filterByCategory: "カテゴリで絞り込み",
+    allCategories: "すべてのカテゴリ",
+    fields: {
+      category: "カテゴリ",
+      maker: "メーカー",
+      name: "商品名",
+      modelNo: "型番",
+      capacity: "容量",
+      unit: "単位",
+      purchasePrice: "仕入値（円）",
+      dealerPrice: "二次店向け卸値（円）",
+      listPrice: "参考売価（円）",
+      effectiveFrom: "適用開始日",
+      effectiveTo: "適用終了日",
+      reason: "改定理由",
+      note: "備考",
+      isActive: "有効",
+      updatedAt: "最終更新",
+      changedAt: "変更日時",
+      changedBy: "変更者",
+    },
+    categories: {
+      PANEL: "パネル",
+      BATTERY: "蓄電池",
+      POWER_CONDITIONER: "パワコン",
+      MOUNT: "架台",
+      OTHER_PART: "その他部材",
+      SET: "セット",
+    },
+    sections: {
+      basic: "基本情報",
+      specs: "仕様",
+      price: "価格",
+      effective: "適用期間",
+      note: "備考",
+      history: "価格改定履歴",
+    },
+    historyEmpty: "価格改定履歴はまだありません。",
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+      reviseSubmit: "価格改定を確定",
+      retire: "この商品を廃止",
+      retireConfirm: "廃止すると新規契約で選択できなくなります。続行しますか？",
+      goToRevise: "価格を改定",
+    },
+    errors: {
+      makerRequired: "メーカーを入力してください",
+      nameRequired: "商品名を入力してください",
+      unitRequired: "単位を入力してください",
+      priceRequired: "価格を入力してください",
+      effectiveOrderInvalid: "適用終了日は適用開始日より後にしてください",
+      reviseOrderInvalid: "価格改定の適用開始日は既存の適用開始日より後にしてください",
+    },
+  },
+
+  // S-052 サブ — F-014 インセンティブ率マスタ
+  incentiveRate: {
+    title: "インセンティブ率マスタ",
+    listTitle: "二次店ごとのインセンティブ率",
+    new: "インセンティブ率を新規登録",
+    edit: "インセンティブ率を編集",
+    empty: "インセンティブ率未登録",
+    emptyCta: "最初のインセンティブ率を登録しましょう",
+    groupBy: "二次店",
+    relationshipColumn: "対象関係（二次店）",
+    currentRate: "現在の率",
+    noCurrentRate: "現在有効な率はありません",
+    fields: {
+      relationship: "対象関係（二次店）",
+      targetType: "対象粗利種別",
+      rate: "率（%）",
+      effectiveFrom: "適用開始日",
+      effectiveTo: "適用終了日",
+      note: "備考",
+      updatedAt: "最終更新",
+    },
+    targetTypes: {
+      PROJECT_PROFIT: "案件粗利",
+      WHOLESALE_PROFIT: "卸粗利",
+      MANUAL: "手動指定",
+    },
+    sections: {
+      relationship: "対象関係",
+      target: "対象粗利・率",
+      effective: "適用期間",
+      note: "備考",
+    },
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+    },
+    errors: {
+      relationshipRequired: "関係（二次店）を選択してください",
+      rateRequired: "率（%）を入力してください",
+      effectiveFromRequired: "適用開始日を入力してください",
+      effectiveOrderInvalid: "適用終了日は適用開始日より後にしてください",
+      noActiveRelationships: "有効な二次店との関係が未登録です。先に関係を登録してください。",
+    },
+    notices: {
+      overlapClose:
+        "新規登録時、同じ関係内で適用中（適用終了日未設定）の率があれば、その率は新規率の適用開始日で自動的に締められます。",
+      immutableFields: "対象粗利種別と適用開始日は編集できません（時系列の整合性を保つため）。",
+    },
+  },
+
+  // S-052 サブ — F-015 / F-016 卸業者設定
+  wholesalerSettings: {
+    title: "卸業者設定",
+    subtitle: "キャンセル期限・年度開始月・PII マスキングモードの設定",
+    splitSubtitle: {
+      cancelDeadline: "契約成立日から何日以内をキャンセル受付期間とするかを設定します。",
+      fiscalYear: "年度集計の起点月を設定します。",
+    },
+    fullSettingsLink: "PII マスキングモードを含む全設定画面を開く",
+    fields: {
+      cancelDeadlineDays: "キャンセル期限（日数）",
+      fiscalYearStartMonth: "年度開始月",
+      piiMaskingMode: "PII マスキングモード",
+    },
+    helpers: {
+      cancelDeadlineDays:
+        "契約成立日から何日以内であればキャンセル受付・インセンティブ取消となるかを設定します（特商法準拠デフォルト 8 日、1〜90 日）。",
+      cancelDeadlineDaysWarning:
+        "設定変更は今後成立する契約のみに適用され、過去の契約はそれぞれの契約成立時のキャンセル期限を保持します。",
+      fiscalYearStartMonth:
+        "年度集計の起点月を設定します（4 月始まり、1 月始まり等）。月次集計は暦月固定です。",
+      piiMaskingMode:
+        "二次店メンバ向けの顧客 PII（電話・住所・氏名）の表示制御。MASKED は常時マスク、FULL は非マスク、PARTIAL は部分マスク（電話下 4 桁可視・住所と氏名はマスク）です。",
+    },
+    piiMaskingModes: {
+      MASKED: "マスク（既定）",
+      FULL: "フル表示",
+      PARTIAL: "部分マスク",
+    },
+    months: {
+      "1": "1 月",
+      "2": "2 月",
+      "3": "3 月",
+      "4": "4 月",
+      "5": "5 月",
+      "6": "6 月",
+      "7": "7 月",
+      "8": "8 月",
+      "9": "9 月",
+      "10": "10 月",
+      "11": "11 月",
+      "12": "12 月",
+    },
+    sections: {
+      cancel: "キャンセル運用",
+      fiscalYear: "年度設定",
+      privacy: "PII 表示制御",
+    },
+    actions: {
+      save: "保存",
+    },
+    errors: {
+      cancelDeadlineDaysRange: "1〜90 日の範囲で入力してください",
+      fiscalYearStartMonthRange: "1〜12 月の範囲で入力してください",
+    },
+  },
+
+  // S-013 / S-014 / S-015 — F-004 SaaS 運営者: テナント管理
+  saasAdminTenant: {
+    dashboardTitle: "運営者ダッシュボード",
+    dashboardSubtitle: "テナント / ユーザー / 招待状況のサマリ",
+    summaryCards: {
+      totalTenants: "テナント数",
+      activeTenants: "アクティブテナント",
+      totalUsers: "アクティブユーザー数",
+      pendingInvitations: "未受諾招待数",
+    },
+    listTitle: "卸業者テナント一覧",
+    listSubtitle: "テナントの作成・ステータス・プランを管理",
+    new: "卸業者テナントを新規作成",
+    empty: "テナント未作成",
+    emptyCta: "最初の卸業者テナントを作成しましょう",
+    detailTitle: "卸業者テナント詳細",
+    backToList: "テナント一覧へ戻る",
+    fields: {
+      name: "テナント名",
+      type: "種別",
+      plan: "プラン",
+      status: "ステータス",
+      adminEmail: "全体管理者メール",
+      adminName: "全体管理者氏名",
+      userCount: "ユーザー数",
+      createdAt: "作成日",
+      updatedAt: "最終更新",
+    },
+    types: {
+      WHOLESALER: "卸業者",
+      DEALER: "二次店",
+    },
+    plans: {
+      PILOT: "パイロット",
+      SMALL: "小",
+      MEDIUM: "中",
+      LARGE: "大",
+    },
+    statuses: {
+      ACTIVE: "アクティブ",
+      SUSPENDED: "停止中",
+    },
+    filters: {
+      type: "種別で絞り込み",
+      plan: "プランで絞り込み",
+      status: "ステータスで絞り込み",
+      all: "すべて",
+    },
+    sections: {
+      basic: "基本情報",
+      admin: "全体管理者",
+      invitation: "招待状態",
+      lifecycle: "ステータス操作",
+    },
+    invitation: {
+      pending: "招待未受諾",
+      accepted: "招待受諾済み",
+      expired: "招待期限切れ",
+      none: "招待情報なし",
+      sentAt: "招待送信日時",
+      expiresAt: "招待期限",
+      acceptedAt: "受諾日時",
+      resend: "招待を再発行",
+      resending: "再発行中…",
+      resendUnavailable: "現在の招待が有効期間内です。期限経過後（7 日後）に再発行できます。",
+      resendSuccess: "招待を再発行しました",
+    },
+    lifecycle: {
+      suspend: "テナントを停止",
+      activate: "テナントを再開",
+      suspendConfirm:
+        "停止するとこのテナントの全ユーザーがログインできなくなります。続行しますか？",
+      activateConfirm: "テナントを再開します。続行しますか？",
+      suspended: "停止しました",
+      activated: "再開しました",
+    },
+    actions: {
+      createSubmit: "テナントを作成",
+      creating: "作成中…",
+    },
+    errors: {
+      duplicateEmail:
+        "同一メールアドレスで既に管理者ユーザーが存在します。別のメールを指定してください。",
+      nameRequired: "テナント名を入力してください",
+      adminEmailRequired: "管理者メールを入力してください",
+      adminNameRequired: "管理者氏名を入力してください",
+    },
+  },
+
+  // S-016 / S-017 — F-005 SaaS 運営者: プラン管理 + 請求状況
+  saasAdminPlan: {
+    listTitle: "プラン管理",
+    listSubtitle: "卸業者テナントの現行プランと直近変更日",
+    detailTitle: "プラン変更履歴",
+    backToList: "プラン一覧へ戻る",
+    billingTitle: "請求状況（オフライン記録）",
+    billingSubtitle: "請求書発行・決済は本システム外。プラン変更履歴のメモを参照します。",
+    sections: {
+      current: "現在のプラン",
+      apply: "新プランを適用",
+      history: "変更履歴",
+    },
+    fields: {
+      name: "テナント名",
+      type: "種別",
+      currentPlan: "現在プラン",
+      newPlan: "新プラン",
+      effectiveFrom: "適用開始日",
+      changedAt: "変更日時",
+      changedBy: "変更者",
+      planBefore: "変更前",
+      planAfter: "変更後",
+      note: "メモ",
+      status: "ステータス",
+      lastChangedAt: "直近プラン変更日",
+      latestNote: "直近メモ",
+    },
+    empty: "プラン管理対象のテナントがありません",
+    noHistory: "プラン変更履歴はまだありません。",
+    actions: {
+      apply: "プラン変更を適用",
+      applying: "適用中…",
+    },
+    notices: {
+      external:
+        "請求書発行・決済はオフライン運用です。本画面ではプラン適用と変更履歴のみを管理します。",
+      noOp: "同じプランへの変更は記録されません（履歴・監査ログともに無変更）。",
+    },
+    errors: {
+      tenantIdRequired: "テナント ID を指定してください",
+      planRequired: "新プランを選択してください",
+      noteTooLong: "メモは 2000 文字以内で入力してください",
+    },
+  },
+
+  // S-052 サブ — F-013 施工業者マスタ
+  installer: {
+    title: "施工業者マスタ",
+    listTitle: "施工業者一覧",
+    new: "施工業者を新規登録",
+    edit: "施工業者を編集",
+    empty: "施工業者未登録",
+    emptyCta: "最初の施工業者を登録しましょう",
+    searchByName: "名称で検索",
+    fields: {
+      name: "名称",
+      contactName: "担当者",
+      phone: "電話",
+      email: "メール",
+      area: "対応エリア",
+      isActive: "有効",
+      updatedAt: "最終更新",
+    },
+    sections: {
+      basic: "基本情報",
+      contact: "連絡先",
+      coverage: "対応エリア",
+    },
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+      disable: "このマスタを無効化",
+      disableConfirm:
+        "無効化すると新規契約で選択できなくなります（過去契約からの参照は維持されます）。続行しますか？",
+    },
+    errors: {
+      nameRequired: "名称を入力してください",
+    },
+  },
+
+  // エリアマスタ — イベント候補登録時のエリア選択肢を管理する。
+  // installer マスタと同じ構造（一覧 / 新規 / 編集 / 論理停止）。
+  areaMaster: {
+    title: "エリアマスタ",
+    listTitle: "エリア一覧",
+    new: "エリアを新規登録",
+    edit: "エリアを編集",
+    empty: "エリア未登録",
+    emptyCta: "最初のエリアを登録しましょう",
+    searchByName: "名称で検索",
+    fields: {
+      name: "名称",
+      isActive: "有効",
+      updatedAt: "最終更新",
+    },
+    sections: {
+      basic: "基本情報",
+    },
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+      disable: "このエリアを無効化",
+      disableConfirm:
+        "無効化すると新規イベント候補で選択できなくなります。続行しますか？",
+    },
+    errors: {
+      nameRequired: "名称を入力してください",
+    },
+  },
+
+  storeMaster: {
+    title: "店舗マスタ",
+    listTitle: "店舗一覧",
+    new: "店舗を新規登録",
+    edit: "店舗を編集",
+    empty: "店舗未登録",
+    emptyCta: "最初の店舗を登録しましょう",
+    searchByName: "名称で検索",
+    fields: {
+      name: "名称",
+      isActive: "有効",
+      updatedAt: "最終更新",
+    },
+    sections: {
+      basic: "基本情報",
+    },
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+      disable: "この店舗を無効化",
+      disableConfirm:
+        "無効化すると新規イベント候補で選択できなくなります。続行しますか？",
+    },
+    errors: {
+      nameRequired: "名称を入力してください",
+    },
+  },
+
+  // S-027 — F-023 イベント開催体制決定 (T-03-08 / docs/04 §1.3 S-027).
+  //
+  // 卸業者本部 (wholesaler_admin / wholesaler_event_team) が EventCandidate
+  // (OPEN or CLOSED) の体制を決定する画面。mode 別に動的フォームを表示し、
+  // CANCELLED 以外では Event + EventDealer + EventChange を生成する。
+  eventDecision: {
+    title: "開催体制決定",
+    subtitle: "このイベント候補の開催体制を決定してください",
+    backToCandidate: "イベント候補詳細へ戻る",
+    candidateInfo: "イベント候補概要",
+    preferencesSummary: "希望提出状況",
+    fields: {
+      mode: "開催体制",
+      requiredPeople: "必要人数",
+      dealerRelationshipIds: "担当二次店",
+      reason: "中止理由",
+      note: "備考",
+    },
+    modes: {
+      SELF: "自社開催",
+      DEALER: "二次店開催",
+      JOINT: "共同開催",
+      CANCELLED: "中止",
+    },
+    modeDescriptions: {
+      SELF: "自社スタッフのみで開催します。必要人数を入力してください。",
+      DEALER: "担当二次店が単独で開催します。担当二次店を選択してください。",
+      JOINT: "自社と担当二次店が共同で開催します。必要人数と担当二次店を入力してください。",
+      CANCELLED: "このイベント候補を中止します。イベントは作成されません。",
+    },
+    preferenceStatus: {
+      submitted: "提出済み",
+      notSubmitted: "未提出",
+      heading: "希望提出状況サマリ",
+      submittedDealers: "提出済み二次店",
+      notSubmittedDealers: "未提出二次店",
+      noPreferences: "希望提出がありません",
+    },
+    actions: {
+      submit: "決定して通知",
+      submitting: "決定中…",
+      confirmTitle: "開催体制を決定しますか？",
+      confirmDescription: "決定後は体制変更が必要な場合、別途変更操作が必要です。",
+      confirmCancelled: "このイベント候補を中止します。中止後は元に戻せません。続行しますか？",
+      confirm: "決定する",
+      cancelAction: "キャンセル",
+    },
+    hints: {
+      cancelledNoEvent: "中止を選択した場合、イベントは作成されません。",
+      redirectToShifts: "決定後、自社・共同開催の場合はシフト管理画面に遷移します。",
+    },
+    placeholders: {
+      requiredPeople: "例: 3",
+      reason: "中止理由を入力してください",
+    },
+    decideLinkText: "開催体制を決定する",
+    errors: {
+      requiredPeopleRequired: "自社開催・共同開催では必要人数（1以上）を入力してください",
+      dealerRequired: "二次店開催・共同開催では担当二次店を 1 件以上選択してください",
+      reasonRequired: "中止の場合は理由を入力してください",
+      invalidStatus: "OPEN または CLOSED 状態のイベント候補のみ開催体制を決定できます",
+    },
+    success: {
+      decided: "開催体制を決定しました",
+      cancelled: "イベント候補を中止しました",
+    },
+    changeMode: {
+      confirmTitle: "開催体制を変更しますか？",
+      confirmDescription: "変更前後の差分は変更履歴に記録されます。",
+    },
+    scopeOverride: {
+      title: "二次店スコープ上書き",
+      subtitle: "このイベントの担当二次店のスコープを個別に上書きできます。未設定の場合は関係のデフォルトスコープが適用されます。",
+      fields: {
+        scope: "スコープ",
+        reason: "変更理由",
+      },
+      scopes: {
+        APPOINTMENT_ONLY: "アポ獲得まで",
+        FIRST_VISIT: "初回訪問まで",
+        FULL_CLOSING: "商談・クロージングまで",
+      },
+      scopeNone: "デフォルト（関係設定を使用）",
+      actions: {
+        save: "上書き設定を保存",
+        saving: "保存中…",
+        clear: "上書きをクリア（デフォルトに戻す）",
+      },
+      errors: {
+        reasonRequired: "変更理由を入力してください",
+        eventDealerNotFound: "指定した担当二次店がこのイベントに存在しません",
+      },
+      success: {
+        updated: "スコープ上書きを保存しました",
+        cleared: "スコープ上書きをクリアしました",
+      },
+    },
+  },
+  // S-028 — F-025 自社要員シフト割当 (T-03-10 / docs/04 §1.3 S-028).
+  //
+  // 卸業者本部 (wholesaler_admin / wholesaler_event_team) 専用画面。
+  // Event ヘッダー + シフト一覧テーブル + 必要人数充足バッジ。
+  // シフト追加・編集は shadcn Dialog 経由。
+  eventShift: {
+    title: "シフト管理",
+    subtitle: "自社要員のシフトを割り当てます",
+    backToEvent: "イベント一覧へ戻る",
+    eventInfo: "イベント情報",
+    fields: {
+      user: "担当者",
+      role: "役割",
+      startPlanned: "開始時刻（予定）",
+      endPlanned: "終了時刻（予定）",
+      status: "ステータス",
+    },
+    roles: {
+      LEAD: "リーダー",
+      CATCH: "キャッチ",
+      RECEPTION: "受付",
+      PITCH: "ピッチ",
+      OTHER: "その他",
+    },
+    statuses: {
+      ASSIGNED: "割当済",
+      CHECKED_IN: "チェックイン済",
+      CHECKED_OUT: "チェックアウト済",
+      NO_SHOW: "無断欠席",
+    },
+    staffCount: {
+      label: "充足状況",
+      badge: "{current}/{required} 人",
+      fulfilled: "充足",
+      insufficient: "不足",
+      noRequirement: "人数設定なし",
+    },
+    table: {
+      empty: "シフトがまだ割り当てられていません",
+      columns: {
+        user: "担当者",
+        role: "役割",
+        startPlanned: "開始（予定）",
+        endPlanned: "終了（予定）",
+        status: "状態",
+        actions: "操作",
+      },
+    },
+    placeholders: {
+      selectDefault: "— 選択してください —",
+    },
+    addDialog: {
+      title: "シフトを追加",
+    },
+    editDialog: {
+      title: "シフトを編集",
+    },
+    actions: {
+      add: "シフトを追加",
+      edit: "編集",
+      unassign: "削除",
+      unassignConfirm: "このシフトを削除します。続行しますか？",
+      save: "保存",
+      saving: "保存中…",
+    },
+    errors: {
+      userRequired: "担当者を選択してください",
+      roleRequired: "役割を選択してください",
+      startRequired: "開始時刻を入力してください",
+      endRequired: "終了時刻を入力してください",
+      endBeforeStart: "終了時刻は開始時刻より後にしてください",
+      overlap: "この時間帯に既にシフトが割り当てられています",
+    },
+    feedback: {
+      assigned: "シフトを追加しました",
+      updated: "シフトを更新しました",
+      unassigned: "シフトを削除しました",
+    },
+  },
+  // S-053 — 現場要員ダッシュボード / S-054 — 自分のシフト一覧
+  // (T-03-11 / F-026 / docs/04 §1.4).
+  //
+  // wholesaler_field_staff のスマホ向けダッシュボードと期間フィルタ付き
+  // シフト一覧画面。当日分は最上段固定 + border-primary で視覚強調。
+  fieldShift: {
+    dashboardTitle: "現場ダッシュボード",
+    dashboardSubtitle: "今日の割当シフトと今週の予定を確認します",
+    shiftListTitle: "シフト一覧",
+    shiftListSubtitle: "期間を指定してシフトを確認できます",
+    todaySection: "本日のシフト",
+    thisWeekSection: "今週のシフト",
+    noShiftsToday: "本日のシフトはありません",
+    noShiftsInPeriod: "指定期間にシフトはありません",
+    filter: {
+      today: "今日",
+      thisWeek: "今週",
+      custom: "期間指定",
+      from: "開始日",
+      to: "終了日",
+      apply: "適用",
+    },
+    card: {
+      storeName: "店舗名",
+      area: "エリア",
+      address: "住所",
+      scheduledDate: "実施日",
+      startPlanned: "開始（予定）",
+      endPlanned: "終了（予定）",
+      role: "役割",
+      status: "状態",
+      eventStatus: "イベント状態",
+    },
+    roles: {
+      LEAD: "リーダー",
+      CATCH: "キャッチ",
+      RECEPTION: "受付",
+      PITCH: "ピッチ",
+      OTHER: "その他",
+    },
+    statuses: {
+      ASSIGNED: "割当済",
+      CHECKED_IN: "チェックイン済",
+      CHECKED_OUT: "チェックアウト済",
+      NO_SHOW: "無断欠席",
+    },
+    eventStatuses: {
+      PLANNED: "開催予定",
+      ONGOING: "開催中",
+      CLOSED: "終了",
+      CANCELLED: "中止",
+    },
+    todayBadge: "本日",
+    loading: "シフトを読み込んでいます…",
+  },
+  // S-029 unified — イベント一覧（週次カレンダー + テーブル統合ビュー）
+  eventList: {
+    title: "単発イベント一覧",
+    subtitleWeekly: "週ごとのイベント状況を確認できます",
+    subtitleMonthly: "期間を指定してイベントを一覧できます",
+    newEvent: "イベント登録",
+    weeklyCalendar: "週次カレンダー",
+    weekLabel: "{start} 〜 {end}",
+    selectedWeekEvents: "選択週のイベント一覧",
+    selectedDateEvents: "選択日のイベント一覧",
+    selectedWeekRange: "対象: {start} 〜 {end}",
+    selectedDateLabel: "対象: {date}",
+    empty: "該当するイベントはありません",
+    columns: {
+      scheduledDate: "開催日時",
+      area: "エリア",
+      venue: "場所名",
+      holdingStatus: "開催ステータス",
+      assignStatus: "アサインステータス",
+    },
+    holdingStatuses: {
+      confirmed: "確定",
+      pending: "確認中",
+      cancelled: "中止",
+    },
+    assignStatuses: {
+      confirmed: "確定",
+      pending: "確認中",
+    },
+    dayLabels: {
+      mon: "月",
+      tue: "火",
+      wed: "水",
+      thu: "木",
+      fri: "金",
+      sat: "土",
+      sun: "日",
+    },
+    eventCount: "{n}件",
+    totalEvents: "総イベント件数",
+    confirmed: "開催確定",
+    prospective: "開催見込み",
+    unassigned: "未アサイン",
+    prevWeek: "前週",
+    nextWeek: "次週",
+    thisWeek: "今週",
+    clearSelection: "選択をクリア",
+    weeklyView: "週次表示",
+    monthlyView: "月次表示",
+    monthlyListTitle: "イベント一覧",
+    filter: {
+      period: "期間",
+      venue: "場所",
+      allVenues: "すべて",
+      all: "すべて",
+      clear: "クリア",
+      resultCount: "件",
+    },
+    appointmentInfo: "アポ取り情報（顧客アポイント情報）",
+    appointmentPlaceholder: "開催体制決定後にアポ情報が表示されます",
+    appointmentColumns: {
+      customerName: "顧客名",
+      dateTime: "アポイント日時",
+      address: "住所",
+      memo: "メモ",
+    },
+    assignPendingNote: "開催体制が決定されると、アサイン情報がここに表示されます",
+    decideLink: "開催体制を決定する →",
+    eventDetailTitle: "イベント詳細",
+    editButton: "編集",
+    dateTime: "日時",
+    holdingStatusLabel: "開催ステータス",
+    assignColumns: {
+      name: "担当者名",
+      affiliation: "所属",
+      status: "アサインステータス",
+    },
+    assignStatusOptions: {
+      confirmed: "確定",
+      adjusting: "調整中",
+    },
+    addAssign: "アサイン設定",
+    assignNotAvailable: "開催体制が決定されると担当者をアサインできます",
+    affiliationSelf: "自社",
+    affiliationDealer: "二次店",
+    assignNamePlaceholder: "担当者名を入力",
+    assignDialogTitle: "アサイン設定",
+    assignModeLabel: "開催体制",
+    assignModeSelf: "自社開催",
+    assignModeDealer: "二次店開催",
+    assignModeJoint: "混合開催",
+    assignSelectStaff: "自社要員を選択",
+    assignDealerName: "二次店事業者名",
+    assignDealerNamePlaceholder: "事業者名を入力",
+    assignOverallStatus: "アサインステータス",
+    assignMemo: "メモ",
+    assignMemoPlaceholder: "メモを入力",
+    assignSave: "保存",
+    reportSection: "レポート",
+    reportColumns: {
+      type: "報告種別",
+      submitter: "提出者",
+      submittedAt: "提出日時",
+      memo: "メモ",
+    },
+    reportStart: "開始報告",
+    reportEnd: "終了報告",
+    reportResult: "成果報告",
+    reportNotSubmitted: "未提出",
+    reportSubmitted: "提出済",
+    noReports: "報告はまだありません",
+  },
+
+  // レーンイベント — F-059. 懇意の場所提供元と月単位で複数開催日を契約する
+  // イベント。卸業者本部 (wholesaler_admin / wholesaler_event_team) 専用画面。
+  // 単発イベントと並ぶ機能。仕入値は扱わない（場所提供元との契約条件のみ）。
+  lineEvent: {
+    title: "レーン一覧",
+    subtitle: "場所ごとのレーン契約情報を一覧で確認できます",
+    detailTitle: "レーン詳細",
+    newLine: "レーン登録",
+    empty: "該当するレーンはありません",
+    breadcrumbList: "レーンイベント一覧",
+    holdingCountSuffix: "回",
+    csvExport: "CSV出力",
+    filter: {
+      month: "対象月",
+      venueProvider: "場所提供元",
+      allVenueProviders: "すべての場所提供元",
+      search: "検索",
+      clear: "クリア",
+      resultCount: "件",
+    },
+    columns: {
+      venueName: "場所名",
+      venueProvider: "場所提供事業者",
+      scheduledDates: "開催予定日",
+      area: "エリア",
+      holdingCount: "開催回数",
+      lastUpdated: "最終更新日",
+    },
+    statuses: {
+      DRAFT: "確認中",
+      CONFIRMED: "確定",
+      CANCELLED: "中止",
+    },
+    sections: {
+      basic: "基本情報",
+      schedule: "開催日",
+      contract: "契約条件",
+      status: "ステータス",
+      assign: "アサイン情報",
+    },
+    calendar: {
+      held: "開催日",
+      outOfRange: "対象外",
+      scheduledDatesHeading: "開催予定日",
+      holdingCount: "開催回数",
+      note: "備考",
+    },
+    editSchedule: {
+      button: "編集",
+      dialogTitle: "開催日を編集",
+      save: "保存",
+    },
+    // 日付ポップアップ。タイトルは「YYYY年M月D日(曜)」。レポート/アポは
+    // 単発詳細 (eventList) のラベルを流用し、現状はプレースホルダー表示。
+    datePopup: {
+      titleFormat: "{year}年{month}月{day}日({dow})",
+      reportSection: "レポート",
+      appointmentSection: "アポ取り顧客一覧",
+    },
+    statusUpdate: {
+      label: "開催ステータス",
+      cancelConfirm: "このレーンを中止しますか？",
+    },
+    fields: {
+      lineName: "レーン名",
+      venueName: "場所名",
+      venueProvider: "場所提供元",
+      area: "エリア",
+      address: "住所",
+      targetMonth: "対象月",
+      scheduledDates: "開催日",
+      status: "ステータス",
+      contractType: "契約形態",
+      perDayFee: "日当たりの報酬額（円）",
+      revenueRate: "売上に対する報酬率（%）",
+      contractNote: "メモ",
+      registeredAt: "登録日時",
+      updatedAt: "最終更新",
+    },
+    form: {
+      selectDates: "対象月を選ぶと、その月の開催日を選択できます",
+      selectedCount: "{n}日選択中",
+    },
+    errors: {
+      lineNameRequired: "レーン名を入力してください",
+      venueNameRequired: "場所名を選択してください",
+      targetMonthRequired: "対象月を選択してください",
+      scheduledDatesRequired: "開催日を 1 日以上選択してください",
+    },
+    actions: {
+      createSubmit: "登録",
+    },
+  },
+
+  // S-089 — F-060 二次店レーン希望一覧（アコーディオン）。卸業者ビュー。
+  lanePreference: {
+    title: "二次店希望一覧",
+    subtitle: "二次店ごとのレーン希望を月単位で確認できます",
+    empty: "該当する希望提出はありません",
+    csvExport: "CSV出力",
+    submittedAtLabel: "提出日時",
+    commentLabel: "備考",
+    noComment: "備考はありません",
+    filter: {
+      month: "対象月",
+      dealer: "二次店",
+      allDealers: "すべての二次店",
+      search: "検索",
+      clear: "クリア",
+      resultCount: "件",
+    },
+    card: {
+      lineName: "レーン名",
+      venueProvider: "場所提供元",
+      scheduledDates: "開催日",
+      weekLabel: "第{n}週",
+      dayCount: "{n}日",
+    },
+    priorityLabels: {
+      1: "第一希望",
+      2: "第二希望",
+      3: "第三希望",
+      4: "第四希望",
+      5: "第五希望",
+      // 6 以上は priorityFallback で「第N希望」を生成する。
+      fallback: "第{n}希望",
+    },
+  },
+
+  // 手数料管理 — 一覧・設定（ページ内要素は後続で定義。現状はプレースホルダ）。
+  commission: {
+    list: {
+      title: "手数料一覧",
+      subtitle: "二次店ごとの手数料を確認できます",
+    },
+    settings: {
+      title: "手数料設定",
+      subtitle: "手数料の計算ルールを設定できます",
+    },
+    placeholder: "この画面は準備中です。",
+    // 手数料設定ページ専用ラベル（二次店一覧 / インセンティブ率カード /
+    // 適用期間 / 計算プレビュー / 変更履歴）。値は全てクライアント側のサンプル
+    // で、保存はプレースホルダ（永続化なし）。
+    settingsPage: {
+      listTitle: "二次店一覧",
+      addRule: "ルール追加",
+      columns: {
+        dealerName: "二次店名",
+        tossUpRate: "トスアップ率",
+        closingRate: "クロージング率",
+      },
+      sections: {
+        baseSetting: "インセンティブ基準設定",
+        rates: "インセンティブ率",
+        applyPeriod: "適用期間",
+        preview: "計算プレビュー",
+        history: "変更履歴",
+      },
+      rateCards: {
+        tossUp: "トスアップ（紹介のみ）",
+        tossUpDesc: "紹介（アポ獲得）のみを担当した場合の率",
+        closing: "クロージング（契約完了まで）",
+        closingDesc: "契約完了まで対応した場合の率",
+      },
+      applyPeriod: {
+        from: "適用開始日",
+        to: "適用終了日",
+        noEnd: "終了日なし（現在適用中）",
+        noEndHint: "終了日を空欄にすると「終了日なし」となります",
+      },
+      preview: {
+        baseAmount: "基準金額",
+        baseAmountPlaceholder: "例: 3,000,000",
+        tossUpFee: "トスアップ手数料",
+        closingFee: "クロージング手数料",
+      },
+      historyColumns: {
+        date: "日付",
+        changedBy: "変更者",
+        summary: "内容",
+      },
+      historyEmpty: "変更履歴はまだありません。",
+      save: "保存",
+      empty: "二次店が登録されていません",
+      percentSuffix: "%",
+    },
+    // 手数料一覧ページ専用ラベル（フィルタ・列見出し・支払状況・件数）。
+    listPage: {
+      sectionTitle: "二次店別 手数料",
+      filter: {
+        targetMonth: "対象月",
+        dealer: "二次店",
+        allDealers: "すべての二次店",
+        paymentStatus: "支払状況",
+        all: "すべて",
+        search: "検索",
+        clear: "クリア",
+        csvExport: "CSV出力",
+      },
+      columns: {
+        dealerName: "二次店名",
+        targetMonth: "対象月",
+        customerCount: "対象顧客数",
+        totalFee: "手数料合計",
+        paymentStatus: "支払状況",
+        updatedAt: "最終更新日",
+        expand: "展開",
+        customerName: "顧客名",
+        contractAmount: "契約金額",
+        scope: "対応範囲",
+        incentiveRate: "インセンティブ率",
+        fee: "手数料金額",
+        note: "備考",
+      },
+      band: {
+        customerCount: "顧客数",
+        closingCount: "クロージング件数",
+        tossUpCount: "トスアップ件数",
+        subtotal: "小計",
+      },
+      scopeLabels: {
+        closing: "クロージングまで",
+        tossup: "トスアップのみ",
+      } as Record<"closing" | "tossup", string>,
+      paymentStatusLabels: {
+        pending: "未確定",
+        unpaid: "未払い",
+        partial: "一部支払",
+        paid: "支払済",
+      } as Record<"pending" | "unpaid" | "partial" | "paid", string>,
+      caseCountUnit: "件",
+      customerCountUnit: "名",
+      empty: "該当する手数料データがありません",
+      resultCount: "件",
+      // {start}-{end} を {total} 件中で表示。
+      rangeOf: "{start}-{end}件 / 全{total}件",
+      // 一括支払状況設定ツールバー。{n} は選択件数。
+      bulk: {
+        selectAll: "全選択",
+        selectedCount: "{n}件選択中",
+        apply: "一括設定",
+      },
+      // 展開明細内の調整項目（加算・減算）セクション。
+      adjust: {
+        title: "調整項目",
+        add: "項目追加",
+        itemPlaceholder: "項目名",
+        amountPlaceholder: "金額",
+        total: "合計",
+        remove: "削除",
+      },
+    },
+  },
+
+  // 施工一覧 / 申請一覧（サイドバー導線。ページ内要素は後続で定義するプレースホルダ）。
+  constructionList: {
+    title: "施工一覧",
+    subtitle: "施工状況を一覧で確認・管理できます",
+    placeholder: "この画面は準備中です。",
+  },
+  applicationList: {
+    title: "申請一覧",
+    subtitle: "補助金申請状況を一覧で確認・管理できます",
+    placeholder: "この画面は準備中です。",
+  },
+
+  // S-029 / S-030 — F-027 配属済みイベント一覧・詳細 (T-04-02)
+  // 卸業者ビュー (wholesaler_* 全ロール)
+  event: {
+    title: "配属済みイベント",
+    listTitle: "イベント一覧",
+    detailTitle: "イベント詳細",
+    empty: "表示できるイベントがありません",
+    emptyCta: "開催体制が決定したイベントがここに表示されます",
+    backToList: "イベント一覧へ戻る",
+    filterByStatus: "ステータスで絞り込み",
+    filterByFrom: "開始日",
+    filterByTo: "終了日",
+    allStatuses: "すべてのステータス",
+    detailHeading: "詳細情報",
+    fields: {
+      storeName: "店舗名",
+      area: "エリア",
+      address: "住所",
+      scheduledDate: "開催日",
+      targetMonth: "対象年月",
+      mode: "開催体制",
+      status: "ステータス",
+      requiredPeople: "必要人数",
+      dealerCount: "担当二次店数",
+      reportStatus: "報告状況",
+      updatedAt: "最終更新",
+      lastUpdated: "最終更新日",
+      updatedBy: "更新者",
+      note: "備考",
+      contractType: "契約形態",
+      fixedFee: "固定費",
+      performanceRate: "成果報酬率",
+    },
+    modes: {
+      SELF: "自社開催",
+      DEALER: "二次店開催",
+      JOINT: "共同開催",
+      CANCELLED: "中止",
+    },
+    statuses: {
+      PLANNED: "開催予定",
+      ONGOING: "開催中",
+      CLOSED: "終了",
+      CANCELLED: "中止",
+    },
+    contractTypes: {
+      FIXED: "固定費",
+      PERFORMANCE: "成果報酬",
+      NONE: "なし",
+      OTHER: "その他",
+    },
+    reportTypes: {
+      START: "開始報告",
+      END: "終了報告",
+      RESULT: "成果報告",
+    },
+    reportOrgTypes: {
+      WHOLESALER: "自社",
+      DEALER: "二次店",
+    },
+    sections: {
+      info: "イベント情報",
+      basicInfo: "基本情報",
+      contractConditions: "契約条件",
+      assignInfo: "アサイン情報",
+      dealers: "担当二次店",
+      shifts: "シフト",
+      reports: "報告状況",
+      customers: "関連顧客",
+    },
+    noReports: "報告はまだありません",
+    noDealers: "担当二次店はありません",
+    noShifts: "シフトは未設定です",
+    noCustomers: "関連顧客はまだ登録されていません",
+    customerCountSuffix: "件の顧客が登録されています。",
+    manageShifts: "シフト管理",
+    table: {
+      columns: {
+        store: "店舗名",
+        scheduledDate: "実施日",
+        mode: "開催体制",
+        status: "ステータス",
+        dealers: "担当二次店数",
+        reports: "報告",
+        actions: "操作",
+      },
+    },
+  },
+
+  // S-061 / S-062 — F-027 配属済みイベント一覧・詳細 (T-04-02)
+  // 二次店ビュー (dealer_admin / dealer_staff)
+  eventDealer: {
+    title: "担当イベント",
+    listTitle: "担当イベント一覧",
+    detailTitle: "イベント詳細",
+    empty: "担当イベントがありません",
+    emptyCta: "卸業者から配属されたイベントがここに表示されます",
+    backToList: "担当イベント一覧へ戻る",
+    filterByStatus: "ステータスで絞り込み",
+    filterByFrom: "開始日",
+    filterByTo: "終了日",
+    allStatuses: "すべてのステータス",
+    fields: {
+      storeName: "店舗名",
+      area: "エリア",
+      address: "住所",
+      scheduledDate: "実施日",
+      targetMonth: "対象年月",
+      mode: "開催体制",
+      status: "ステータス",
+      wholesaler: "卸業者",
+      scope: "スコープ",
+      reportStatus: "報告状況",
+      updatedAt: "最終更新",
+    },
+    modes: {
+      SELF: "自社開催",
+      DEALER: "二次店開催",
+      JOINT: "共同開催",
+      CANCELLED: "中止",
+    },
+    statuses: {
+      PLANNED: "開催予定",
+      ONGOING: "開催中",
+      CLOSED: "終了",
+      CANCELLED: "中止",
+    },
+    scopes: {
+      APPOINTMENT_ONLY: "アポ獲得まで",
+      FIRST_VISIT: "初回訪問まで",
+      FULL_CLOSING: "商談・クロージングまで",
+    },
+    reportTypes: {
+      START: "開始報告",
+      END: "終了報告",
+      RESULT: "成果報告",
+    },
+    sections: {
+      info: "イベント情報",
+      scope: "担当スコープ",
+      reports: "報告状況",
+    },
+    noReports: "報告はまだありません",
+    table: {
+      columns: {
+        store: "店舗名",
+        scheduledDate: "実施日",
+        mode: "開催体制",
+        status: "ステータス",
+        scope: "スコープ",
+        reports: "報告",
+        actions: "操作",
+      },
+    },
+  },
+
+  // S-032 / S-033 / S-057 / S-064 / S-065 — F-031 顧客登録・編集 (T-04-06).
+  //
+  // 卸業者と二次店の両ロールが使う顧客管理ラベル。PII マスキング表示は
+  // MaskingService が適用した後の文字列がここのラベルと組み合わさる。
+  customer: {
+    title: "顧客管理",
+    listTitle: "顧客一覧",
+    subtitle: "全ての顧客情報を一覧で確認・管理できます。",
+    new: "顧客を新規登録",
+    newShort: "＋ 新規顧客登録",
+    honorific: "様",
+    edit: "顧客情報を編集",
+    empty: "顧客未登録",
+    emptyCta: "最初の顧客を登録しましょう",
+    searchByName: "氏名で検索",
+    searchByPhone: "電話番号で検索",
+    searchPlaceholder: "氏名・電話番号で検索",
+    searchPlaceholderFull: "顧客名・住所・担当者名で検索",
+    filterByStatus: "ステータスで絞り込み",
+    allStatuses: "すべてのステータス",
+    filterByChannel: "チャネルで絞り込み",
+    allChannels: "すべてのチャネル",
+    filters: {
+      assignee: "担当者",
+      contractStatus: "契約状況",
+      constructionStatus: "施工状況",
+      subsidyStatus: "補助金申請状況",
+      maekaku: "マエカク有無",
+      all: "すべて",
+      search: "検索",
+      clear: "クリア",
+      resultCount: "表示件数: {total}件",
+    },
+    columns: {
+      name: "顧客名",
+      area: "エリア",
+      assignee: "担当者",
+      nextAppointmentAt: "次回アポイント",
+      maekaku: "マエカク",
+      contractStatus: "契約状況",
+      constructionStatus: "施工状況",
+      subsidyStatus: "補助金申請状況",
+    },
+    maekakuLabels: {
+      present: "済",
+      absent: "未",
+    },
+    contractStatusLabels: {
+      negotiating: "商談中",
+      contracted: "契約済",
+      lost: "失注",
+      cancelled: "解約",
+    },
+    constructionStatusLabels: {
+      not_started: "未着工",
+      in_progress: "着工中",
+      done: "施工完了",
+    },
+    subsidyStatusLabels: {
+      none: "未申請",
+      applying: "申請中",
+      granted: "交付決定",
+    },
+    detail: {
+      basicInfo: "基本情報",
+      memo: "メモ",
+      edit: "編集",
+      editBasicInfo: "基本情報を編集",
+      editMemo: "メモを編集",
+      editAssignee: "担当者を変更",
+      changeAssignee: "変更",
+      assigneeLabel: "担当者",
+      areaUnset: "未設定",
+      editContract: "契約状況を編集",
+      editConstruction: "施工状況を編集",
+      editSubsidy: "補助金申請状況を編集",
+      save: "保存",
+      cancel: "キャンセル",
+      backToList: "一覧へ戻る",
+      noMemo: "メモはありません",
+      fields: {
+        kana: "フリガナ",
+        postalCode: "郵便番号",
+        address: "住所",
+        area: "エリア",
+        phone: "電話番号",
+        email: "メールアドレス",
+        channel: "獲得チャネル",
+        assignee: "担当者",
+        createdAt: "登録日時",
+      },
+      cards: {
+        contract: "契約状況",
+        construction: "施工状況",
+        subsidy: "補助金申請状況",
+      },
+      contractFields: {
+        plan: "契約プラン",
+        expectedDate: "契約予定日",
+      },
+      constructionFields: {
+        plannedDate: "工事予定日",
+        completedDate: "完了予定日",
+      },
+      subsidyFields: {
+        type: "申請種別",
+        submittedDate: "申請日",
+        grantedDate: "交付決定日",
+      },
+      history: {
+        title: "商談履歴（新しい順）",
+        newRecord: "新規記録",
+        showAll: "すべての履歴を表示",
+        assignee: "担当",
+        empty: "商談履歴はありません",
+        kinds: {
+          event: "イベント経由",
+          phone: "電話連絡",
+          appointment: "アポイント",
+          email: "メール",
+          visit: "訪問",
+          other: "その他",
+        },
+      },
+      newActivity: {
+        title: "新規記録",
+        date: "日付",
+        category: "種別",
+        detail: "詳細",
+        tasks: "発生タスク",
+        taskContent: "タスク内容",
+        taskDue: "期限",
+        taskAssignee: "担当者",
+        addTask: "タスクを追加",
+        files: "関連ファイル",
+        selectFile: "ファイルを選択",
+        uploading: "アップロード中…",
+        save: "保存",
+        cancel: "キャンセル",
+        detailPlaceholder: "対応内容を入力",
+      },
+      files: {
+        title: "関連ファイル",
+        showAll: "すべてのファイルを見る",
+        empty: "関連ファイルはありません",
+      },
+      tasks: {
+        title: "タスク / ToDo",
+        showAll: "すべてのタスクを見る",
+        empty: "タスクはありません",
+      },
+    },
+    pageSize: {
+      label: "{n}件",
+      range: "{from} - {to} / {total}件",
+      displayCount: "表示件数",
+    },
+    weekdays: ["日", "月", "火", "水", "木", "金", "土"],
+    none: "—",
+    pagination: {
+      first: "最初へ",
+      prev: "前へ",
+      next: "次へ",
+      last: "最後へ",
+      pageOf: "{page} / {total} ページ",
+    },
+    fields: {
+      name: "氏名",
+      kana: "フリガナ",
+      phone: "電話番号",
+      email: "メールアドレス",
+      postalCode: "郵便番号",
+      address: "住所",
+      channel: "獲得チャネル",
+      sourceEventId: "催事 ID",
+      status: "ステータス",
+      note: "備考",
+      ownerRelationshipId: "担当二次店",
+      createdAt: "登録日時",
+      updatedAt: "最終更新",
+    },
+    channels: {
+      EVENT: "催事",
+      WALK_IN: "飛び込み",
+      TELE: "テレアポ",
+      REFERRAL: "紹介",
+      OTHER: "その他",
+    },
+    statuses: {
+      NEW: "新規",
+      PRE_CALL_WAIT: "マエカク待ち",
+      PRE_CALL_DONE: "マエカク済",
+      VISIT_PLANNED: "訪問予定",
+      IN_NEGOTIATION: "商談中",
+      CONTRACTED: "契約済",
+      LOST: "失注",
+      IN_CONSTRUCTION: "施工中",
+      COMPLETED: "完了",
+    },
+    sections: {
+      basic: "基本情報",
+      contact: "連絡先",
+      address: "住所",
+      acquisition: "獲得チャネル",
+      note: "備考",
+    },
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+    },
+    feedback: {
+      duplicatePhone: "同じ電話番号の顧客がすでに存在します（登録は完了しています）",
+    },
+    errors: {
+      nameRequired: "氏名を入力してください",
+      phoneRequired: "電話番号を入力してください",
+      channelRequired: "獲得チャネルを選択してください",
+      sourceEventIdRequired: "催事チャネルでは催事 ID を指定してください",
+    },
+  },
+
+  // S-034 / S-074 / S-075 — F-033 / F-034 アポ登録・編集・一覧 (T-04-08).
+  //
+  // 卸業者と二次店双方が利用するアポ管理ラベル。
+  appointment: {
+    title: "アポ管理",
+    listTitle: "アポ一覧",
+    new: "アポを新規登録",
+    edit: "アポを編集",
+    empty: "アポ未登録",
+    emptyCta: "最初のアポを登録しましょう",
+    filterByStatus: "ステータスで絞り込み",
+    allStatuses: "すべてのステータス",
+    filterByFrom: "開始日",
+    filterByTo: "終了日",
+    pagination: {
+      prev: "前へ",
+      next: "次へ",
+      pageOf: "{page} / {total} ページ",
+    },
+    fields: {
+      customerId: "顧客",
+      eventId: "催事 ID（任意）",
+      scheduledAt: "訪問予定日時",
+      location: "場所（任意）",
+      acquiredRelationshipId: "取得元二次店（任意）",
+      appointmentType: "種別（任意）",
+      status: "ステータス",
+      note: "備考（任意）",
+      cancelReason: "キャンセル理由",
+      createdAt: "登録日時",
+      updatedAt: "最終更新",
+    },
+    statuses: {
+      UNCONFIRMED: "未確認",
+      PRE_CALL_DONE: "マエカク済",
+      VISITED: "訪問済",
+      ABSENT: "不在",
+      CANCELLED: "キャンセル",
+      RESCHEDULED: "再調整",
+    },
+    sections: {
+      basic: "基本情報",
+      schedule: "日程",
+      status: "ステータス",
+      note: "備考",
+      cancel: "キャンセル",
+    },
+    actions: {
+      createSubmit: "登録",
+      updateSubmit: "保存",
+      cancel: "アポをキャンセル",
+      cancelConfirm: "このアポをキャンセルします。続行しますか？",
+      cancelling: "キャンセル中…",
+      preCall: "マエカク",
+    },
+    feedback: {
+      created: "アポを登録しました",
+      updated: "アポを更新しました",
+      cancelled: "アポをキャンセルしました",
+      invalidTransition: "この状態からその状態への変更はできません",
+    },
+    errors: {
+      customerRequired: "顧客を選択してください",
+      scheduledAtRequired: "訪問予定日時を入力してください",
+      cancelReasonPlaceholder: "キャンセル理由（任意）",
+      invalidStateTransition: "この状態からその状態への変更はできません",
+    },
+  },
+
+  // S-035 — F-035 マエカク管理 (T-04-09 / docs/04 §1.3).
+  //
+  // 卸業者本部 (wholesaler_admin / wholesaler_call_team) 専用画面。
+  // 二次店ロールは URL 直叩きも含めて 403。
+  preCall: {
+    title: "マエカク管理",
+    listTitle: "マエカク履歴",
+    recordTitle: "マエカク結果を記録",
+    recordDescription: "コール結果と次のアクションを記録してください",
+    noPreCall: "マエカク未記録",
+    alreadyRecorded: "このアポにはすでにマエカクが記録されています",
+    backToAppointment: "アポ詳細へ戻る",
+    fields: {
+      result: "コール結果",
+      notes: "メモ（任意）",
+      rescheduledAt: "新しい訪問予定日時",
+      calledAt: "コール日時",
+      calledBy: "コール担当者",
+    },
+    results: {
+      APPROVED: "承認（訪問確認）",
+      ABSENT: "不在",
+      CALLBACK: "折り返し依頼",
+      CANCELLED: "キャンセル",
+      RESCHEDULED: "日程変更",
+    },
+    resultBadges: {
+      APPROVED: "承認",
+      ABSENT: "不在",
+      CALLBACK: "折り返し",
+      CANCELLED: "キャンセル",
+      RESCHEDULED: "日程変更",
+    },
+    appointmentStatusUpdated: {
+      APPROVED: "アポステータスを「マエカク済」に更新しました",
+      ABSENT: "マエカクを記録しました",
+      CALLBACK: "マエカクを記録しました",
+      CANCELLED: "アポステータスを「キャンセル」に更新しました",
+      RESCHEDULED: "アポステータスを「再調整」に更新し、日程を更新しました",
+    },
+    actions: {
+      record: "記録する",
+      recording: "記録中…",
+    },
+    errors: {
+      appointmentNotFound: "アポが見つかりません",
+      rescheduledAtRequired: "日程変更の場合は新しい訪問予定日時を入力してください",
+      alreadyRecorded: "このアポにはすでにマエカクが記録されています",
+    },
+    feedback: {
+      recorded: "マエカクを記録しました",
+    },
+  },
+
+  // S-036 / S-066 / S-077 — F-036 / F-037 マエカク結果連絡・二次店確認 (T-04-10).
+  //
+  // 卸業者側: 対象二次店チェックリスト + 連絡ボタン + 連絡済みステータス表示。
+  // 二次店側: マエカク結果通知一覧 + 確認ボタン → ACKNOWLEDGED に更新。
+  preCallNotification: {
+    title: "マエカク結果連絡",
+    listTitle: "マエカク結果通知一覧",
+    sendTitle: "二次店への結果連絡",
+    sendDescription: "マエカク結果を対象の二次店に通知します。",
+    ackTitle: "マエカク結果の確認",
+    noNotifications: "通知はありません",
+    fields: {
+      relationship: "二次店",
+      status: "ステータス",
+      notifiedAt: "連絡日時",
+      acknowledgedAt: "確認日時",
+    },
+    statuses: {
+      PENDING: "未連絡",
+      SENT: "送信済み",
+      ACKNOWLEDGED: "確認済み",
+    },
+    statusBadges: {
+      PENDING: "未連絡",
+      SENT: "送信済み",
+      ACKNOWLEDGED: "確認済み",
+    },
+    actions: {
+      send: "連絡する",
+      sending: "連絡中…",
+      acknowledge: "確認済みにする",
+      acknowledging: "確認中…",
+    },
+    feedback: {
+      sent: "マエカク結果を連絡しました",
+      alreadySent: "この二次店はすでに連絡済みです",
+      acknowledged: "確認済みにしました",
+      alreadyAcknowledged: "すでに確認済みです",
+    },
+    errors: {
+      preCallNotFound: "マエカクが見つかりません",
+      notificationNotFound: "通知が見つかりません",
+      noRelationshipSelected: "通知対象の二次店を 1 件以上選択してください",
+    },
+    selectAll: "すべて選択",
+    clearSelection: "選択を解除",
+    selectedCount: "{n} 件選択中",
+  },
+
+  // S-057 — 現場フォーム: アポ顧客登録 (T-04-11 / F-031 / F-033 / docs/04 §1.4).
+  //
+  // wholesaler_field_staff がスマホ上で 1 画面で顧客 + アポを同時登録する
+  // 簡易フォーム。Sheet（BottomSheet）ベースでダッシュボードから呼び出す。
+  fieldQuickAppointment: {
+    sheetTitle: "アポ・顧客を登録",
+    sheetDescription: "顧客情報とアポ日程を入力してください。今日の催事から自動的に紐付けます。",
+    openButton: "クイックアポ登録",
+    sections: {
+      customer: "顧客情報",
+      appointment: "アポ日程",
+    },
+    fields: {
+      name: "氏名",
+      phone: "電話番号",
+      scheduledAt: "訪問予定日時",
+      note: "メモ（任意）",
+      sourceEventId: "催事 ID（自動入力）",
+    },
+    submitButton: "登録する",
+    submitting: "登録中…",
+    successToast: "顧客とアポを登録しました",
+    noEventToday: "今日の催事シフトが見つかりません。催事 ID を確認してください。",
+    errors: {
+      nameRequired: "氏名を入力してください",
+      phoneRequired: "電話番号を入力してください",
+      scheduledAtRequired: "訪問予定日時を入力してください",
+    },
+    reportLinks: {
+      startReport: "開始報告",
+      endReport: "終了報告",
+    },
+  },
+
+  // S-037 / S-038 / S-067 — F-038 商談・クロージング管理 (T-05-03 / docs/04 §1.3 §1.5).
+  //
+  // 卸業者 (S-037/S-038) と二次店 (S-067) の両側で利用する商談管理ラベル。
+  // ステータス遷移ボタン・スコープ制限バッジ・ページネーションを含む。
+  deal: {
+    title: "商談管理",
+    listTitle: "商談一覧",
+    detailTitle: "商談詳細",
+    new: "商談を新規登録",
+    empty: "商談未登録",
+    emptyCta: "顧客のアポ取得後、商談を登録できます",
+    dealerSubtitle: "自社が担当する商談の一覧です",
+    filterByStatus: "ステータスで絞り込み",
+    allStatuses: "すべてのステータス",
+    filterFrom: "登録日（開始）",
+    filterTo: "登録日（終了）",
+    pagination: {
+      prev: "前へ",
+      next: "次へ",
+      pageOf: "{page} / {total} ページ",
+    },
+    fields: {
+      customer: "顧客",
+      status: "ステータス",
+      ownerType: "担当",
+      firstVisitAt: "初回訪問日",
+      proposedProduct: "提案商品",
+      proposedAmount: "提案金額",
+      expectedProfit: "見込み粗利",
+      expectedContractDate: "契約見込み日",
+      lostReason: "失注理由",
+      nextAction: "次回アクション",
+      note: "備考",
+      createdAt: "登録日",
+      scopeCapability: "スコープ",
+    },
+    statuses: {
+      VISIT_PLANNED: "初回訪問予定",
+      VISITED: "訪問済み",
+      PROPOSING: "提案中",
+      QUOTED: "見積提出",
+      CONSIDERING: "検討中",
+      LIKELY_CONTRACT: "契約見込み",
+      CONTRACTED: "契約",
+      LOST: "失注",
+    },
+    ownerTypes: {
+      WHOLESALER: "自社",
+      DEALER: "二次店",
+    },
+    scopeCapabilities: {
+      readOnly: "閲覧のみ（アポ獲得まで）",
+      visitOnly: "初回訪問まで",
+      fullClosing: "商談・クロージングまで",
+    },
+    sections: {
+      basic: "基本情報",
+      statusChange: "ステータス変更",
+    },
+    terminalNotice: "このステータスは最終状態のため、変更はできません。",
+    actions: {
+      changeStatus: "ステータスを変更",
+      changing: "変更中…",
+    },
+    errors: {
+      notFound: "商談が見つかりません",
+      invalidTransition: "この状態からその状態への変更はできません",
+      scopeForbidden: "このスコープではこの操作はできません",
+    },
+    feedback: {
+      created: "商談を登録しました",
+      updated: "商談を更新しました",
+      statusChanged: "ステータスを変更しました",
+    },
+  },
+
+  // S-040 / S-041 — F-040 契約登録・詳細 (T-05-06 / docs/04 §1.3 §1.5).
+  //
+  // 卸業者 (WHOLESALER_ADMIN / WHOLESALER_DIRECT_SALES) 専用の契約登録フォームと
+  // 契約詳細画面。契約日・金額・自社開催フラグを入力し、Deal の LIKELY_CONTRACT
+  // → CONTRACTED 遷移と Contract レコード作成を 1 トランザクションで完結する。
+  // cancelDeadline と incentiveRateSnapshot は自動計算されてサーバ側で確定する。
+  contract: {
+    title: "契約管理",
+    listTitle: "契約一覧",
+    detailTitle: "契約詳細",
+    new: "契約を登録",
+    empty: "契約未登録",
+    emptyCta: "商談が「契約見込み」になったら契約を登録できます",
+    filterByStatus: "ステータスで絞り込み",
+    allStatuses: "すべてのステータス",
+    filterFrom: "契約日（開始）",
+    filterTo: "契約日（終了）",
+    pagination: {
+      prev: "前へ",
+      next: "次へ",
+      pageOf: "{page} / {total} ページ",
+    },
+    fields: {
+      deal: "商談",
+      customer: "顧客",
+      contractDate: "契約日",
+      totalAmount: "契約金額（円）",
+      cancelDeadline: "キャンセル期限",
+      incentiveRateSnapshot: "インセンティブ率スナップショット（%）",
+      incentiveTargetTypeSnapshot: "インセンティブ対象粗利種別スナップショット",
+      isSelfHosted: "自社開催案件（二次店インセンティブ対象外）",
+      status: "ステータス",
+      createdAt: "登録日時",
+      updatedAt: "最終更新",
+    },
+    statuses: {
+      CONTRACTED: "契約中",
+      CONSTRUCTING: "施工中",
+      DONE: "完了",
+      CANCELLED: "キャンセル済み",
+    },
+    sections: {
+      basic: "基本情報",
+      amounts: "金額・条件",
+      snapshot: "スナップショット（自動）",
+      items: "契約明細",
+      grossProfit: "粗利",
+      constructions: "施工状況",
+      applications: "補助金申請",
+      incentive: "インセンティブ",
+    },
+    actions: {
+      createSubmit: "契約を登録",
+      creating: "登録中…",
+      goToItems: "明細を編集",
+      goToGrossProfit: "粗利を計算",
+      goToIncentive: "インセンティブを確認・調整",
+    },
+    feedback: {
+      created: "契約を登録しました",
+    },
+    detail: {
+      dealLink: "商談",
+      customerLink: "顧客",
+      noItems: "明細未登録",
+      noGrossProfit: "粗利未計算",
+      noConstructions: "施工未登録",
+      noApplications: "補助金申請未登録",
+      selfHostedBadge: "自社開催案件",
+      incentiveNote: "共同開催案件は手動分配が必要です。インセンティブを確認・確定してください。",
+    },
+    cancel: {
+      buttonLabel: "契約をキャンセル",
+      dialogTitle: "契約キャンセルの確認",
+      dialogDescription:
+        "この操作は取り消せません。キャンセル期限内の場合はインセンティブも取消し、期限後の場合は翌月に負調整が発生します。",
+      reasonLabel: "キャンセル理由",
+      reasonPlaceholder: "例: お客様都合によるキャンセル",
+      confirmButton: "キャンセルを実行",
+      confirming: "処理中…",
+      withinDeadlineNotice: "キャンセル期限内です。インセンティブは即時取消しになります。",
+      afterDeadlineNotice: "キャンセル期限を過ぎています。翌月分に負調整が作成されます。",
+      successWithin: "契約をキャンセルしました（期限内）",
+      successAfter: "契約をキャンセルしました。翌月分に負調整が作成されます",
+      alreadyCancelled: "この契約はすでにキャンセル済みです",
+      invalidStatus: "キャンセルできるのは「契約中」または「施工中」の状態のみです",
+    },
+    errors: {
+      dealRequired: "商談 ID を指定してください",
+      contractDateRequired: "契約日を入力してください",
+      totalAmountRequired: "契約金額を入力してください",
+      totalAmountNonNegative: "契約金額は 0 以上で入力してください",
+      dealNotFound: "商談が見つかりません",
+      dealNotLikelyContract:
+        "契約登録には商談が「契約見込み」状態である必要があります",
+    },
+  },
+
+  // S-065 — 二次店 契約一覧・詳細 (T-05-09 / F-040 / docs/04 §1.5).
+  //
+  // 二次店ロール (dealer_admin / dealer_staff) 向け契約一覧・詳細。
+  // snapshotPurchasePrice は DTO 物理除外。施工費・卸業者内部情報も非表示。
+  // 自社関与 (ownerRelationshipId IN ctx.relationshipIds) のみ表示。
+  dealerContract: {
+    listTitle: "契約一覧",
+    detailTitle: "契約詳細",
+    empty: "契約がありません",
+    emptyCta: "担当顧客の契約が成立するとここに表示されます",
+    filterByStatus: "ステータスで絞り込み",
+    allStatuses: "すべてのステータス",
+    filterFrom: "契約日（開始）",
+    filterTo: "契約日（終了）",
+    pagination: {
+      prev: "前へ",
+      next: "次へ",
+      pageOf: "{page} / {total} ページ",
+    },
+    fields: {
+      customer: "顧客",
+      contractDate: "契約日",
+      totalAmount: "契約金額（円）",
+      cancelDeadline: "キャンセル期限",
+      status: "ステータス",
+      dealerPrice: "二次店卸値（円）",
+      listPrice: "参考売価（円）",
+    },
+    statuses: {
+      CONTRACTED: "契約中",
+      CONSTRUCTING: "施工中",
+      DONE: "完了",
+      CANCELLED: "キャンセル済み",
+    },
+    sections: {
+      basic: "基本情報",
+      items: "契約明細",
+      incentivePlaceholder: "インセンティブ（SP-06 で接続予定）",
+    },
+    detail: {
+      noItems: "明細未登録",
+      incentivePlaceholder: "インセンティブ確定は SP-06 で実装予定です",
+    },
+  },
+
+  // S-039 — F-039 二次店商談・クロージング報告一覧 (T-05-04 / docs/04 §1.3 S-039).
+  //
+  // 卸業者 (wholesaler_admin / wholesaler_direct_sales) 専用。
+  // 二次店所有の商談更新（ownerType = DEALER）を一覧表示し、
+  // 契約見込み行を強調。「商談詳細へ」で S-038 に遷移する。
+  dealReport: {
+    listTitle: "二次店商談・クロージング報告",
+    subtitle: "二次店が更新した商談の最新ステータスを確認できます",
+    empty: "該当する二次店商談報告がありません",
+    emptyCta: "フィルタ条件を変更するか、対象月を切り替えてください",
+    filterByMonth: "対象月",
+    goToDetail: "商談詳細へ",
+    fields: {
+      customer: "顧客",
+      status: "ステータス",
+      dealer: "担当二次店",
+      updatedAt: "最終更新",
+    },
+  },
+
+  // S-044 — F-041 契約明細登録（価格スナップショット）(T-05-07 / docs/04 §1.3 S-044).
+  //
+  // 卸業者 (WHOLESALER_ADMIN / WHOLESALER_DIRECT_SALES) 専用の契約明細管理画面。
+  // 価格スナップショット列（仕入値 / 二次店卸値 / 参考売価）を一括表示し、
+  // 商品選択 + 数量入力で明細を全置換する。
+  // 二次店向け DTO では snapshotPurchasePrice を物理除外する（CLAUDE.md rule #5）。
+  contractItem: {
+    title: "契約明細",
+    contractInfo: "契約情報",
+    empty: "明細がまだ登録されていません",
+    addRow: "明細を追加",
+    selectProduct: "— 商品を選択 —",
+    notEditable: "この契約は CONTRACTED 状態ではないため明細の変更はできません",
+    purchasePriceHidden: "（内部管理）",
+    fields: {
+      product: "商品",
+      qty: "数量",
+      contractDate: "契約日",
+      status: "ステータス",
+      totalAmount: "契約金額",
+    },
+    columns: {
+      productName: "商品名",
+      maker: "メーカー",
+      qty: "数量",
+      unit: "単位",
+      purchasePrice: "仕入値（円）",
+      dealerPrice: "二次店卸値（円）",
+      listPrice: "参考売価（円）",
+      subtotal: "小計（円）",
+    },
+    actions: {
+      addRow: "追加",
+      save: "明細を保存",
+      saving: "保存中…",
+    },
+    feedback: {
+      saved: "契約明細を保存しました",
+    },
+    errors: {
+      itemsRequired: "明細は 1 件以上必要です",
+      productRequired: "商品を選択してください",
+      qtyRequired: "数量を入力してください",
+      productNotEffective: "契約日時点で有効な商品が見つかりません",
+    },
+  },
+
+  // S-045 — F-042 粗利計算・手動調整 (T-05-08 / docs/04 §1.3 §1.5).
+  //
+  // 卸業者 (WHOLESALER_ADMIN / WHOLESALER_DIRECT_SALES) 専用。
+  // 契約明細スナップショットから自動計算し、必要に応じて手動調整する。
+  // snapshotPurchasePrice は DTO 物理除外対象なので二次店には表示しない。
+  grossProfit: {
+    title: "粗利計算",
+    subtitle: "契約明細スナップショットをもとに粗利を計算します",
+    backToContract: "契約詳細へ戻る",
+    noItems: "契約明細がまだ登録されていません。先に明細を登録してください。",
+    sections: {
+      summary: "粗利サマリ",
+      recalc: "再計算",
+      adjust: "手動調整",
+    },
+    fields: {
+      salesPrice: "売上（円）",
+      purchaseTotal: "仕入合計（円）",
+      dealerTotal: "二次店向け卸値合計（円）",
+      constructionFee: "施工費（円）",
+      otherCost: "その他費用（円）",
+      discount: "値引き（円）",
+      projectProfit: "案件粗利（円）",
+      wholesaleProfit: "卸粗利（円）",
+      profitRate: "粗利率",
+      incentiveTargetType: "インセンティブ対象粗利種別",
+      incentiveTargetProfit: "インセンティブ対象粗利（円）",
+      manualAdjustmentReason: "調整理由",
+      manualAdjustedAt: "手動調整日時",
+      manualValue: "手動指定額（円）",
+    },
+    incentiveTargetTypes: {
+      PROJECT_PROFIT: "案件粗利",
+      WHOLESALE_PROFIT: "卸粗利",
+      MANUAL: "手動指定",
+    },
+    manualBadge: "手動調整済み",
+    actions: {
+      recalc: "再計算",
+      recalcing: "計算中…",
+      adjust: "手動調整を保存",
+      adjusting: "保存中…",
+    },
+    feedback: {
+      recalcDone: "粗利を再計算しました",
+      adjustDone: "手動調整を保存しました",
+    },
+    placeholders: {
+      manualValue: "例: 50000",
+      adjustReason: "例: 共同開催手動配分",
+    },
+    errors: {
+      salesPriceRequired: "売上金額を入力してください",
+      manualValueRequired: "手動指定額を入力してください",
+      reasonRequired: "調整理由を入力してください",
+      itemsRequired: "契約明細が登録されていません",
+    },
+  },
+
+  // S-046 — F-044 施工状況管理 (T-05-10 / docs/04 §1.3 S-046).
+  //
+  // 卸業者 (WHOLESALER_ADMIN / WHOLESALER_DIRECT_SALES) 専用。
+  // 施工レコードの作成・ステータス遷移・費用更新を管理する。
+  // 施工費更新時は粗利が自動再計算される（docs/02 §F-044 受入基準）。
+  construction: {
+    title: "施工管理",
+    listTitle: "施工一覧",
+    detailTitle: "施工詳細",
+    new: "施工を登録",
+    empty: "施工未登録",
+    emptyCta: "施工を登録しましょう",
+    backToContract: "契約詳細へ戻る",
+    fields: {
+      status: "ステータス",
+      installer: "施工業者",
+      fee: "施工費（円）",
+      surveyDate: "現地調査日",
+      plannedDate: "施工予定日",
+      completedDate: "施工完了日",
+      note: "備考",
+      createdAt: "登録日時",
+      updatedAt: "最終更新",
+    },
+    statuses: {
+      REQUEST_PENDING: "依頼前",
+      REQUESTED: "依頼済み",
+      SURVEYED: "現地調査済み",
+      CONSTRUCTING: "施工中",
+      DONE: "完了",
+      PAUSED: "中断",
+    },
+    sections: {
+      basic: "基本情報",
+      schedule: "日程",
+      cost: "施工費",
+      statusChange: "ステータス変更",
+    },
+    upcomingBadge: "施工予定 7 日前以内",
+    actions: {
+      create: "施工を登録",
+      creating: "登録中…",
+      save: "保存",
+      saving: "保存中…",
+      changeStatus: "ステータスを変更",
+      changing: "変更中…",
+    },
+    feedback: {
+      created: "施工を登録しました",
+      updated: "施工情報を更新しました",
+      statusChanged: "ステータスを変更しました",
+      grossProfitRecalculated: "施工費の変更により粗利を再計算しました",
+    },
+    errors: {
+      contractRequired: "契約 ID を指定してください",
+      constructionNotFound: "施工情報が見つかりません",
+      invalidTransition: "この状態からその状態への変更はできません",
+      cancelledContract: "キャンセルされた契約には施工を登録できません",
+    },
+  },
+
+  // S-047 — F-045 補助金申請管理 (T-05-11 / docs/04 §1.3 S-047).
+  //
+  // 卸業者 (WHOLESALER_ADMIN / WHOLESALER_DIRECT_SALES) 専用。
+  // 補助金申請レコードの作成・ステータス遷移・金額更新を管理する。
+  application: {
+    title: "補助金申請管理",
+    listTitle: "補助金申請一覧",
+    detailTitle: "申請詳細",
+    new: "申請を登録",
+    empty: "申請未登録",
+    emptyCta: "補助金申請を登録しましょう",
+    backToContract: "契約詳細へ戻る",
+    fields: {
+      status: "ステータス",
+      type: "申請種別",
+      agency: "申請先",
+      plannedDate: "申請予定日",
+      submittedDate: "申請日",
+      approvedDate: "承認日",
+      estimatedAmount: "補助金見込み額（円）",
+      confirmedAmount: "補助金確定額（円）",
+      note: "備考",
+      createdAt: "登録日時",
+      updatedAt: "最終更新",
+    },
+    statuses: {
+      DRAFT: "未申請",
+      SUBMITTED: "申請済み",
+      APPROVED: "承認済み",
+      REJECTED: "却下",
+      CANCELLED: "取消",
+    },
+    sections: {
+      basic: "基本情報",
+      amounts: "補助金金額",
+      statusChange: "ステータス変更",
+    },
+    actions: {
+      create: "申請を登録",
+      creating: "登録中…",
+      save: "保存",
+      saving: "保存中…",
+      changeStatus: "ステータス変更",
+      changing: "変更中…",
+    },
+    feedback: {
+      created: "申請を登録しました",
+      updated: "申請情報を更新しました",
+      statusChanged: "ステータスを変更しました",
+    },
+    estimatedPrefix: "見込み",
+    confirmedPrefix: "確定",
+    placeholders: {
+      type: "例：省エネ補助金、住宅ポイント",
+      agency: "申請先機関名",
+    },
+    errors: {
+      contractRequired: "契約 ID を指定してください",
+      typeRequired: "申請種別を入力してください",
+      applicationNotFound: "申請情報が見つかりません",
+      invalidTransition: "この状態からその状態への変更はできません",
+      cancelledContract: "キャンセルされた契約には申請を登録できません",
+      confirmedAmountRequired: "承認時は補助金確定額が必要です",
+    },
+  },
+
+  // S-050 タブ — F-047 共同開催インセンティブ手動調整 (T-06-03 / docs/05 §4.8 §6.1).
+  //
+  // 卸業者 (WHOLESALER_ADMIN) 専用。eventModeAtContract=JOINT の契約の
+  // インセンティブを二次店ごとに手動分配し FINALIZED にする。
+  incentiveAdjust: {
+    title: "インセンティブ調整",
+    subtitle: "共同開催インセンティブの二次店への手動分配",
+    backToContract: "契約詳細へ戻る",
+    notJointMode: "この契約は共同開催ではないため、手動分配は不要です",
+    noIncentives: "インセンティブ情報がありません。先に粗利を確定してください",
+    allFinalized: "すべてのインセンティブが確定済みです",
+    sections: {
+      distributions: "分配設定",
+      history: "調整履歴",
+    },
+    columns: {
+      relationship: "対象二次店",
+      currentAmount: "現在の金額（円）",
+      status: "ステータス",
+      adjustAmount: "分配金額（円）",
+      reason: "調整理由",
+    },
+    statuses: {
+      DRAFT: "下書き（未確定）",
+      FINALIZED: "確定済み",
+      CANCELLED: "取消済み",
+      NEGATIVE_ADJUSTED: "負調整済み",
+    },
+    actions: {
+      submit: "分配を確定",
+      submitting: "確定中…",
+    },
+    feedback: {
+      done: "インセンティブ分配を確定しました",
+    },
+    errors: {
+      contractNotFound: "契約が見つかりません",
+      notJoint: "共同開催契約のみ手動調整できます",
+      incentiveNotFound: "インセンティブが見つかりません",
+      alreadyFinalized: "既に確定済みのインセンティブは再調整できません",
+      amountRequired: "分配金額を入力してください",
+      reasonRequired: "調整理由を入力してください",
+      noDistributions: "分配先を 1 件以上入力してください",
+    },
+    placeholders: {
+      amount: "例: 50000",
+      reason: "例: 共同開催分配合意による",
+    },
+  },
+
+  // T-04-03 / T-04-04 — EventReport start / end / result actions (F-028 / F-029 / F-030)
+  eventReport: {
+    sections: {
+      actions: "報告操作",
+      result: "成果報告",
+    },
+    submitStart: "開始報告を提出",
+    submitEnd: "終了報告を提出",
+    submitResult: "成果報告を提出",
+    submitting: "提出中…",
+    startAlreadySubmitted: "開始報告は提出済みです",
+    endAlreadySubmitted: "終了報告は提出済みです",
+    resultAlreadySubmitted: "成果報告は提出済みです",
+    startSuccess: "開始報告を提出しました",
+    endSuccess: "終了報告を提出しました",
+    resultSuccess: "成果報告を提出しました",
+    startMissingWarning: "開始報告が未提出です。終了報告を提出しました",
+    conflictError: "すでに同じ種別の報告が提出済みです",
+    unknownError: "報告の提出に失敗しました。時間を置いて再度お試しください",
+    wholesalerLabel: "自社",
+    dealerLabel: "二次店",
+    commentLabel: "コメント（任意）",
+    commentPlaceholder: "コメントを入力…",
+    result: {
+      approachCount: "声かけ数",
+      surveyCount: "アンケート数",
+      totalAppts: "アポ取得数",
+      validAppts: "有効アポ数",
+      invalidAppts: "無効アポ数",
+      apptsSumError: "有効アポ数 + 無効アポ数 はアポ取得数以下にしてください",
+      negativeError: "0 以上の値を入力してください",
+    },
+  },
+
+  // S-048 / S-049 — F-048 / F-049 / F-050 月次報告一覧・詳細 (T-06-07)
+  monthlyReport: {
+    listTitle: "月次報告一覧",
+    listSubtitle: "対象月と体制区分を選択して月次集計を確認します",
+    detailTitle: "月次報告詳細",
+    backToList: "月次報告一覧へ戻る",
+    aggregateButton: "集計を実行",
+    aggregating: "集計中…",
+    aggregateSuccess: "集計を実行しました",
+    aggregateError: "集計に失敗しました",
+    aggregateMonthLabel: "集計対象月（YYYY-MM）",
+    targetMonthLabel: "対象月（YYYY-MM）",
+    scopeLabel: "体制区分",
+    filterApply: "絞り込む",
+    scopes: {
+      ALL: "全体",
+      SELF: "自社開催",
+      DEALER: "二次店開催",
+      JOINT: "共同開催",
+    } as Record<string, string>,
+    statuses: {
+      DRAFT: "下書き",
+      SUBMITTED: "提出済み",
+      REVIEWED: "確認済み",
+      FINALIZED: "確定",
+    } as Record<string, string>,
+    statusBadgeClass: {
+      DRAFT: "text-muted-foreground",
+      SUBMITTED: "text-amber-600",
+      REVIEWED: "text-blue-600",
+      FINALIZED: "text-green-700",
+    } as Record<string, string>,
+    fields: {
+      targetMonth: "対象月",
+      scope: "体制区分",
+      status: "ステータス",
+      contractCount: "契約数",
+      totalSales: "売上合計",
+      totalGrossProfit: "粗利合計",
+      totalIncentive: "インセンティブ見込み",
+      averageProfitRate: "平均粗利率",
+      updatedAt: "最終更新",
+      relationshipId: "関係 ID",
+      finalizedAt: "確定日時",
+    },
+    empty: "月次報告がありません",
+    emptyCta: "集計を実行すると月次報告が作成されます",
+    aggregatedSection: "集計値",
+    chartSection: "直近 6 ヶ月の推移",
+    chartLabels: {
+      totalSales: "売上",
+      totalGrossProfit: "粗利",
+      totalIncentive: "インセンティブ",
+    },
+    commentsSection: "コメント",
+    commentsPlaceholder: "コメントはまだ提出されていません",
+    finalizeSection: "確定操作",
+    finalizeButton: "月次確定する",
+    finalizing: "確定中…",
+    finalizeSuccess: "月次報告を確定しました",
+    finalizeConfirm: "この月次報告を確定します。確定後は集計値が固定され、手動調整ができなくなります。よろしいですか？",
+    unlockButton: "確定を解除する",
+    unlocking: "解除中…",
+    unlockSuccess: "確定を解除しました",
+    unlockReasonLabel: "解除理由",
+    unlockReasonPlaceholder: "アンロックの理由を入力してください（必須）",
+    finalizedBadge: "確定済み",
+    notReviewedYet: "確認済み状態になってから確定できます",
+    currencySuffix: "円",
+    percentSuffix: "%",
+    noAggregated: "集計データがありません",
+    allScopes: "すべての区分",
+    allTab: "すべて",
+    viewDetail: "詳細",
+    countSuffix: "件",
+    chartAxisUnit: "万",
+    comment: {
+      fields: {
+        mainResults: "主な成果",
+        issues: "課題",
+        improvements: "改善アクション",
+        nextMonthFocusStores: "翌月重点店舗",
+        nextMonthMeasures: "翌月施策",
+        dealerComment: "二次店コメント",
+        reviewComment: "卸業者コメント",
+      },
+      submitButton: "コメントを提出する",
+      submitting: "提出中…",
+      reviewButton: "確認済みにする",
+      reviewing: "確認中…",
+      submitSuccess: "コメントを提出しました",
+      reviewSuccess: "確認済みにしました",
+      notSubmittedYet: "コメントはまだ提出されていません",
+      alreadySubmitted: "コメント提出済み",
+      alreadyReviewed: "確認済み",
+      finalized: "確定済みのため変更できません",
+      dealerCommentLabel: "二次店からのコメント",
+      wholesalerCommentLabel: "卸業者からのコメント（任意）",
+    },
+    // S-068 — dealer monthly reports list
+    dealerList: {
+      title: "月次報告",
+      subtitle: "卸業者ごとの月次成績を確認し、コメントを提出します",
+      empty: "月次報告がありません",
+      emptyCta: "集計が完了すると月次報告が表示されます",
+      fields: {
+        wholesaler: "卸業者",
+        targetMonth: "対象月",
+        status: "ステータス",
+      },
+      submitCommentCta: "コメントを入力・提出",
+      backToList: "月次報告一覧へ戻る",
+    },
+  },
+
+  // S-069 — F-051 二次店向け成績確認 (T-06-10 / docs/04 §1.5)
+  dealerPerformance: {
+    title: "成績確認",
+    subtitle: "卸業者ごとの月次成績を確認できます",
+    empty: "成績データがありません",
+    emptyCta: "月次集計が完了すると成績が表示されます",
+    filterLabel: "対象月（YYYY-MM）",
+    filterApply: "絞り込む",
+    filterPlaceholder: "例: 2026-06",
+    wholesalerLabel: "卸業者",
+    fields: {
+      targetMonth: "対象月",
+      contractCount: "契約数",
+      totalSales: "売上合計",
+      totalIncentive: "インセンティブ見込み",
+      averageProfitRate: "平均粗利率",
+      status: "ステータス",
+    },
+    statuses: {
+      DRAFT: "集計中",
+      SUBMITTED: "提出済み",
+      REVIEWED: "確認済み",
+      FINALIZED: "確定",
+    } as Record<string, string>,
+    currencySuffix: "円",
+    percentSuffix: "%",
+    countSuffix: "件",
+    noData: "データなし",
+  },
+
+  // S-070 — F-051 インセンティブ確認 (T-06-10 / docs/04 §1.5)
+  dealerIncentive: {
+    title: "インセンティブ確認",
+    subtitle: "確定済みインセンティブの一覧です",
+    empty: "確定済みのインセンティブがありません",
+    emptyCta: "月次確定後にインセンティブが表示されます",
+    filterLabel: "対象月（YYYY-MM）",
+    filterApply: "絞り込む",
+    filterPlaceholder: "例: 2026-06",
+    fields: {
+      contractDate: "契約日",
+      settledMonth: "対象月",
+      targetProfit: "インセンティブ対象粗利",
+      rate: "インセンティブ率",
+      amount: "確定インセンティブ額",
+      status: "ステータス",
+      finalizedAt: "確定日時",
+    },
+    statuses: {
+      DRAFT: "下書き",
+      FINALIZED: "確定",
+      CANCELLED: "取消済み",
+      NEGATIVE_ADJUSTED: "負調整済み",
+    } as Record<string, string>,
+    statusBadgeClass: {
+      DRAFT: "text-muted-foreground",
+      FINALIZED: "text-green-700",
+      CANCELLED: "text-destructive",
+      NEGATIVE_ADJUSTED: "text-amber-600",
+    } as Record<string, string>,
+    currencySuffix: "円",
+    percentSuffix: "%",
+    // purchasePrice は二次店向け画面に一切表示しない (CLAUDE.md rule #5)
+  },
+
+  // S-051 — F-056 BI ダッシュボード (T-06-11 / docs/04 §4.3 S-051).
+  //
+  // 卸業者本部 (wholesaler_admin / wholesaler_event_team / wholesaler_direct_sales)
+  // 専用。期間・体制・二次店フィルタ付きの時系列グラフ + 二次店ランキング。
+  // dealer ロールには表示しない（他社情報が混入するため）。
+  bi: {
+    title: "BI ダッシュボード",
+    subtitle: "売上・粗利・契約数の時系列推移と二次店ランキングを確認できます",
+    filters: {
+      fromMonth: "集計開始月",
+      toMonth: "集計終了月",
+      scope: "体制区分",
+      allScopes: "すべての体制",
+      dealerRelationship: "二次店",
+      allDealers: "すべての二次店",
+      apply: "絞り込む",
+    },
+    scopes: {
+      ALL: "全体",
+      SELF: "自社開催",
+      DEALER: "二次店開催",
+      JOINT: "共同開催",
+    } as Record<string, string>,
+    kpi: {
+      title: "集計期間合計",
+      contractCount: "契約件数",
+      totalSales: "売上合計",
+      totalGrossProfit: "粗利合計",
+      averageProfitRate: "平均粗利率",
+    },
+    chart: {
+      timeSeriesTitle: "月別推移",
+      axisUnit: "万",
+      currencySuffix: "円",
+      contractCountSuffix: "件",
+      percentSuffix: "%",
+      salesLabel: "売上",
+      grossProfitLabel: "粗利",
+      contractCountLabel: "契約数",
+      conversionRateLabel: "成約率",
+    },
+    ranking: {
+      title: "二次店ランキング（Top 10）",
+      rankLabel: "順位",
+      dealerLabel: "二次店",
+      contractCountLabel: "契約件数",
+      totalSalesLabel: "売上合計（円）",
+      totalGrossProfitLabel: "粗利合計（円）",
+      empty: "ランキングデータがありません",
+    },
+    empty: "指定期間にデータがありません",
+  },
+  // Notification type labels — used in notification inbox, settings, and email
+  // subject lines (T-07-02 / T-07-04 / T-07-06 / docs/05 §6.7).
+  notificationTypes: {
+    DEALER_PREFERENCE_SUBMITTED: "二次店から希望が提出されました",
+    DEALER_PREFERENCE_MISSING: "希望未提出の二次店があります",
+    EVENT_DECISION_PENDING: "開催体制決定が保留中です",
+    EVENT_SHIFT_SHORTAGE: "シフト人数が不足しています",
+    EVENT_START_REPORTED: "イベント開始が報告されました",
+    EVENT_END_REPORTED: "イベント終了が報告されました",
+    EVENT_RESULT_REPORTED: "イベント実績が報告されました",
+    CUSTOMER_NEW: "新規顧客が登録されました",
+    PRE_CALL_PENDING: "マエカク登録が未完了です",
+    PRE_CALL_NOTIFICATION_PENDING: "マエカク結果の連絡が未送信です",
+    PRE_CALL_RESULT_SHARED: "マエカク結果が共有されました",
+    DEAL_STATUS_TO_CONTRACT: "商談が契約に進みました",
+    MONTHLY_REPORT_SUBMITTED: "月次報告が提出されました",
+    MONTHLY_REPORT_REVIEW_PENDING: "月次報告のレビューが必要です",
+    GROSS_PROFIT_PENDING: "粗利計算が未確定です",
+    INCENTIVE_PENDING: "インセンティブが未確定です",
+    INCENTIVE_FINALIZED: "インセンティブが確定しました",
+    CONSTRUCTION_UPCOMING: "施工予定が近づいています",
+    APPLICATION_DEADLINE: "申請期限が近づいています",
+    EVENT_PUBLISHED: "新しいイベント候補が公開されました",
+    EVENT_PREFERENCE_DEADLINE: "希望提出期限が近づいています",
+    EVENT_ASSIGNED: "イベントに割り当てられました",
+    EVENT_DAY_BEFORE: "明日はイベント当日です",
+    CONTRACT_CONTRACTED: "契約が成立しました",
+    SHIFT_ASSIGNED: "シフトに割り当てられました",
+    SHIFT_CHANGED: "シフトが変更されました",
+    REPORT_PENDING: "実績報告が未提出です",
+  },
+
+  // S-078/S-079 — notification inbox UI (T-07-04 / F-052).
+  notifications: {
+    pageTitle: "通知インボックス",
+    pageSubtitle: "あなた宛の通知一覧です",
+    bellAriaLabel: "通知",
+    unreadCount: "{count} 件の未読",
+    noUnread: "未読通知なし",
+    markAllRead: "すべて既読にする",
+    markAllReadConfirm: "すべての通知を既読にします。よろしいですか？",
+    markAllReadDone: "すべて既読にしました",
+    filterUnreadOnly: "未読のみ表示",
+    empty: "通知はありません",
+    emptyUnreadOnly: "未読の通知はありません",
+    loadMore: "さらに読み込む",
+    loading: "通知を読み込んでいます…",
+    showingOf: "{shown} 件を表示（全 {total} 件）",
+    readStatus: {
+      read: "既読",
+      unread: "未読",
+    },
+    columns: {
+      title: "タイトル",
+      body: "本文",
+      createdAt: "受信日時",
+      status: "状態",
+    },
+    goToTarget: "詳細を確認",
+    markRead: "既読にする",
+    errors: {
+      loadFailed: "通知の取得に失敗しました",
+      markReadFailed: "既読更新に失敗しました",
+    },
+  },
+
+  // S-080 — 通知設定 UI (T-07-06 / F-052 / F-053 / docs/04 §1.7).
+  //
+  // チャネル別 (IN_APP / EMAIL) × type 別のチェックボックスマトリクス。
+  // LINE は Phase 2 Feature Flag が false の間は disabled 表示。
+  notificationSettings: {
+    pageTitle: "通知設定",
+    pageSubtitle: "受け取る通知の種類とチャネルを設定してください",
+    saveButton: "保存",
+    saving: "保存中…",
+    savedToast: "通知設定を保存しました",
+    errorToast: "通知設定の保存に失敗しました",
+    loadErrorToast: "通知設定の取得に失敗しました",
+    channelHeaders: {
+      IN_APP: "アプリ内通知",
+      EMAIL: "メール通知",
+      LINE: "LINE 通知（Phase 2）",
+    },
+    lineDisabledNote: "LINE 通知は現在準備中です",
+    typeColumnHeader: "通知の種類",
+  },
+
+  // S-084 / S-085 — 監査ログ閲覧 (T-07-09 / F-055 / docs/04 §1.3).
+  //
+  // wholesaler_admin は自テナントのログのみ閲覧 (S-084)。
+  // saas_admin は全テナント横断閲覧 (S-085)。
+  auditLog: {
+    pageTitle: "監査ログ",
+    pageSubtitle: "操作履歴を閲覧します。ログは追記専用のため編集・削除はできません。",
+    saasAdminSubtitle: "全テナント横断の操作履歴を閲覧します。",
+    filterActor: "アクターで絞り込み（ユーザー ID）",
+    filterAction: "アクションで絞り込み",
+    filterFrom: "開始日時",
+    filterTo: "終了日時",
+    filterApply: "絞り込む",
+    filterReset: "リセット",
+    allActions: "すべてのアクション",
+    empty: "条件に一致する監査ログがありません",
+    emptyCta: "フィルタを変更してください",
+    pagination: {
+      prev: "前へ",
+      next: "次へ",
+      pageOf: "{page} / {total} ページ",
+    },
+    columns: {
+      createdAt: "日時",
+      actorUserId: "アクター",
+      action: "アクション",
+      targetType: "対象種別",
+      targetId: "対象 ID",
+      before: "変更前",
+      after: "変更後",
+      ip: "IP",
+      tenantId: "テナント",
+    },
+    actions: {
+      CREATE: "作成",
+      UPDATE: "更新",
+      DELETE: "削除",
+      STATUS_CHANGE: "ステータス変更",
+      PUBLISH: "公開",
+      UNPUBLISH: "非公開",
+      CANCEL: "キャンセル",
+      FINALIZE: "確定",
+      UNLOCK: "ロック解除",
+      MANUAL_ADJUST: "手動調整",
+      REVEAL_PII: "PII 開示",
+      ROLE_CHANGE: "ロール変更",
+      RELATION_SUSPEND: "関係停止",
+      RELATION_RESUME: "関係再開",
+    } as Record<string, string>,
+    noActor: "システム",
+    jsonPreviewLabel: "変更内容",
+    jsonEmpty: "—",
+    archiveNote: "90 日以前のログはアーカイブ表示です",
+  },
+
+  // Sign-out
+  signOut: {
+    button: "サインアウト",
+    ariaLabel: "サインアウト",
+  },
+
+  // S-018 サブ — F-006 / F-008 メンバー管理 (卸業者・二次店共通ラベル)
+  // WHOLESALER_ADMIN は /members、DEALER_ADMIN は /d-members で利用。
+  memberManagement: {
+    wholesalerTitle: "メンバー管理",
+    dealerTitle: "メンバー管理",
+    subtitle: "ユーザーの一覧と招待状況を確認できます",
+    inviteButton: "招待",
+    inviteDialogTitle: "メンバーを招待",
+    inviteDialogDescription: "招待メールを送信します。受け取ったメンバーはリンクからアカウントを開設できます。",
+    empty: "メンバーが登録されていません",
+    emptyCta: "招待ボタンから最初のメンバーを招待しましょう",
+    fields: {
+      name: "氏名",
+      email: "メールアドレス",
+      roles: "ロール",
+      twoFactor: "2FA",
+      status: "ステータス",
+      lastLoginAt: "最終ログイン",
+      inviteRole: "招待ロール",
+      inviteEmail: "メールアドレス",
+    },
+    twoFactorEnabled: "有効",
+    twoFactorDisabled: "無効",
+    statuses: {
+      ACTIVE: "有効",
+      INVITED: "招待済み（未受諾）",
+      SUSPENDED: "停止中",
+    },
+    wholesalerRoles: {
+      WHOLESALER_ADMIN: "管理者",
+      WHOLESALER_EVENT_TEAM: "イベントチーム",
+      WHOLESALER_CALL_TEAM: "コールチーム",
+      WHOLESALER_DIRECT_SALES: "直販営業",
+      WHOLESALER_FIELD_STAFF: "現場要員",
+    } as Record<string, string>,
+    dealerRoles: {
+      DEALER_ADMIN: "管理者",
+      DEALER_STAFF: "スタッフ",
+    } as Record<string, string>,
+    neverLoggedIn: "なし",
+    actions: {
+      invite: "招待する",
+      inviting: "招待中…",
+    },
+    feedback: {
+      invited: "招待メールを送信しました",
+    },
+    errors: {
+      emailRequired: "メールアドレスを入力してください",
+      emailInvalid: "正しいメールアドレスを入力してください",
+      roleRequired: "ロールを選択してください",
+    },
+  },
+
+  // S-022 サブ — F-009 / F-010 取引先管理（卸業者 ↔ 二次店 関係）
+  // WHOLESALER_ADMIN 専用。Relationship 一覧・スコープ編集・停止/再開・招待コード発行。
+  relationshipManagement: {
+    title: "取引先管理",
+    subtitle: "二次店との関係、デフォルトスコープ、招待コードを管理します",
+    empty: "取引先（二次店）がまだ登録されていません",
+    emptyCta: "招待コードを発行して二次店に渡してください",
+    inviteCodeSectionTitle: "新規招待コード発行",
+    inviteCodeDialogTitle: "招待コードを発行",
+    inviteCodeDialogDescription: "有効期限と最大使用回数を設定して招待コードを発行します。コードは画面に一度だけ表示されます。",
+    inviteCodeResult: "発行した招待コード",
+    inviteCodeResultNote: "このコードは今後表示されません。二次店に安全な方法でお伝えください。",
+    inviteCodeCopied: "コードをコピーしました",
+    fields: {
+      dealerName: "二次店名",
+      status: "ステータス",
+      defaultScope: "デフォルトスコープ",
+      createdAt: "開始日",
+      inviteCodeExpiresAt: "有効期限",
+      inviteCodeMaxUses: "最大使用回数",
+    },
+    statuses: {
+      ACTIVE: "有効",
+      SUSPENDED: "停止中",
+    },
+    scopes: {
+      APPOINTMENT_ONLY: "アポ獲得まで",
+      FIRST_VISIT: "初回訪問まで",
+      FULL_CLOSING: "商談・クロージングまで",
+    },
+    actions: {
+      editScope: "スコープを変更",
+      savingScope: "保存中…",
+      saveScope: "保存",
+      suspend: "停止",
+      resume: "再開",
+      suspending: "停止中…",
+      resuming: "再開中…",
+      generateCode: "招待コードを発行",
+      generating: "発行中…",
+    },
+    feedback: {
+      scopeUpdated: "デフォルトスコープを変更しました",
+      suspended: "取引先を停止しました",
+      resumed: "取引先を再開しました",
+      codeGenerated: "招待コードを発行しました",
+    },
+    errors: {
+      notFound: "取引先が見つかりません",
+      invalidScope: "スコープを選択してください",
+      expiresAtRequired: "有効期限を入力してください",
+      maxUsesRequired: "最大使用回数を入力してください（1〜100）",
+    },
+  },
+
+  // S-077 — F-037 二次店マエカク結果確認 (dealer side pre-call notification list)
+  // DEALER_ADMIN / DEALER_STAFF が確認する画面。
+  dealerPreCallNotification: {
+    title: "マエカク結果確認",
+    subtitle: "卸業者から共有されたマエカク結果を確認できます",
+    empty: "マエカク結果の通知はありません",
+    emptyCta: "卸業者からマエカク結果が共有されると、ここに表示されます",
+    filterByStatus: "ステータスで絞り込み",
+    allStatuses: "すべてのステータス",
+    fields: {
+      customerName: "顧客",
+      scheduledAt: "訪問予定日時",
+      preCallResult: "コール結果",
+      status: "確認ステータス",
+      notifiedAt: "通知日時",
+      acknowledgedAt: "確認日時",
+    },
+    statuses: {
+      PENDING: "未確認",
+      SENT: "通知済み",
+      ACKNOWLEDGED: "確認済み",
+    },
+    actions: {
+      acknowledge: "確認済みにする",
+      acknowledging: "確認中…",
+    },
+    feedback: {
+      acknowledged: "確認済みにしました",
+    },
+    errors: {
+      notFound: "通知が見つかりません",
+      alreadyAcknowledged: "すでに確認済みです",
+    },
+  },
+
+  // Breadcrumb — generic separator and aria label
+  breadcrumb: {
+    ariaLabel: "パンくずリスト",
+    separator: "/",
+    items: {
+      eventCandidates: "イベント一覧",
+      eventCandidateDetail: "詳細",
+      eventCandidateDecide: "開催体制決定",
+      eventCandidatePreferences: "希望状況",
+      events: "イベント一覧",
+      eventDetail: "詳細",
+      eventShifts: "シフト管理",
+      venueNegotiations: "場所提供元対応",
+      venueNegotiationDetail: "詳細",
+      customers: "顧客",
+      customerEdit: "編集",
+      customerNew: "新規登録",
+      customerDetail: "顧客詳細",
+      appointments: "アポ",
+      appointmentNew: "新規登録",
+      appointmentPreCall: "マエカク",
+      deals: "商談",
+      dealDetail: "詳細",
+      contracts: "契約",
+      contractDetail: "詳細",
+      contractItems: "明細",
+      contractGrossProfit: "粗利",
+      contractConstruction: "施工",
+      contractApplication: "補助金",
+      contractIncentive: "インセンティブ",
+      contractCancel: "キャンセル",
+      monthlyReports: "月次報告",
+      monthlyReportDetail: "詳細",
+      masters: "マスタ管理",
+      masterProducts: "商品",
+      masterProductDetail: "詳細",
+      masterVenueProviders: "場所提供元",
+      masterVenueProviderDetail: "詳細",
+      masterInstallers: "施工業者",
+      masterInstallerDetail: "詳細",
+      masterIncentiveRates: "インセンティブ率",
+      masterIncentiveRateDetail: "詳細",
+    },
+  },
+
+  // Auth flows — invite acceptance (F-006) and dealer self-signup (F-007).
+  // Keys are nested under `auth` so pages import `labels.auth.invite` /
+  // `labels.auth.signup` etc. without polluting the top-level namespace.
+  auth: {
+    // S-007 — Invite acceptance (F-006)
+    invite: {
+      title: "アカウントを開設する",
+      subtitle: "招待メールに記載のリンクからアクセスしています。氏名とパスワードを設定してください。",
+      nameLabel: "氏名",
+      namePlaceholder: "例: 山田 太郎",
+      passwordLabel: "パスワード",
+      passwordPlaceholder: "8 文字以上",
+      confirmPasswordLabel: "パスワード（確認）",
+      confirmPasswordPlaceholder: "もう一度入力",
+      submitButton: "アカウントを開設",
+      submitting: "開設中…",
+      backToSignIn: "サインインへ戻る",
+      errors: {
+        nameRequired: "氏名を入力してください",
+        passwordMinLength: "パスワードは 8 文字以上で入力してください",
+        passwordMismatch: "パスワードが一致しません",
+        invalidToken: "このリンクは無効または期限切れです。担当者にご連絡ください。",
+        unknownError: "予期しないエラーが発生しました。時間を置いて再度お試しください",
+      },
+    },
+
+    // S-008 / S-009 / S-010 — Dealer self-signup (F-007)
+    signup: {
+      // Step 1 — invite code entry (S-008)
+      codeTitle: "新規二次店登録",
+      codeSubtitle: "卸業者から発行された招待コードを入力してください。",
+      codeLabel: "招待コード",
+      codePlaceholder: "SOLAR-XXXX-YYYY",
+      codeHint: "招待コードは卸業者から送付されます。形式: SOLAR-XXXX-YYYY",
+      codeSubmitButton: "次へ",
+      submitting: "処理中…",
+      backToSignIn: "サインインへ戻る",
+
+      // Step 2 — company + admin account (S-009 / S-010)
+      registerTitle: "会社情報・管理者アカウント設定",
+      registerSubtitle: "会社名と管理者アカウントの情報を入力してください。",
+      sectionCompany: "会社情報",
+      sectionAdmin: "管理者アカウント",
+      companyNameLabel: "会社名",
+      companyNamePlaceholder: "例: 株式会社サンシャイン",
+      adminNameLabel: "管理者氏名",
+      adminNamePlaceholder: "例: 山田 太郎",
+      adminEmailLabel: "管理者メールアドレス",
+      adminEmailPlaceholder: "you@example.com",
+      passwordLabel: "パスワード",
+      passwordPlaceholder: "8 文字以上",
+      confirmPasswordLabel: "パスワード（確認）",
+      confirmPasswordPlaceholder: "もう一度入力",
+      registerSubmitButton: "登録する",
+      backToCodeEntry: "招待コード入力へ戻る",
+
+      // Success
+      successTitle: "登録完了",
+      successBody: "二次店アカウントが作成されました。サインインしてください。",
+
+      errors: {
+        codeRequired: "招待コードを入力してください",
+        invalidCode: "招待コードが無効または期限切れです。卸業者にご確認ください。",
+        codeExhausted: "この招待コードは利用上限に達しています。卸業者に新しいコードを発行してもらってください。",
+        companyNameRequired: "会社名を入力してください",
+        adminEmailRequired: "管理者メールアドレスを入力してください",
+        adminNameRequired: "管理者氏名を入力してください",
+        passwordMinLength: "パスワードは 8 文字以上で入力してください",
+        passwordMismatch: "パスワードが一致しません",
+        emailAlreadyExists: "このメールアドレスはすでに登録されています。別のアドレスを使用してください。",
+        validationError: "入力内容に誤りがあります。ご確認ください。",
+        unknownError: "予期しないエラーが発生しました。時間を置いて再度お試しください",
+      },
+    },
+  },
+
+  // Password reset — S-007 / S-008
+  passwordReset: {
+    requestTitle: "パスワードを再設定",
+    requestSubtitle: "登録済みのメールアドレスを入力してください。再設定リンクを送信します。",
+    emailLabel: "メールアドレス",
+    emailPlaceholder: "you@example.com",
+    submitButton: "再設定リンクを送信",
+    submitting: "送信中…",
+    sentTitle: "メールを送信しました",
+    sentBody: "パスワード再設定リンクをメールに送りました。メールが届かない場合は迷惑メールフォルダをご確認ください。",
+    backToSignIn: "サインインへ戻る",
+    newPasswordTitle: "新しいパスワードを設定",
+    newPasswordSubtitle: "新しいパスワードを入力してください。",
+    newPasswordLabel: "新しいパスワード",
+    newPasswordPlaceholder: "8 文字以上",
+    confirmPasswordLabel: "パスワード（確認）",
+    confirmPasswordPlaceholder: "もう一度入力",
+    setButton: "パスワードを変更",
+    setting: "変更中…",
+    successTitle: "パスワードを変更しました",
+    successBody: "新しいパスワードでサインインしてください。",
+    invalidToken: "このリンクは無効または期限切れです。再度パスワード再設定をお試しください。",
+    passwordMinLength: "パスワードは 8 文字以上で入力してください",
+    passwordMismatch: "パスワードが一致しません",
+    errors: {
+      emailRequired: "メールアドレスを入力してください",
+      emailInvalid: "メールアドレスの形式が正しくありません",
+      unknownError: "予期しないエラーが発生しました。時間を置いて再度お試しください",
+    },
+  },
+
+  // Profile — common for all roles
+  profile: {
+    title: "プロフィール",
+    subtitle: "アカウント情報と 2FA の設定状況を確認できます",
+    fields: {
+      displayName: "表示名",
+      email: "メールアドレス",
+      role: "ロール",
+      twoFaStatus: "2 段階認証",
+    },
+    twoFa: {
+      enabled: "有効",
+      disabled: "無効",
+    },
+    changePassword: "パスワードを変更",
+    passwordPage: {
+      title: "パスワード変更",
+      subtitle: "現在のパスワードと新しいパスワードを入力してください",
+      currentLabel: "現在のパスワード",
+      newLabel: "新しいパスワード",
+      confirmLabel: "新しいパスワード（確認）",
+      submitButton: "変更する",
+      submitting: "変更中…",
+      success: "パスワードを変更しました",
+      errors: {
+        currentRequired: "現在のパスワードを入力してください",
+        newRequired: "新しいパスワードを入力してください",
+        newMinLength: "パスワードは 8 文字以上で入力してください",
+        confirmMismatch: "パスワードが一致しません",
+        currentIncorrect: "現在のパスワードが正しくありません",
+        unknownError: "パスワードの変更に失敗しました。時間を置いて再度お試しください",
+      },
+    },
+  },
+
+  // Dealer dashboard — S-058
+  dealerDashboard: {
+    title: "ダッシュボード",
+    subtitle: "今日のイベント・マエカク・今月の契約を確認できます",
+    sections: {
+      todayEvents: {
+        title: "本日のイベント",
+        empty: "本日のイベントはありません",
+        cta: "担当イベント一覧を開く",
+      },
+      pendingPreCall: {
+        title: "マエカク未対応",
+        description: "アポ取得後、マエカク結果通知の確認が未完了の件数",
+        cta: "アポ一覧を開く",
+        unitSuffix: "件",
+      },
+      monthlyContracts: {
+        title: "今月の契約件数",
+        cta: "契約一覧を開く",
+        unitSuffix: "件",
+      },
+    },
+  },
+
+  // Sidebar navigation labels — used by AppShell component.
+  wholesalerNav: {
+    dashboard: "ダッシュボード",
+    eventCandidates: "イベント候補",
+    venueNegotiations: "場所提供元対応",
+    events: "イベント実施",
+    customers: "顧客",
+    appointments: "アポ",
+    deals: "商談",
+    contracts: "契約",
+    monthlyReports: "月次報告",
+    masters: "マスタ管理",
+    auditLogs: "監査ログ",
+    bi: "BI ダッシュボード",
+  },
+
+  dealerNav: {
+    dashboard: "ダッシュボード",
+    eventCandidates: "イベント候補",
+    events: "担当イベント",
+    customers: "顧客",
+    appointments: "アポ",
+    deals: "商談",
+    contracts: "契約",
+    monthly: "月次成績",
+    incentives: "インセンティブ",
+  },
+
+  saasAdminNav: {
+    dashboard: "ダッシュボード",
+    tenants: "テナント管理",
+    plans: "プラン管理",
+    billing: "請求状況",
+    auditLogs: "監査ログ",
+  },
+
+  fieldNav: {
+    dashboard: "ダッシュボード",
+    shifts: "シフト一覧",
+    quickAppointment: "クイックアポ登録",
+  },
+
+  // Email subjects — T-07-05 transactional email templates.
+  // These are the Japanese subject lines used by packages/email/src/templates/*.
+  // The template files themselves embed subjects directly, but listing them
+  // here keeps the i18n rule satisfied (labels.ts is the single source of truth).
+  emailSubjects: {
+    invite: "[Solar SaaS] アカウント招待",
+    passwordReset: "[Solar SaaS] パスワード再設定リンク",
+    preferenceDeadline: "[Solar SaaS] 希望提出期限が近づいています",
+    eventDecided: "[Solar SaaS] イベント開催体制が決定しました",
+    preCallResult: "[Solar SaaS] マエカク結果が共有されました",
+    contractCreated: "[Solar SaaS] 契約が成立しました",
+    monthlyReportSubmitted: "[Solar SaaS] 月次報告が提出されました",
+    monthlyReportFinalized: "[Solar SaaS] 月次レポートが確定しました",
+  },
+
+  // 卸業者インセンティブ一覧 (wholesaler/incentives/page.tsx).
+  //
+  // 卸業者テナント全体のインセンティブ一覧。二次店単位・対象月・ステータスで絞り込み。
+  wholesalerIncentive: {
+    title: "インセンティブ一覧",
+    subtitle: "テナント全体のインセンティブ確定状況を確認できます",
+    empty: "インセンティブがありません",
+    emptyCta: "契約成立後に粗利が確定するとインセンティブが生成されます",
+    filterByStatus: "ステータスで絞り込み",
+    filterByMonth: "対象月で絞り込み",
+    allStatuses: "すべてのステータス",
+    goToContract: "契約詳細",
+    columns: {
+      dealer: "二次店",
+      contractDate: "契約日",
+      settledMonth: "対象月",
+      amount: "インセンティブ額",
+      status: "ステータス",
+      finalizedAt: "確定日",
+    },
+    statuses: {
+      DRAFT: "下書き",
+      FINALIZED: "確定済み",
+      CANCELLED: "取消済み",
+      NEGATIVE_ADJUSTED: "負調整済み",
+    } as Record<string, string>,
+    pagination: {
+      prev: "前へ",
+      next: "次へ",
+      pageOf: "{page} / {total} ページ",
+    },
+  },
+
+  // BI 市況分析 placeholder (wholesaler/bi/analysis/page.tsx).
+  //
+  // Phase 2 機能のプレースホルダ。サイドバーリンクの 404 を防ぐ。
+  biAnalysis: {
+    title: "市況分析",
+    subtitle: "市場動向・地域別需要・競合比較などを分析します（Phase 2 予定）",
+    placeholderTitle: "この機能は準備中です",
+    placeholderBody:
+      "市況分析（競合店分析・地域別需要トレンド・価格動向など）は Phase 2 で実装予定です。現在は BI ダッシュボード（/bi）で売上・粗利・二次店ランキングを確認できます。",
+  },
+} as const;
+
+export type Labels = typeof labels;

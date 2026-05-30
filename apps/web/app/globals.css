@@ -1,0 +1,120 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* PlayStation-inspired palette */
+    --background: #ffffff;
+    --foreground: #000000;
+
+    --card: #ffffff;
+    --card-foreground: #000000;
+
+    --popover: #ffffff;
+    --popover-foreground: #000000;
+
+    --primary: #0070d1;
+    --primary-foreground: #ffffff;
+
+    --secondary: #f3f3f3;
+    --secondary-foreground: #000000;
+
+    --muted: #f5f7fa;
+    --muted-foreground: #6b6b6b;
+
+    --accent: #f5f7fa;
+    --accent-foreground: #000000;
+
+    --destructive: #c81b3a;
+    --destructive-foreground: #ffffff;
+
+    --border: #f3f3f3;
+    --input: #f3f3f3;
+    --ring: #0070d1;
+
+    --radius: 8px;
+    --radius-btn: 9999px;
+    --radius-card: 8px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    color: rgba(0, 0, 0, 0.6);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    color: #000000;
+  }
+  a {
+    transition: color 0.33s, opacity 0.33s;
+  }
+  button, [role="button"] {
+    transition: background-color 0.33s, border-color 0.33s, color 0.33s, opacity 0.33s;
+  }
+
+  /* Table base styling */
+  table {
+    @apply w-full text-sm;
+  }
+  thead {
+    @apply bg-surface-card;
+  }
+  th {
+    @apply px-4 py-3 text-left text-xs font-medium text-mute-light uppercase tracking-wider;
+  }
+  td {
+    @apply px-4 py-3 text-body-light;
+  }
+  tbody tr {
+    @apply border-b border-hairline-light last:border-0 hover:bg-surface-soft transition-colors;
+  }
+
+  /* Form input base styling */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea {
+    @apply border border-ash-light rounded-sm px-3 py-2 text-sm text-ink bg-white placeholder:text-mute-light focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors w-full;
+  }
+}
+
+@layer components {
+  /* Status badges */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-default {
+    @apply bg-surface-soft text-mute-light;
+  }
+  .badge-primary {
+    @apply bg-primary/10 text-primary;
+  }
+  .badge-success {
+    @apply bg-emerald-50 text-emerald-700;
+  }
+  .badge-warning {
+    @apply bg-amber-50 text-amber-700;
+  }
+  .badge-destructive {
+    @apply bg-warning/10 text-warning;
+  }
+}
