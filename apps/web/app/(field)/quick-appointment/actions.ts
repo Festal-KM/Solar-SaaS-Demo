@@ -16,7 +16,8 @@ import { z } from "zod";
 
 import { withServerActionContext } from "@/lib/tenancy/server-action";
 
-export const QuickAppointmentSchema = z.object({
+// 「"use server"」ファイルは runtime 値（オブジェクト）の export 不可。型のみ OK。
+const QuickAppointmentSchema = z.object({
   // Customer fields
   name: z.string().trim().min(1, "氏名を入力してください").max(255),
   phone: z.string().trim().min(1, "電話番号を入力してください").max(50),
@@ -29,7 +30,7 @@ export const QuickAppointmentSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 
-export type QuickAppointmentInput = z.input<typeof QuickAppointmentSchema>;
+type QuickAppointmentInput = z.input<typeof QuickAppointmentSchema>;
 
 export interface QuickAppointmentResult {
   customerId: string;

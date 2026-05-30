@@ -21,7 +21,7 @@
 // truly hits the DB instead of returning a stale 200.
 
 import * as Sentry from "@sentry/nextjs";
-import { getLogger } from "@solar/contracts";
+import { getLogger } from "@solar/contracts/logger";
 import { rawPrisma } from "@solar/db";
 import { NextResponse } from "next/server";
 

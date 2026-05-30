@@ -51,21 +51,23 @@ const VALID_TYPES = [
   "REPORT_PENDING",
 ] as const;
 
-export const NotificationPreferenceItemSchema = z.object({
+// 「"use server"」ファイルは async function 以外を export 不可（Next.js 制約）。
+// 以下のスキーマ・型は内部使用のみ。
+const NotificationPreferenceItemSchema = z.object({
   type: z.enum(VALID_TYPES),
   channel: z.enum(ALLOWED_CHANNELS),
   enabled: z.boolean(),
 });
 
-export const UpdateNotificationPreferencesSchema = z.object({
+const UpdateNotificationPreferencesSchema = z.object({
   preferences: z.array(NotificationPreferenceItemSchema).min(1),
 });
 
-export type UpdateNotificationPreferencesInput = z.infer<
+type UpdateNotificationPreferencesInput = z.infer<
   typeof UpdateNotificationPreferencesSchema
 >;
 
-export interface UpdateNotificationPreferencesResult {
+interface UpdateNotificationPreferencesResult {
   updatedCount: number;
 }
 

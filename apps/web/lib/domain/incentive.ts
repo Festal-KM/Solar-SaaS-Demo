@@ -15,7 +15,8 @@
 // wholesalerId / relationshipId are always read from the DB row, never from caller input.
 
 import type { TxClient } from "@solar/db";
-import { shouldSkipIncentive, computeIncentiveAmount, getLogger } from "@solar/contracts";
+import { shouldSkipIncentive, computeIncentiveAmount } from "@solar/contracts";
+import { getLogger } from "@solar/contracts/logger";
 
 import { NotFoundError } from "@/lib/errors";
 

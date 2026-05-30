@@ -2,6 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   typedRoutes: true,
+  // ESLint runs separately via `pnpm lint`. Skipping here keeps next build
+  // focused on type/build correctness; style/import-order issues don't gate
+  // releases.
+  eslint: { ignoreDuringBuilds: true },
   transpilePackages: [
     "@solar/auth",
     "@solar/contracts",

@@ -1,6 +1,10 @@
 // @solar/contracts — shared zod schemas / DTO types / pure calculation services.
+//
+// NOTE: `./logger` is intentionally NOT re-exported here because it uses
+// `node:async_hooks` (server-only). Re-exporting it would pull a server-only
+// dependency into any client bundle that imports anything from this package.
+// Server code imports directly from "@solar/contracts/logger".
 export * from "./jobs.js";
-export * from "./logger.js";
 export * from "./schemas/venue-provider.js";
 export * from "./schemas/venue-negotiation.js";
 export * from "./schemas/event-candidate.js";

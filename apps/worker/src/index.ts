@@ -14,7 +14,7 @@
 // boot is captured. We then switch to the shared `pino` logger (via
 // `@solar/contracts`) for structured JSON output.
 
-import { logger } from "@solar/contracts";
+import { logger } from "@solar/contracts/logger";
 import { run, runMigrations, type Runner } from "graphile-worker";
 
 import { initWorkerSentry, Sentry } from "./sentry.js";
