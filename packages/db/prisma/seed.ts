@@ -276,6 +276,10 @@ export async function seedAll(): Promise<SeedSummary> {
   // re-hash + overwrite, which is acceptable for a pilot dataset.
   const passwordHash = await hashPilotPassword(PILOT_PASSWORD);
 
+  // Long timeout: this single transaction inserts ~50+ rows across 20+ models
+  // and can exceed Prisma's 5s default — especially over a public proxy
+  // (Railway demo seed run). 5 minutes is generous but safe; the work itself
+  // takes ~10s over an internal connection.
   return withTenant(SYSTEM_TENANT_CONTEXT, async (tx) => {
     const saasOps = await upsertTenantByName(tx, {
       name: TENANT_KEY.saasOps,
@@ -556,10 +560,10 @@ export async function seedAll(): Promise<SeedSummary> {
       wholesalerTenantId: pilot.id,
       dealerTenantIds: { alpha: alpha.id, beta: beta.id, gamma: gamma.id },
       relationshipIds: rels.map((r) => r.id),
-      userCount: USER_SEEDS.length,
+      userCount: USER_SEEDS.length + 1, // +1 for the demo release shared account
       venueProviderId: venueProvider.id,
     };
-  });
+  }, { timeout: 300_000, maxWait: 60_000 });
 }
 
 // Sample-customer name prefix — used both to generate the dataset and to detect

@@ -51,10 +51,21 @@ function quote(value: string): string {
  * The returned promise resolves to whatever `fn` returns; the transaction is
  * committed on success and rolled back on thrown error.
  */
+export interface WithTenantOptions {
+  /** Prisma interactive transaction timeout in ms (default Prisma: 5000). */
+  timeout?: number;
+  /** Prisma interactive transaction maxWait in ms (default Prisma: 2000). */
+  maxWait?: number;
+}
+
 export async function withTenant<T>(
   ctx: TenantContext,
   fn: (tx: TxClient) => Promise<T>,
+  options?: WithTenantOptions,
 ): Promise<T> {
+  const txOptions: { timeout?: number; maxWait?: number } = {};
+  if (options?.timeout !== undefined) txOptions.timeout = options.timeout;
+  if (options?.maxWait !== undefined) txOptions.maxWait = options.maxWait;
   return tenantContextStore.run(ctx, async () => {
     return rawPrisma.$transaction(async (tx) => {
       const tenantId = ctx.tenantId ?? "";
@@ -76,6 +87,6 @@ export async function withTenant<T>(
       );
 
       return fn(tx);
-    });
+    }, txOptions);
   });
 }
