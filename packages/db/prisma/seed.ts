@@ -53,6 +53,10 @@ async function hashPilotPassword(plain: string): Promise<string> {
 }
 
 const PILOT_PASSWORD = process.env.SEED_PILOT_PASSWORD ?? "Pilot!2026";
+// Demo release shared account (WHOLESALER_ADMIN, 2FA disabled). Independent
+// from PILOT_PASSWORD so the demo URL/password can be shared widely without
+// also handing out access to every seeded role account.
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? "Demo1234!";
 
 // Stable tenant identities — we cannot rely on cuid() across runs, so we look
 // up by `name` (which is unique in practice for the pilot dataset; the schema
@@ -346,6 +350,20 @@ export async function seedAll(): Promise<SeedSummary> {
         passwordHash,
       });
     }
+
+    // Demo release shared account — distinct from the role-based seeds above.
+    // Lives in the pilot wholesaler tenant as WHOLESALER_ADMIN with 2FA off so
+    // demo participants can hop in without setting up TOTP. Password comes
+    // from SEED_DEMO_PASSWORD (different from SEED_PILOT_PASSWORD).
+    const demoPasswordHash = await hashPilotPassword(DEMO_PASSWORD);
+    await upsertUser(tx, {
+      email: "demo@solar-saas.demo",
+      name: "管理者デモアカウント",
+      tenantId: tenantIdByKey.pilotWholesaler,
+      role: "WHOLESALER_ADMIN",
+      twoFactorRequired: false,
+      passwordHash: demoPasswordHash,
+    });
 
     // Seed one VenueProvider for pilotWholesaler so the UC-01 E2E test can
     // select a venue provider without depending on the masters test suite
