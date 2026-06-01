@@ -28,6 +28,15 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+// Demo release banner: when NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=true the login
+// page renders a panel with the shared demo account so participants don't
+// have to look it up. Stripped completely from non-demo builds because the
+// env check folds to a constant at build time.
+const DEMO_CREDENTIALS_ENABLED =
+  process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true";
+const DEMO_EMAIL = "demo@solar-saas.demo";
+const DEMO_PASSWORD = "Demo1234!";
+
 export default function SignInPage() {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -74,12 +83,50 @@ export default function SignInPage() {
     });
   }
 
+  function fillDemoCredentials() {
+    form.setValue("email", DEMO_EMAIL, { shouldValidate: true });
+    form.setValue("password", DEMO_PASSWORD, { shouldValidate: true });
+  }
+
   return (
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{labels.signIn.title}</h1>
         <p className="text-muted-foreground text-sm">{labels.signIn.subtitle}</p>
       </div>
+
+      {DEMO_CREDENTIALS_ENABLED ? (
+        <button
+          type="button"
+          onClick={fillDemoCredentials}
+          className="border-primary/30 bg-primary/5 hover:bg-primary/10 focus-visible:ring-ring w-full rounded-md border p-4 text-left transition focus:outline-none focus-visible:ring-2"
+          aria-label={labels.signIn.demoAutofillButton}
+        >
+          <div className="text-primary text-sm font-semibold">
+            {labels.signIn.demoPanelTitle}
+          </div>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {labels.signIn.demoPanelDescription}
+          </p>
+          <dl className="mt-3 space-y-1 font-mono text-xs">
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground min-w-[7.5rem]">
+                {labels.signIn.demoEmailLabel}
+              </dt>
+              <dd className="text-foreground">{DEMO_EMAIL}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground min-w-[7.5rem]">
+                {labels.signIn.demoPasswordLabel}
+              </dt>
+              <dd className="text-foreground">{DEMO_PASSWORD}</dd>
+            </div>
+          </dl>
+          <p className="text-primary/80 mt-3 text-xs underline-offset-4 hover:underline">
+            {labels.signIn.demoAutofillButton}
+          </p>
+        </button>
+      ) : null}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>

@@ -47,6 +47,11 @@ export const labels = {
     suspended: "このアカウントは利用停止中です。管理者にお問い合わせください",
     invited: "招待メール内のリンクからアカウント開設を完了してください",
     unknownError: "予期しないエラーが発生しました。時間を置いて再度お試しください",
+    demoPanelTitle: "デモアカウント",
+    demoPanelDescription: "下記の認証情報でサインインしてお試しください",
+    demoEmailLabel: "メールアドレス",
+    demoPasswordLabel: "パスワード",
+    demoAutofillButton: "クリックでフォームに自動入力",
   },
 
   // Auth — S-002 MFA challenge
