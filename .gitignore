@@ -43,3 +43,11 @@ next-env.d.ts
 
 # preservation backups (旧実装の保全用 .bak。git が履歴を保持するため公開しない)
 *.bak
+
+# ログイン情報・デモアカウントの控え (絶対に公開しない)
+docs/login_info
+docs/login_info.*
+docs/randum_number
+docs/random_number
+docs/secrets
+docs/secrets.*
