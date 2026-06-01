@@ -190,24 +190,28 @@ describe("changeStatusAction — state machine", () => {
     expect(args.data.decidedDate).toBeInstanceOf(Date);
   });
 
-  it("rejects FIXED → CONTACTING with InvalidStateTransitionError (422)", async () => {
+  it("rejects same-state transitions (no-op guard)", async () => {
     authMock.mockResolvedValue(WS_SESSION);
     venueNegotiationFindUniqueMock.mockResolvedValue({ id: "vn_1", status: "FIXED" });
 
-    await expect(changeStatusAction({ id: "vn_1", status: "CONTACTING" })).rejects.toBeInstanceOf(
+    await expect(changeStatusAction({ id: "vn_1", status: "FIXED" })).rejects.toBeInstanceOf(
       InvalidStateTransitionError,
     );
     expect(venueNegotiationUpdateMock).not.toHaveBeenCalled();
   });
 
-  it("rejects transitions out of INFEASIBLE (terminal)", async () => {
+  it("allows re-opening from INFEASIBLE (state machine relaxed for demo)", async () => {
     authMock.mockResolvedValue(WS_SESSION);
-    venueNegotiationFindUniqueMock.mockResolvedValue({ id: "vn_2", status: "INFEASIBLE" });
+    venueNegotiationFindUniqueMock.mockResolvedValue({
+      id: "vn_2",
+      status: "INFEASIBLE",
+      note: null,
+    });
+    venueNegotiationUpdateMock.mockResolvedValue({ id: "vn_2", status: "CONTACTING" });
 
-    await expect(changeStatusAction({ id: "vn_2", status: "CANCELLED" })).rejects.toBeInstanceOf(
-      InvalidStateTransitionError,
-    );
-    expect(venueNegotiationUpdateMock).not.toHaveBeenCalled();
+    await expect(
+      changeStatusAction({ id: "vn_2", status: "CONTACTING" }),
+    ).resolves.toEqual({ id: "vn_2", status: "CONTACTING" });
   });
 
   it("forbids dealer_admin from status changes", async () => {

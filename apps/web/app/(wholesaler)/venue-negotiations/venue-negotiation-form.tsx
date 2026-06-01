@@ -17,8 +17,10 @@ import {
 import type { ActiveVenueProviderOption } from "./data";
 import type { VenueNegotiationInput } from "@solar/contracts";
 
-// S-022 の新規作成 / 編集フォーム。実施候補日は yyyy-mm-dd の改行区切りで
-// 受け付け、actions.ts 側で `Date[]` に正規化する。
+// S-022 の新規作成 / 編集フォーム。実施候補日は input[type=date] の配列で
+// 受け付け、actions.ts 側に `Date[]` として渡す。空欄行は無視し、yyyy-mm-dd
+// 文字列のままだとブラウザのタイムゾーンに依存しないよう正午 UTC 起点で
+// `Date` 化している。
 
 type Mode =
   | { kind: "create" }
@@ -44,7 +46,9 @@ interface VenueNegotiationFormProps {
 
 interface FormState {
   venueProviderId: string;
-  candidateDates: string;
+  storeName: string; // mirrors VenueProvider.name; edits sync back via venueProviderUpdate
+  address: string; // mirrors VenueProvider.address; same
+  candidateDates: string[]; // yyyy-mm-dd strings, one per <input type=date> row
   contractType: "" | "FIXED" | "PERFORMANCE" | "OTHER";
   fixedFee: string;
   performanceRate: string;
@@ -53,11 +57,16 @@ interface FormState {
   note: string;
 }
 
-function toFormState(mode: Mode): FormState {
+function toFormState(
+  mode: Mode,
+  providers: ActiveVenueProviderOption[],
+): FormState {
   if (mode.kind === "create") {
     return {
       venueProviderId: "",
-      candidateDates: "",
+      storeName: "",
+      address: "",
+      candidateDates: [""],
       contractType: "",
       fixedFee: "",
       performanceRate: "",
@@ -66,9 +75,15 @@ function toFormState(mode: Mode): FormState {
       note: "",
     };
   }
+  const selected = providers.find((v) => v.id === mode.initial.venueProviderId);
   return {
     venueProviderId: mode.initial.venueProviderId,
-    candidateDates: mode.initial.candidateDates.join("\n"),
+    storeName: selected?.name ?? "",
+    address: selected?.address ?? "",
+    candidateDates:
+      mode.initial.candidateDates.length > 0
+        ? mode.initial.candidateDates.map((iso) => iso.slice(0, 10))
+        : [""],
     contractType: mode.initial.contractType ?? "",
     fixedFee: mode.initial.fixedFee ?? "",
     performanceRate: mode.initial.performanceRate ?? "",
@@ -78,12 +93,14 @@ function toFormState(mode: Mode): FormState {
   };
 }
 
-function parseCandidateDates(text: string): Date[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => new Date(line))
+function parseCandidateDates(values: string[]): Date[] {
+  return values
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    // Anchor to 12:00 UTC so the calendar date matches across timezones —
+    // a yyyy-mm-dd without a time would otherwise be interpreted as
+    // midnight UTC which displays as the previous day in JST.
+    .map((s) => new Date(`${s}T12:00:00.000Z`))
     .filter((d) => !Number.isNaN(d.getTime()));
 }
 
@@ -92,12 +109,44 @@ export function VenueNegotiationForm({ mode, venueProviders }: VenueNegotiationF
   const t = labels.venueNegotiation;
   const c = labels.common;
 
-  const [values, setValues] = useState<FormState>(() => toFormState(mode));
+  const [values, setValues] = useState<FormState>(() => toFormState(mode, venueProviders));
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // When the user picks a different venue provider, autofill the editable
+  // 店舗名 / 住所 fields from the selected master. The user can still edit
+  // them inline afterward — the edits flow back to VenueProvider on save.
+  function selectVenueProvider(id: string) {
+    const next = venueProviders.find((v) => v.id === id);
+    setValues((prev) => ({
+      ...prev,
+      venueProviderId: id,
+      storeName: next?.name ?? "",
+      address: next?.address ?? "",
+    }));
+  }
+
+  function updateCandidateDate(index: number, value: string) {
+    setValues((prev) => {
+      const next = [...prev.candidateDates];
+      next[index] = value;
+      return { ...prev, candidateDates: next };
+    });
+  }
+
+  function addCandidateDate() {
+    setValues((prev) => ({ ...prev, candidateDates: [...prev.candidateDates, ""] }));
+  }
+
+  function removeCandidateDate(index: number) {
+    setValues((prev) => {
+      const next = prev.candidateDates.filter((_, i) => i !== index);
+      return { ...prev, candidateDates: next.length > 0 ? next : [""] };
+    });
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -134,9 +183,23 @@ export function VenueNegotiationForm({ mode, venueProviders }: VenueNegotiationF
           toast.success(c.saved);
           router.push(`/venue-negotiations/${result.id}`);
         } else {
+          // Detect inline 店舗名 / 住所 edits and forward them to the linked
+          // VenueProvider master. Skip the side-update when the values match
+          // the currently selected provider verbatim — no useless writes.
+          const selected = venueProviders.find((v) => v.id === values.venueProviderId);
+          const providerUpdate: { name?: string; address?: string } = {};
+          if (selected && values.storeName.trim() && values.storeName.trim() !== selected.name) {
+            providerUpdate.name = values.storeName.trim();
+          }
+          if (selected && values.address.trim() !== (selected.address ?? "").trim()) {
+            providerUpdate.address = values.address.trim();
+          }
           const patch: UpdateVenueNegotiationInput = {
             id: mode.id,
             patch: payload,
+            ...(Object.keys(providerUpdate).length > 0
+              ? { venueProviderUpdate: providerUpdate }
+              : {}),
           };
           await updateVenueNegotiationAction(patch);
           toast.success(c.saved);
@@ -150,17 +213,18 @@ export function VenueNegotiationForm({ mode, venueProviders }: VenueNegotiationF
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8" noValidate>
-      <section className="space-y-4">
-        <h2 className="text-lg font-medium">{t.sections.basic}</h2>
+    <form onSubmit={onSubmit} className="space-y-6" noValidate>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="venueProviderId">
-            {t.fields.venueProvider} <span className="text-destructive">*</span>
-          </label>
+          <div className="flex h-5 items-center">
+            <label className="text-sm font-medium leading-none" htmlFor="venueProviderId">
+              {t.fields.venueProvider} <span className="text-destructive">*</span>
+            </label>
+          </div>
           <select
             id="venueProviderId"
             value={values.venueProviderId}
-            onChange={(e) => update("venueProviderId", e.target.value)}
+            onChange={(e) => selectVenueProvider(e.target.value)}
             disabled={mode.kind === "edit"}
             className="border-input bg-background flex h-10 w-full rounded-md border px-3 py-2 text-sm"
             aria-required="true"
@@ -175,38 +239,82 @@ export function VenueNegotiationForm({ mode, venueProviders }: VenueNegotiationF
           </select>
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="candidateDates">
-            {t.fields.candidateDates} <span className="text-destructive">*</span>
-          </label>
-          <textarea
-            id="candidateDates"
-            rows={4}
-            value={values.candidateDates}
-            onChange={(e) => update("candidateDates", e.target.value)}
-            placeholder="2026-05-01&#10;2026-05-08"
-            className="border-input bg-background flex w-full rounded-md border px-3 py-2 text-sm"
-            aria-required="true"
-          />
-          <p className="text-muted-foreground text-xs">
-            yyyy-mm-dd 形式で 1 行に 1 日付。複数候補日を入力可能。
-          </p>
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="nextAction">
-            {t.fields.nextAction}
-          </label>
+          <div className="flex h-5 items-center">
+            <label className="text-sm font-medium leading-none" htmlFor="storeName">
+              {t.fields.storeName}
+            </label>
+          </div>
           <Input
-            id="nextAction"
-            value={values.nextAction}
-            onChange={(e) => update("nextAction", e.target.value)}
+            id="storeName"
+            value={values.storeName}
+            onChange={(e) => update("storeName", e.target.value)}
+            disabled={!values.venueProviderId}
           />
         </div>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-lg font-medium">{t.sections.contract}</h2>
         <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="contractType">
+          <div className="flex h-5 items-center justify-between gap-2">
+            <span className="text-sm font-medium leading-none">
+              {t.fields.candidateDates} <span className="text-destructive">*</span>
+            </span>
+            <button
+              type="button"
+              onClick={addCandidateDate}
+              className="text-electric-blue hover:text-electric-blue/80 text-xs font-medium leading-none underline-offset-2 hover:underline"
+            >
+              + 候補日を追加
+            </button>
+          </div>
+          <ul className="space-y-2">
+            {values.candidateDates.map((value, index) => (
+              <li key={index} className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={value}
+                  onChange={(e) => updateCandidateDate(index, e.target.value)}
+                  aria-label={`${t.fields.candidateDates} ${index + 1}`}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeCandidateDate(index)}
+                  disabled={values.candidateDates.length <= 1 && value === ""}
+                  aria-label={`${t.fields.candidateDates} ${index + 1} を削除`}
+                >
+                  −
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="address">
+          {t.fields.address}
+        </label>
+        <Input
+          id="address"
+          value={values.address}
+          onChange={(e) => update("address", e.target.value)}
+          disabled={!values.venueProviderId}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="nextAction">
+          {t.fields.nextAction}
+        </label>
+        <Input
+          id="nextAction"
+          value={values.nextAction}
+          onChange={(e) => update("nextAction", e.target.value)}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <label className="text-sm font-bold" htmlFor="contractType">
             {t.fields.contractType}
           </label>
           <select
@@ -221,51 +329,60 @@ export function VenueNegotiationForm({ mode, venueProviders }: VenueNegotiationF
             <option value="OTHER">{labels.venueProvider.contractTypes.OTHER}</option>
           </select>
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="fixedFee">
-            {t.fields.fixedFee}
-          </label>
-          <Input
-            id="fixedFee"
-            inputMode="decimal"
-            value={values.fixedFee}
-            onChange={(e) => update("fixedFee", e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="performanceRate">
-            {t.fields.performanceRate}
-          </label>
-          <Input
-            id="performanceRate"
-            inputMode="decimal"
-            value={values.performanceRate}
-            onChange={(e) => update("performanceRate", e.target.value)}
-          />
-        </div>
-      </section>
+        {values.contractType === "FIXED" ? (
+          <div className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="fixedFee">
+              {t.fields.fixedFee}
+            </label>
+            <Input
+              id="fixedFee"
+              inputMode="decimal"
+              value={values.fixedFee}
+              onChange={(e) => update("fixedFee", e.target.value)}
+            />
+          </div>
+        ) : values.contractType === "PERFORMANCE" ? (
+          <div className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="performanceRate">
+              {t.fields.performanceRate}
+            </label>
+            <Input
+              id="performanceRate"
+              inputMode="decimal"
+              value={values.performanceRate}
+              onChange={(e) => update("performanceRate", e.target.value)}
+            />
+          </div>
+        ) : (
+          <div aria-hidden />
+        )}
+      </div>
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-medium">{t.sections.condition}</h2>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="conditionNote">
+          {t.sections.condition}
+        </label>
         <textarea
+          id="conditionNote"
           rows={3}
           value={values.conditionNote}
           onChange={(e) => update("conditionNote", e.target.value)}
           className="border-input bg-background flex w-full rounded-md border px-3 py-2 text-sm"
-          aria-label={t.fields.conditionNote}
         />
-      </section>
+      </div>
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-medium">{t.fields.note}</h2>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="note">
+          {t.fields.note}
+        </label>
         <textarea
+          id="note"
           rows={4}
           value={values.note}
           onChange={(e) => update("note", e.target.value)}
           className="border-input bg-background flex w-full rounded-md border px-3 py-2 text-sm"
-          aria-label={t.fields.note}
         />
-      </section>
+      </div>
 
       {serverError ? (
         <p role="alert" className="text-destructive text-sm font-medium">

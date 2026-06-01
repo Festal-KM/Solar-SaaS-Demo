@@ -259,6 +259,34 @@ export const labels = {
     },
   },
 
+  // /masters/relationships — 二次店一覧マスタ（卸業者管理者向け）
+  dealerRelationships: {
+    title: "二次店一覧",
+    subtitle: "卸業者と取引のある二次店の一覧。ステータスとスコープ既定値を管理します。",
+    empty: "二次店との関係はまだ登録されていません",
+    emptyCta: "招待コードを発行して二次店にサインアップしてもらうと、ここに表示されます",
+    fields: {
+      dealerName: "二次店名",
+      status: "ステータス",
+      defaultScope: "既定スコープ",
+      note: "備考",
+      createdAt: "登録日",
+      updatedAt: "最終更新",
+    },
+    statuses: {
+      ACTIVE: "有効",
+      SUSPENDED: "停止中",
+    },
+    scopes: {
+      APPOINTMENT_ONLY: "アポ取りまで",
+      FIRST_VISIT: "初訪まで",
+      FULL_CLOSING: "契約まで",
+    },
+    actions: {
+      saving: "保存中…",
+    },
+  },
+
   // S-019 / S-020 — F-011 場所提供元マスタ
   venueProvider: {
     title: "場所提供元マスタ",
@@ -324,6 +352,8 @@ export const labels = {
     allStatuses: "すべてのステータス",
     fields: {
       venueProvider: "場所提供元",
+      storeName: "店舗名",
+      address: "住所",
       candidateDates: "実施候補日",
       decidedDate: "確定日",
       contractType: "契約形態",
@@ -387,6 +417,8 @@ export const labels = {
       promoteRequiresFixed: "場所提供元対応が「確定」のときのみイベント候補に昇格できます",
       storeNameRequired: "店舗名を入力してください",
       targetMonthFormat: "対象年月は YYYY-MM 形式で入力してください",
+      statusRequired: "遷移先のステータスを選択してください",
+      invalidDate: "日付の形式が正しくありません",
     },
   },
 

@@ -42,28 +42,13 @@ import { withServerActionContext } from "@/lib/tenancy/server-action";
 
 const LIST_PATH = "/venue-negotiations";
 
-// Allowed-transition adjacency table — see header comment for rationale.
-const ALLOWED_TRANSITIONS: Record<VenueNegotiationStatus, VenueNegotiationStatus[]> = {
-  NOT_CONTACTED: ["CONTACTING", "CONDITION_REVIEW", "INFEASIBLE", "CANCELLED"],
-  CONTACTING: ["CONDITION_REVIEW", "INFEASIBLE", "CANCELLED"],
-  CONDITION_REVIEW: ["FEASIBLE", "INFEASIBLE", "CANCELLED"],
-  FEASIBLE: ["FIXED", "INFEASIBLE", "CANCELLED"],
-  FIXED: ["CANCELLED"],
-  INFEASIBLE: [],
-  CANCELLED: [],
-};
+// 状態遷移制約は撤廃（デモ用途で柔軟性を優先）。同一状態への遷移のみブロック。
+// 元の strict な状態機械（FIXED → CANCELLED only / INFEASIBLE 終端 等）は
+// 必要に応じて以前の git 履歴から復元可能。
 
 function assertTransitionAllowed(from: VenueNegotiationStatus, to: VenueNegotiationStatus): void {
   if (from === to) {
     throw new InvalidStateTransitionError("既に同じ状態です", { from, to });
-  }
-  const allowed = ALLOWED_TRANSITIONS[from] ?? [];
-  if (!allowed.includes(to)) {
-    throw new InvalidStateTransitionError(`「${from}」から「${to}」への変更はできません`, {
-      from,
-      to,
-      allowed,
-    });
   }
 }
 
@@ -127,6 +112,16 @@ export const createVenueNegotiationAction = withServerActionContext<
 export interface UpdateVenueNegotiationInput {
   id: string;
   patch: VenueNegotiationUpdate;
+  /**
+   * Optional updates to the linked VenueProvider master. Set when the detail
+   * page edits 店舗名 / 住所 inline — the field belongs to the provider
+   * record but we surface it on the negotiation form to keep the workflow on
+   * one page. Pass only the fields that should change.
+   */
+  venueProviderUpdate?: {
+    name?: string;
+    address?: string;
+  };
 }
 
 export interface UpdateVenueNegotiationResult {
@@ -146,7 +141,7 @@ export const updateVenueNegotiationAction = withServerActionContext<
 
     const existing = await tx.venueNegotiation.findUnique({
       where: { id: input.id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, venueProviderId: true },
     });
     if (!existing) {
       throw new NotFoundError("場所提供元対応が見つかりません");
@@ -171,6 +166,29 @@ export const updateVenueNegotiationAction = withServerActionContext<
       },
       select: { id: true },
     });
+
+    // Optional master update: forward the inline 店舗名 / 住所 edits to the
+    // linked VenueProvider record. Same transaction so both rows commit
+    // atomically. Empty strings are treated as "do not change" — to clear an
+    // address pass an explicit empty string from the client only when intended.
+    if (input.venueProviderUpdate) {
+      const providerPatch: Record<string, string> = {};
+      if (
+        typeof input.venueProviderUpdate.name === "string" &&
+        input.venueProviderUpdate.name.trim().length > 0
+      ) {
+        providerPatch.name = input.venueProviderUpdate.name.trim();
+      }
+      if (typeof input.venueProviderUpdate.address === "string") {
+        providerPatch.address = input.venueProviderUpdate.address.trim();
+      }
+      if (Object.keys(providerPatch).length > 0) {
+        await tx.venueProvider.update({
+          where: { id: existing.venueProviderId },
+          data: providerPatch,
+        });
+      }
+    }
 
     revalidatePath(LIST_PATH);
     revalidatePath(`${LIST_PATH}/${input.id}`);

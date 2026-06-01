@@ -1,27 +1,48 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { labels } from "@/lib/i18n/labels";
 
 import { changeStatusAction } from "./actions";
 
 import type { VenueNegotiationStatus, VenueNegotiationStatusTarget } from "@solar/contracts";
 
-// S-022 — ステータス遷移ボタン群。許可遷移は actions.ts と同じ表をローカルに
-// 持っているが、サーバ側で必ず再検証されるので二重チェック扱い。
+// S-022 — ヘッダ右上に表示するインラインステータスプルダウン。他のフォーム
+// プルダウンと同じ UX で、選択した瞬間に保存。状態遷移の制約はデモ用途で
+// 撤廃済み（actions.ts 側も同様）— 同一状態のみブロック。
+//
+// FIXED に変更した時は確認ダイアログを開き、単発イベントとして登録するか
+// 尋ねる。Yes → /events へ遷移、No → ダイアログを閉じてそのまま。
 
-const ALLOWED: Record<VenueNegotiationStatus, VenueNegotiationStatusTarget[]> = {
-  NOT_CONTACTED: ["CONTACTING", "CONDITION_REVIEW", "INFEASIBLE", "CANCELLED"],
-  CONTACTING: ["CONDITION_REVIEW", "INFEASIBLE", "CANCELLED"],
-  CONDITION_REVIEW: ["FEASIBLE", "INFEASIBLE", "CANCELLED"],
-  FEASIBLE: ["FIXED", "INFEASIBLE", "CANCELLED"],
-  FIXED: ["CANCELLED"],
-  INFEASIBLE: [],
-  CANCELLED: [],
+const ALL_TARGETS: VenueNegotiationStatusTarget[] = [
+  "CONTACTING",
+  "CONDITION_REVIEW",
+  "FEASIBLE",
+  "FIXED",
+  "INFEASIBLE",
+  "CANCELLED",
+];
+
+const STATUS_PILL_CLASS: Record<VenueNegotiationStatus, string> = {
+  NOT_CONTACTED: "bg-gray-100 text-gray-700 ring-gray-200",
+  CONTACTING: "bg-blue-50 text-blue-700 ring-blue-200",
+  CONDITION_REVIEW: "bg-amber-50 text-amber-700 ring-amber-200",
+  FEASIBLE: "bg-teal-50 text-teal-700 ring-teal-200",
+  FIXED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  INFEASIBLE: "bg-rose-50 text-rose-700 ring-rose-200",
+  CANCELLED: "bg-zinc-100 text-zinc-500 ring-zinc-200",
 };
 
 interface StatusControlProps {
@@ -34,71 +55,94 @@ export function StatusControl({ id, current }: StatusControlProps) {
   const t = labels.venueNegotiation;
   const c = labels.common;
 
-  const [reason, setReason] = useState("");
+  // Optimistic local value — diverges from `current` while a save is in flight.
+  const [localValue, setLocalValue] = useState<VenueNegotiationStatus>(current);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [pendingTarget, setPendingTarget] = useState<VenueNegotiationStatusTarget | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [showFixedDialog, setShowFixedDialog] = useState(false);
 
-  const allowed = ALLOWED[current];
+  // Sync back to the server-provided value whenever the parent re-renders
+  // (e.g. after router.refresh()).
+  useEffect(() => {
+    setLocalValue(current);
+  }, [current]);
 
-  function onChange(target: VenueNegotiationStatusTarget) {
+  function onChange(value: string) {
+    if (!value || value === localValue) return;
+    const target = value as VenueNegotiationStatusTarget;
+    const prev = localValue;
+    setLocalValue(target);
     setServerError(null);
-    setPendingTarget(target);
     startTransition(async () => {
       try {
-        await changeStatusAction({ id, status: target, reason: reason.trim() || undefined });
+        await changeStatusAction({ id, status: target });
         toast.success(c.saved);
-        setReason("");
         router.refresh();
+        if (target === "FIXED") {
+          setShowFixedDialog(true);
+        }
       } catch (err) {
+        // Roll back optimistic update on failure.
+        setLocalValue(prev);
         const message = err instanceof Error && err.message ? err.message : c.unknownError;
         setServerError(message);
-      } finally {
-        setPendingTarget(null);
       }
     });
   }
 
-  if (allowed.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        現在のステータス「{t.statuses[current]}」からは遷移できません（終端状態）
-      </p>
-    );
-  }
+  // Exclude only the current value so the select keeps it as the displayed
+  // selection but doesn't offer it as a re-pick.
+  const otherTargets = ALL_TARGETS.filter((s) => s !== localValue);
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="reason">
-          {t.fields.reason}
-        </label>
-        <textarea
-          id="reason"
-          rows={2}
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          className="border-input bg-background flex w-full rounded-md border px-3 py-2 text-sm"
-        />
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {allowed.map((target) => (
-          <Button
-            key={target}
-            type="button"
-            variant={target === "CANCELLED" || target === "INFEASIBLE" ? "destructive" : "default"}
-            disabled={pending}
-            onClick={() => onChange(target)}
-          >
-            {pending && pendingTarget === target ? t.actions.changing : t.statuses[target]}
-          </Button>
+    <div className="flex flex-col items-end gap-1">
+      <select
+        aria-label={t.fields.status}
+        value={localValue}
+        onChange={(e) => onChange(e.target.value)}
+        className={`appearance-auto cursor-pointer rounded-full px-4 py-2 text-sm font-semibold ring-1 ring-inset hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-electric-blue/40 ${STATUS_PILL_CLASS[localValue]}`}
+      >
+        <option value={localValue}>{t.statuses[localValue]}</option>
+        {otherTargets.map((s) => (
+          <option key={s} value={s}>
+            {t.statuses[s]}
+          </option>
         ))}
-      </div>
+      </select>
       {serverError ? (
-        <p role="alert" className="text-destructive text-sm font-medium">
+        <p role="alert" className="text-destructive text-xs font-medium">
           {serverError}
         </p>
       ) : null}
+
+      <Dialog open={showFixedDialog} onOpenChange={setShowFixedDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>単発イベントとして登録しますか？</DialogTitle>
+            <DialogDescription>
+              ステータスを「確定」に変更しました。続けて単発イベントとして登録できます。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowFixedDialog(false)}
+            >
+              あとで
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowFixedDialog(false);
+                router.push("/events");
+              }}
+            >
+              イベント登録へ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

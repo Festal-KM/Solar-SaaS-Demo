@@ -34,6 +34,7 @@ export interface VenueNegotiationDetail extends VenueNegotiationListItem {
   performanceRate: string | null;
   conditionNote: string | null;
   note: string | null;
+  venueProviderAddress: string | null;
   createdAt: string;
 }
 
@@ -132,7 +133,7 @@ export async function getVenueNegotiation(id: string): Promise<VenueNegotiationD
         createdAt: true,
         updatedAt: true,
         venueProvider: {
-          select: { id: true, name: true, area: true },
+          select: { id: true, name: true, area: true, address: true },
         },
       },
     });
@@ -142,6 +143,7 @@ export async function getVenueNegotiation(id: string): Promise<VenueNegotiationD
       venueProviderId: r.venueProviderId,
       venueProviderName: r.venueProvider.name,
       venueProviderArea: r.venueProvider.area,
+      venueProviderAddress: r.venueProvider.address,
       status: r.status,
       nextAction: r.nextAction,
       assigneeId: r.assigneeId,
@@ -168,6 +170,7 @@ export interface ActiveVenueProviderOption {
   id: string;
   name: string;
   area: string | null;
+  address: string | null;
 }
 
 export async function listActiveVenueProviders(): Promise<ActiveVenueProviderOption[]> {
@@ -176,8 +179,8 @@ export async function listActiveVenueProviders(): Promise<ActiveVenueProviderOpt
     const rows = await tx.venueProvider.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, area: true },
+      select: { id: true, name: true, area: true, address: true },
     });
-    return rows.map((r) => ({ id: r.id, name: r.name, area: r.area }));
+    return rows.map((r) => ({ id: r.id, name: r.name, area: r.area, address: r.address }));
   });
 }

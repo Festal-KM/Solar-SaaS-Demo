@@ -52,20 +52,29 @@ function quote(value: string): string {
  * committed on success and rolled back on thrown error.
  */
 export interface WithTenantOptions {
-  /** Prisma interactive transaction timeout in ms (default Prisma: 5000). */
+  /** Prisma interactive transaction timeout in ms. */
   timeout?: number;
-  /** Prisma interactive transaction maxWait in ms (default Prisma: 2000). */
+  /** Prisma interactive transaction maxWait in ms. */
   maxWait?: number;
 }
+
+// Prisma's defaults (5s timeout / 2s maxWait) are too tight for local
+// development on Docker / WSL2 where occasional cold-start jitter pushes a
+// single-row SELECT over the limit. Production on Railway uses an internal
+// network and finishes in <100ms, so a generous default has no downside.
+// Per-call options still override these.
+const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_WAIT_MS = 10_000;
 
 export async function withTenant<T>(
   ctx: TenantContext,
   fn: (tx: TxClient) => Promise<T>,
   options?: WithTenantOptions,
 ): Promise<T> {
-  const txOptions: { timeout?: number; maxWait?: number } = {};
-  if (options?.timeout !== undefined) txOptions.timeout = options.timeout;
-  if (options?.maxWait !== undefined) txOptions.maxWait = options.maxWait;
+  const txOptions: { timeout: number; maxWait: number } = {
+    timeout: options?.timeout ?? DEFAULT_TIMEOUT_MS,
+    maxWait: options?.maxWait ?? DEFAULT_MAX_WAIT_MS,
+  };
   return tenantContextStore.run(ctx, async () => {
     return rawPrisma.$transaction(async (tx) => {
       const tenantId = ctx.tenantId ?? "";
