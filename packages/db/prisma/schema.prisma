@@ -428,6 +428,7 @@ model VenueProvider {
   updatedAt       DateTime           @updatedAt
 
   venueNegotiations VenueNegotiation[]
+  stores            Store[]
 
   @@index([wholesalerId, isActive])
 }
@@ -444,16 +445,23 @@ model Area {
   @@index([wholesalerId, isActive])
 }
 
-// 店舗マスタ — イベント開催店舗を卸業者ごとに管理する。
+// 店舗マスタ — チェーン (VenueProvider) の支店を卸業者ごとに管理する。
+// venueProviderId は親チェーンへの参照（nullable: 親未紐づけの古いレコード
+// と互換）。SetNull で親削除時にも残せるが、現状の VenueProvider 廃止フロー
+// は isActive フラグのみで物理削除しないので実害なし。
 model Store {
-  id           String   @id @default(cuid())
-  wholesalerId String
-  name         String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(cuid())
+  wholesalerId    String
+  venueProviderId String?
+  name            String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  venueProvider VenueProvider? @relation(fields: [venueProviderId], references: [id], onDelete: SetNull)
 
   @@index([wholesalerId, isActive])
+  @@index([venueProviderId])
 }
 
 // ラインイベント — 懇意の場所提供元と月単位で複数開催日を契約するイベント。

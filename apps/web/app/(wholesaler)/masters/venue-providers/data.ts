@@ -104,6 +104,30 @@ export async function listVenueProviders(
   });
 }
 
+export interface ChildStoreRow {
+  id: string;
+  name: string;
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export async function listStoresByProvider(providerId: string): Promise<ChildStoreRow[]> {
+  const ctx = await requireWholesalerCtx();
+  return withTenant(ctx, async (tx) => {
+    const rows = await tx.store.findMany({
+      where: { venueProviderId: providerId },
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      select: { id: true, name: true, isActive: true, updatedAt: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      isActive: r.isActive,
+      updatedAt: r.updatedAt.toISOString(),
+    }));
+  });
+}
+
 export async function getVenueProvider(id: string): Promise<VenueProviderDetail | null> {
   const ctx = await requireWholesalerCtx();
   return withTenant(ctx, async (tx) => {

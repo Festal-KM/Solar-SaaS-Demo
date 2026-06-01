@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { labels } from "@/lib/i18n/labels";
 
-import { getStore } from "../data";
+import { getStore, listVenueProviderOptions } from "../data";
 import { StoreForm } from "../store-form";
 
 import type { StoreInput } from "@solar/contracts";
@@ -32,8 +32,10 @@ export default async function StoreDetailPage({ params }: PageProps) {
 
   const initial: StoreInput & { isActive: boolean } = {
     name: row.name,
+    venueProviderId: row.venueProviderId,
     isActive: row.isActive,
   };
+  const venueProviders = await listVenueProviderOptions();
 
   return (
     <div className="space-y-6">
@@ -48,7 +50,10 @@ export default async function StoreDetailPage({ params }: PageProps) {
           {row.isActive ? c.active : c.inactive}
         </span>
       </div>
-      <StoreForm mode={{ kind: "edit", id: row.id, initial }} />
+      <StoreForm
+        mode={{ kind: "edit", id: row.id, initial }}
+        venueProviders={venueProviders}
+      />
     </div>
   );
 }

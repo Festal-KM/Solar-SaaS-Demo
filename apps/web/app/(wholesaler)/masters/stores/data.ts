@@ -16,11 +16,18 @@ export interface StoreListItem {
   id: string;
   name: string;
   isActive: boolean;
+  venueProviderId: string | null;
+  venueProviderName: string | null;
   updatedAt: string;
 }
 
 export interface StoreDetail extends StoreListItem {
   createdAt: string;
+}
+
+export interface VenueProviderOption {
+  id: string;
+  name: string;
 }
 
 async function requireWholesalerCtx() {
@@ -68,13 +75,17 @@ export async function listStores(filter: ListFilter = {}): Promise<StoreListItem
         id: true,
         name: true,
         isActive: true,
+        venueProviderId: true,
         updatedAt: true,
+        venueProvider: { select: { name: true } },
       },
     });
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       isActive: r.isActive,
+      venueProviderId: r.venueProviderId,
+      venueProviderName: r.venueProvider?.name ?? null,
       updatedAt: r.updatedAt.toISOString(),
     }));
   });
@@ -89,8 +100,10 @@ export async function getStore(id: string): Promise<StoreDetail | null> {
         id: true,
         name: true,
         isActive: true,
+        venueProviderId: true,
         createdAt: true,
         updatedAt: true,
+        venueProvider: { select: { name: true } },
       },
     });
     if (!r) return null;
@@ -98,8 +111,22 @@ export async function getStore(id: string): Promise<StoreDetail | null> {
       id: r.id,
       name: r.name,
       isActive: r.isActive,
+      venueProviderId: r.venueProviderId,
+      venueProviderName: r.venueProvider?.name ?? null,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
+  });
+}
+
+export async function listVenueProviderOptions(): Promise<VenueProviderOption[]> {
+  const ctx = await requireWholesalerCtx();
+  return withTenant(ctx, async (tx) => {
+    const rows = await tx.venueProvider.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
+    return rows.map((r) => ({ id: r.id, name: r.name }));
   });
 }

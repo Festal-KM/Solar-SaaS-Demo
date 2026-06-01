@@ -389,6 +389,267 @@ export async function seedAll(): Promise<SeedSummary> {
           select: { id: true },
         });
 
+    // Demo VenueProviders（チェーン）+ Stores（支店）— 1 : N の親子構造。
+    // 場所提供元はチェーン本部相当、Store は各支店として venueProviderId で
+    // 紐づける。VenueNegotiation はチェーン (VenueProvider) 単位で起票し、
+    // 単位を細かく分けたい運用では Store を別途参照する想定。
+    const DEMO_CHAIN_PROVIDERS: Array<{
+      name: string;
+      hqArea: string;
+      contactName: string;
+      phone: string;
+      address: string;
+      contractType: "FIXED" | "PERFORMANCE" | "OTHER";
+      fixedFee?: number;
+      performanceRate?: number;
+      stores: string[];
+    }> = [
+      {
+        name: "カインズ",
+        hqArea: "埼玉県",
+        contactName: "本部 催事推進室 田中",
+        phone: "048-555-0100",
+        address: "埼玉県本庄市早稲田の杜1-2-1",
+        contractType: "FIXED",
+        fixedFee: 80_000,
+        stores: ["浦和美園店", "新所沢店", "幕張店"],
+      },
+      {
+        name: "コメリパワー",
+        hqArea: "新潟県",
+        contactName: "本部 催事担当 佐々木",
+        phone: "025-555-0200",
+        address: "新潟県新潟市南区清水4501-1",
+        contractType: "PERFORMANCE",
+        performanceRate: 5,
+        stores: ["千葉ニュータウン店", "船橋店"],
+      },
+      {
+        name: "ホームセンタームサシ",
+        hqArea: "石川県",
+        contactName: "本部 営業企画 中島",
+        phone: "076-555-0300",
+        address: "石川県金沢市鞍月東2-21",
+        contractType: "FIXED",
+        fixedFee: 65_000,
+        stores: ["横浜瀬谷店", "町田忠生店"],
+      },
+      {
+        name: "ヤマダデンキ",
+        hqArea: "群馬県",
+        contactName: "本部 催事窓口 鈴木",
+        phone: "027-555-0400",
+        address: "群馬県高崎市栄町1-1",
+        contractType: "PERFORMANCE",
+        performanceRate: 7,
+        stores: ["テックランド町田店", "テックランド川越店", "テックランド千葉店"],
+      },
+      {
+        name: "ベイシア",
+        hqArea: "群馬県",
+        contactName: "本部 店舗運営部 山田",
+        phone: "0270-555-0500",
+        address: "群馬県前橋市亀里町900",
+        contractType: "OTHER",
+        stores: ["前橋みなみモール店", "渋川店"],
+      },
+      {
+        name: "ロイヤルホームセンター",
+        hqArea: "大阪府",
+        contactName: "本部 催事担当 佐藤",
+        phone: "06-555-0600",
+        address: "大阪府大阪市住之江区南港北1-21-72",
+        contractType: "FIXED",
+        fixedFee: 70_000,
+        stores: ["大宮店", "千葉北店"],
+      },
+    ];
+
+    const venueProviderIdsByName: Record<string, string> = {};
+    for (const vp of DEMO_CHAIN_PROVIDERS) {
+      const existing = await tx.venueProvider.findFirst({
+        where: { wholesalerId: pilot.id, name: vp.name },
+        select: { id: true },
+      });
+      let providerId: string;
+      if (existing) {
+        providerId = existing.id;
+      } else {
+        const created = await tx.venueProvider.create({
+          data: {
+            wholesalerId: pilot.id,
+            name: vp.name,
+            area: vp.hqArea,
+            contactName: vp.contactName,
+            phone: vp.phone,
+            address: vp.address,
+            contractType: vp.contractType,
+            ...(vp.fixedFee !== undefined ? { fixedFee: vp.fixedFee } : {}),
+            ...(vp.performanceRate !== undefined
+              ? { performanceRate: vp.performanceRate }
+              : {}),
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        providerId = created.id;
+      }
+      venueProviderIdsByName[vp.name] = providerId;
+
+      // Stores（支店）— venueProviderId で紐づける。同 (wholesalerId, name) で
+      // upsert。既に親未紐づけで存在していたら親をセット。
+      for (const storeName of vp.stores) {
+        const existingStore = await tx.store.findFirst({
+          where: { wholesalerId: pilot.id, name: storeName },
+          select: { id: true, venueProviderId: true },
+        });
+        if (!existingStore) {
+          await tx.store.create({
+            data: {
+              wholesalerId: pilot.id,
+              venueProviderId: providerId,
+              name: storeName,
+              isActive: true,
+            },
+          });
+        } else if (existingStore.venueProviderId !== providerId) {
+          await tx.store.update({
+            where: { id: existingStore.id },
+            data: { venueProviderId: providerId },
+          });
+        }
+      }
+    }
+
+    // Legacy demo providers (旧 "カインズ 浦和美園店" 等) を整理。リンクを
+    // 失う前に紐づく VenueNegotiation を削除し、参照不要となった旧 provider
+    // を物理削除する。EventCandidate からの参照が無いケースが前提（旧デモ
+    // データは VenueNegotiation 単位までしか作っていない）。
+    const LEGACY_PROVIDER_NAMES = [
+      "カインズ 浦和美園店",
+      "コメリパワー 千葉ニュータウン店",
+      "ホームセンタームサシ 横浜瀬谷店",
+      "ヤマダデンキ テックランド町田店",
+      "ベイシア 前橋みなみモール店",
+      "ロイヤルホームセンター 大宮店",
+    ];
+    const legacyProviders = await tx.venueProvider.findMany({
+      where: { wholesalerId: pilot.id, name: { in: LEGACY_PROVIDER_NAMES } },
+      select: { id: true },
+    });
+    if (legacyProviders.length > 0) {
+      const legacyIds = legacyProviders.map((p) => p.id);
+      await tx.venueNegotiation.deleteMany({
+        where: { wholesalerId: pilot.id, venueProviderId: { in: legacyIds } },
+      });
+      // 物理削除は EventCandidate 等の外部参照があると ON DELETE 制約で失敗
+      // するので try/catch。失敗時は isActive=false に fallback。
+      try {
+        await tx.venueProvider.deleteMany({ where: { id: { in: legacyIds } } });
+      } catch {
+        await tx.venueProvider.updateMany({
+          where: { id: { in: legacyIds } },
+          data: { isActive: false },
+        });
+      }
+    }
+
+    const hasDemoNegotiation = await tx.venueNegotiation.findFirst({
+      where: { wholesalerId: pilot.id },
+      select: { id: true },
+    });
+    if (!hasDemoNegotiation) {
+      const today = new Date();
+      const isoDate = (offsetDays: number) => {
+        const d = new Date(today);
+        d.setDate(d.getDate() + offsetDays);
+        return d.toISOString().slice(0, 10);
+      };
+      const DEMO_NEGOTIATIONS: Array<{
+        providerName: string;
+        status:
+          | "NOT_CONTACTED"
+          | "CONTACTING"
+          | "CONDITION_REVIEW"
+          | "FEASIBLE"
+          | "INFEASIBLE"
+          | "FIXED"
+          | "CANCELLED";
+        candidateDates: string[];
+        nextAction?: string;
+        conditionNote?: string;
+        decidedDate?: string;
+        contractType?: "FIXED" | "PERFORMANCE" | "OTHER";
+        fixedFee?: number;
+        performanceRate?: number;
+      }> = [
+        {
+          providerName: "カインズ",
+          status: "FIXED",
+          candidateDates: [isoDate(14), isoDate(15)],
+          decidedDate: isoDate(14),
+          contractType: "FIXED",
+          fixedFee: 80_000,
+          conditionNote: "浦和美園店の入口正面ブース、2 日間借用で確定",
+        },
+        {
+          providerName: "コメリパワー",
+          status: "CONDITION_REVIEW",
+          candidateDates: [isoDate(21), isoDate(28)],
+          nextAction: "千葉ニュータウン店、成果報酬率の最終回答待ち（6/8 まで）",
+          contractType: "PERFORMANCE",
+          performanceRate: 5,
+        },
+        {
+          providerName: "ホームセンタームサシ",
+          status: "FEASIBLE",
+          candidateDates: [isoDate(30)],
+          nextAction: "横浜瀬谷店、二次店募集 → 開催体制決定へ",
+          contractType: "FIXED",
+          fixedFee: 65_000,
+        },
+        {
+          providerName: "ヤマダデンキ",
+          status: "CONTACTING",
+          candidateDates: [isoDate(35), isoDate(42)],
+          nextAction: "テックランド町田店、店長と日程調整中（6/5 折り返し電話）",
+        },
+        {
+          providerName: "ベイシア",
+          status: "NOT_CONTACTED",
+          candidateDates: [],
+          nextAction: "前橋みなみモール店、問い合わせフォーム送付予定",
+        },
+        {
+          providerName: "ロイヤルホームセンター",
+          status: "INFEASIBLE",
+          candidateDates: [],
+          conditionNote: "大宮店、別催事と重複のため当月開催不可、来月再打診",
+        },
+      ];
+
+      for (const n of DEMO_NEGOTIATIONS) {
+        const providerId = venueProviderIdsByName[n.providerName];
+        if (!providerId) continue;
+        await tx.venueNegotiation.create({
+          data: {
+            wholesalerId: pilot.id,
+            venueProviderId: providerId,
+            candidateDates: n.candidateDates,
+            status: n.status,
+            ...(n.nextAction ? { nextAction: n.nextAction } : {}),
+            ...(n.conditionNote ? { conditionNote: n.conditionNote } : {}),
+            ...(n.decidedDate ? { decidedDate: new Date(n.decidedDate) } : {}),
+            ...(n.contractType ? { contractType: n.contractType } : {}),
+            ...(n.fixedFee !== undefined ? { fixedFee: n.fixedFee } : {}),
+            ...(n.performanceRate !== undefined
+              ? { performanceRate: n.performanceRate }
+              : {}),
+          },
+        });
+      }
+    }
+
     // Seed a few Areas for pilotWholesaler so the イベント候補登録フォームの
     // エリア選択肢が空にならない。Area has no schema-level UNIQUE constraint
     // beyond `id`, so we find-or-create manually per (wholesalerId, name).

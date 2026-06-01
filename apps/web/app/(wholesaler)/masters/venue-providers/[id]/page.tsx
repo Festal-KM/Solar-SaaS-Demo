@@ -5,7 +5,7 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { labels } from "@/lib/i18n/labels";
 
-import { getVenueProvider } from "../data";
+import { getVenueProvider, listStoresByProvider } from "../data";
 import { VenueProviderForm } from "../venue-provider-form";
 
 import type { VenueProviderInput } from "@solar/contracts";
@@ -29,6 +29,7 @@ export default async function VenueProviderDetailPage({ params }: PageProps) {
 
   const t = labels.venueProvider;
   const bc = labels.breadcrumb.items;
+  const childStores = await listStoresByProvider(row.id);
 
   // Legacy rows (pre-SP-02) may still have a null `address` at the DB level
   // (Prisma schema keeps it nullable; the new docs/02 §F-011 requirement is
@@ -71,6 +72,58 @@ export default async function VenueProviderDetailPage({ params }: PageProps) {
         </span>
       </div>
       <VenueProviderForm mode={{ kind: "edit", id: row.id, initial }} />
+
+      {/* 紐づく店舗（支店）一覧。1 : N の子側を表示。新規追加は店舗マスタの
+          新規作成画面で親をこの provider に指定する想定 → 直リンクを置く。 */}
+      <section aria-label="店舗（支店）" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">店舗（支店）</h2>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/masters/stores/new">店舗を追加</Link>
+          </Button>
+        </div>
+        {childStores.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            この場所提供元には店舗（支店）がまだ登録されていません。
+          </p>
+        ) : (
+          <div className="border-border overflow-x-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-left">
+                <tr>
+                  <th className="px-3 py-2 font-medium">店舗名</th>
+                  <th className="px-3 py-2 font-medium">状態</th>
+                  <th className="px-3 py-2 font-medium">最終更新</th>
+                  <th className="px-3 py-2 font-medium">
+                    <span className="sr-only">編集</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {childStores.map((s) => (
+                  <tr key={s.id} className="border-border border-t">
+                    <td className="px-3 py-2 font-medium">{s.name}</td>
+                    <td className="px-3 py-2">
+                      {s.isActive ? labels.common.active : labels.common.inactive}
+                    </td>
+                    <td className="text-muted-foreground px-3 py-2 text-xs">
+                      {new Date(s.updatedAt).toLocaleString("ja-JP")}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Link
+                        href={`/masters/stores/${s.id}`}
+                        className="text-primary text-xs underline-offset-4 hover:underline"
+                      >
+                        編集
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* TODO(SP-03 HistoryTimeline) — docs/04 §S-020「基本情報 / 連絡先 / 住所 /
           契約条件 / 備考 / 変更履歴」の最後のセクション。`HistoryTimeline`

@@ -9,6 +9,9 @@ import { z } from "zod";
 
 const baseShape = {
   name: z.string().trim().min(1, "名称を入力してください").max(255),
+  // 親チェーン (VenueProvider) への参照。null は「親なし」、undefined は
+  // 「変更しない」(StoreUpdate での挙動)。
+  venueProviderId: z.string().min(1).nullable().optional(),
   isActive: z.boolean().optional(),
 };
 
@@ -17,6 +20,7 @@ export type StoreInput = z.infer<typeof StoreInputSchema>;
 
 export const StoreUpdateSchema = z.object({
   name: baseShape.name.optional(),
+  venueProviderId: baseShape.venueProviderId,
   isActive: baseShape.isActive,
 });
 export type StoreUpdate = z.infer<typeof StoreUpdateSchema>;

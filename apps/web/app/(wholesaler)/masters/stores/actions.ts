@@ -41,6 +41,9 @@ export const createStoreAction = withServerActionContext<StoreInput, CreateStore
       data: {
         wholesalerId: ctx.wholesalerId,
         name: parsed.name,
+        ...(parsed.venueProviderId !== undefined
+          ? { venueProviderId: parsed.venueProviderId }
+          : {}),
         ...(parsed.isActive !== undefined ? { isActive: parsed.isActive } : {}),
       },
       select: { id: true },
@@ -82,6 +85,9 @@ export const updateStoreAction = withServerActionContext<UpdateStoreInput, Updat
       where: { id: input.id },
       data: {
         ...(parsed.name !== undefined ? { name: parsed.name } : {}),
+        ...("venueProviderId" in parsed
+          ? { venueProviderId: parsed.venueProviderId }
+          : {}),
         ...(parsed.isActive !== undefined ? { isActive: parsed.isActive } : {}),
       },
       select: { id: true },

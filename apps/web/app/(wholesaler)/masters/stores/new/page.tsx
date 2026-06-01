@@ -4,6 +4,7 @@ import { labels } from "@/lib/i18n/labels";
 import { assertCan } from "@/lib/permissions/can";
 import { getTenantContext } from "@/lib/tenancy/context";
 
+import { listVenueProviderOptions } from "../data";
 import { StoreForm } from "../store-form";
 
 // 店舗マスタ 新規作成. Page-level guard checks `store.create` so non-admin
@@ -36,11 +37,12 @@ export default async function NewStorePage() {
   });
 
   const t = labels.storeMaster;
+  const venueProviders = await listVenueProviderOptions();
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">{t.new}</h1>
-      <StoreForm mode={{ kind: "create" }} />
+      <StoreForm mode={{ kind: "create" }} venueProviders={venueProviders} />
     </div>
   );
 }

@@ -28,6 +28,30 @@ export interface MasterCardSummary {
 
 export interface DealerRelationshipsTabSummary {
   activeCount: number;
+  preview: DealerRelationshipPreviewRow[];
+}
+
+export interface DealerRelationshipPreviewRow {
+  id: string;
+  dealerName: string;
+  status: "ACTIVE" | "SUSPENDED";
+  defaultScope: "APPOINTMENT_ONLY" | "FIRST_VISIT" | "FULL_CLOSING";
+  updatedAt: string;
+}
+
+export interface VenueProviderTabRow {
+  id: string;
+  name: string;
+  area: string | null;
+  storeCount: number;
+  stores: { id: string; name: string }[]; // 先頭 3 件
+  updatedAt: string;
+}
+
+export interface VenueProviderTabSummary {
+  totalActiveCount: number;
+  totalStoreCount: number;
+  preview: VenueProviderTabRow[];
 }
 
 export interface InstallerTabRow {
@@ -91,12 +115,15 @@ export interface MastersHubSummary {
   wholesalerSettings: WholesalerSettingsTabSummary;
   areas: AreaTabSummary;
   stores: StoreTabSummary;
+  venueProviders: VenueProviderTabSummary;
 }
 
 const INSTALLER_PREVIEW_LIMIT = 5;
 const INCENTIVE_RATE_PREVIEW_LIMIT = 5;
 const AREA_PREVIEW_LIMIT = 5;
 const STORE_PREVIEW_LIMIT = 5;
+const VENUE_PROVIDER_PREVIEW_LIMIT = 5;
+const RELATIONSHIP_PREVIEW_LIMIT = 5;
 
 async function requireHubCtx() {
   const session = await auth();
@@ -138,6 +165,7 @@ export async function getMastersHubSummary(): Promise<MastersHubSummary> {
   return withTenant(ctx, async (tx) => {
     const [
       activeRelationshipCount,
+      relationshipPreview,
       installerActiveCount,
       installerPreview,
       rateRows,
@@ -146,8 +174,22 @@ export async function getMastersHubSummary(): Promise<MastersHubSummary> {
       areaPreview,
       storeActiveCount,
       storePreview,
+      venueProviderActiveCount,
+      venueProviderPreview,
+      storesTotalActiveCount,
     ] = await Promise.all([
         tx.relationship.count({ where: { status: "ACTIVE" } }),
+        tx.relationship.findMany({
+          orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+          take: RELATIONSHIP_PREVIEW_LIMIT,
+          select: {
+            id: true,
+            status: true,
+            defaultScope: true,
+            updatedAt: true,
+            dealer: { select: { name: true } },
+          },
+        }),
         tx.installer.count({ where: { isActive: true } }),
         tx.installer.findMany({
           where: { isActive: true },
@@ -206,6 +248,24 @@ export async function getMastersHubSummary(): Promise<MastersHubSummary> {
             updatedAt: true,
           },
         }),
+        tx.venueProvider.count({ where: { isActive: true } }),
+        tx.venueProvider.findMany({
+          where: { isActive: true },
+          orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+          take: VENUE_PROVIDER_PREVIEW_LIMIT,
+          select: {
+            id: true,
+            name: true,
+            area: true,
+            updatedAt: true,
+            stores: {
+              where: { isActive: true },
+              orderBy: { name: "asc" },
+              select: { id: true, name: true },
+            },
+          },
+        }),
+        tx.store.count({ where: { isActive: true } }),
       ]);
 
     // Group incentive rates by relationship and pick the row currently in
@@ -243,6 +303,13 @@ export async function getMastersHubSummary(): Promise<MastersHubSummary> {
     return {
       dealerRelationships: {
         activeCount: activeRelationshipCount,
+        preview: relationshipPreview.map((r) => ({
+          id: r.id,
+          dealerName: r.dealer.name,
+          status: r.status,
+          defaultScope: r.defaultScope,
+          updatedAt: r.updatedAt.toISOString(),
+        })),
       },
       installers: {
         totalActiveCount: installerActiveCount,
@@ -280,6 +347,18 @@ export async function getMastersHubSummary(): Promise<MastersHubSummary> {
         preview: storePreview.map((r) => ({
           id: r.id,
           name: r.name,
+          updatedAt: r.updatedAt.toISOString(),
+        })),
+      },
+      venueProviders: {
+        totalActiveCount: venueProviderActiveCount,
+        totalStoreCount: storesTotalActiveCount,
+        preview: venueProviderPreview.map((r) => ({
+          id: r.id,
+          name: r.name,
+          area: r.area,
+          storeCount: r.stores.length,
+          stores: r.stores.slice(0, 3),
           updatedAt: r.updatedAt.toISOString(),
         })),
       },

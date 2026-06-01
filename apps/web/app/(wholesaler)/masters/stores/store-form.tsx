@@ -24,7 +24,8 @@ import { createStoreAction, disableStoreAction, updateStoreAction } from "./acti
 
 // Shared form for store create + edit (店舗マスタ). area-form と同じ形:
 // client-side schema は許容的 ("" を受ける)、`toPayload` で空白を正規化してから
-// canonical な `StoreInputSchema` に通す。
+// canonical な `StoreInputSchema` に通す。1:N 親 (VenueProvider) はオプションの
+// プルダウン — 未選択時は null として送る (親未紐づけ)。
 
 type Mode =
   | { kind: "create" }
@@ -36,29 +37,34 @@ type Mode =
 
 interface FormValues {
   name: string;
+  venueProviderId: string;
 }
 
 const FormValuesSchema = z.object({
   name: z.string().trim().min(1, "名称を入力してください").max(255),
+  venueProviderId: z.string(),
 });
 
 function toFormValues(initial?: StoreInput): FormValues {
   return {
     name: initial?.name ?? "",
+    venueProviderId: initial?.venueProviderId ?? "",
   };
 }
 
 function toPayload(v: FormValues): StoreInput {
   return StoreInputSchema.parse({
     name: v.name.trim(),
+    venueProviderId: v.venueProviderId.length > 0 ? v.venueProviderId : null,
   });
 }
 
 export interface StoreFormProps {
   mode: Mode;
+  venueProviders: Array<{ id: string; name: string }>;
 }
 
-export function StoreForm({ mode }: StoreFormProps) {
+export function StoreForm({ mode, venueProviders }: StoreFormProps) {
   const router = useRouter();
   const t = labels.storeMaster;
   const c = labels.common;
@@ -124,6 +130,29 @@ export function StoreForm({ mode }: StoreFormProps) {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8" noValidate>
         <section className="space-y-4">
           <h2 className="text-lg font-medium">{t.sections.basic}</h2>
+          <FormField
+            control={form.control}
+            name="venueProviderId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>場所提供元（親チェーン）</FormLabel>
+                <FormControl>
+                  <select
+                    {...field}
+                    className="border-input bg-background flex h-10 w-full rounded-md border px-3 py-2 text-sm"
+                  >
+                    <option value="">— 未選択 —</option>
+                    {venueProviders.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <FormField
             control={form.control}
             name="name"

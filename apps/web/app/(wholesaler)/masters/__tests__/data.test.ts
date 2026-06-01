@@ -24,6 +24,7 @@ vi.mock("server-only", () => ({}));
 const authMock = vi.fn();
 const rawRelationshipFindManyMock = vi.fn();
 const relationshipCountMock = vi.fn();
+const relationshipFindManyMock = vi.fn();
 const installerCountMock = vi.fn();
 const installerFindManyMock = vi.fn();
 const incentiveRateFindManyMock = vi.fn();
@@ -32,6 +33,8 @@ const areaCountMock = vi.fn();
 const areaFindManyMock = vi.fn();
 const storeCountMock = vi.fn();
 const storeFindManyMock = vi.fn();
+const venueProviderCountMock = vi.fn();
+const venueProviderFindManyMock = vi.fn();
 
 vi.mock("@/auth", () => ({
   auth: () => authMock(),
@@ -42,6 +45,7 @@ vi.mock("@solar/db", async (orig) => {
   const tx = {
     relationship: {
       count: (...args: unknown[]) => relationshipCountMock(...args),
+      findMany: (...args: unknown[]) => relationshipFindManyMock(...args),
     },
     installer: {
       count: (...args: unknown[]) => installerCountMock(...args),
@@ -60,6 +64,10 @@ vi.mock("@solar/db", async (orig) => {
     store: {
       count: (...args: unknown[]) => storeCountMock(...args),
       findMany: (...args: unknown[]) => storeFindManyMock(...args),
+    },
+    venueProvider: {
+      count: (...args: unknown[]) => venueProviderCountMock(...args),
+      findMany: (...args: unknown[]) => venueProviderFindManyMock(...args),
     },
   };
   return {
@@ -140,6 +148,12 @@ beforeEach(() => {
   storeCountMock.mockResolvedValue(0);
   storeFindManyMock.mockReset();
   storeFindManyMock.mockResolvedValue([]);
+  relationshipFindManyMock.mockReset();
+  relationshipFindManyMock.mockResolvedValue([]);
+  venueProviderCountMock.mockReset();
+  venueProviderCountMock.mockResolvedValue(0);
+  venueProviderFindManyMock.mockReset();
+  venueProviderFindManyMock.mockResolvedValue([]);
 });
 
 describe("getMastersHubSummary — 5-tab summary", () => {
@@ -201,7 +215,7 @@ describe("getMastersHubSummary — 5-tab summary", () => {
 
     const summary = await getMastersHubSummary();
 
-    expect(summary.dealerRelationships).toEqual({ activeCount: 3 });
+    expect(summary.dealerRelationships).toEqual({ activeCount: 3, preview: [] });
     expect(summary.installers.totalActiveCount).toBe(2);
     expect(summary.installers.preview).toHaveLength(2);
     expect(summary.installers.preview[0]).toMatchObject({ id: "inst_1", name: "施工業者 A" });
@@ -275,9 +289,14 @@ describe("getMastersHubSummary — 5-tab summary", () => {
     });
     expect(summary.installers.preview).toEqual([]);
     expect(summary.incentiveRates.preview).toEqual([]);
-    expect(summary.dealerRelationships).toEqual({ activeCount: 0 });
+    expect(summary.dealerRelationships).toEqual({ activeCount: 0, preview: [] });
     expect(summary.areas).toEqual({ totalActiveCount: 0, preview: [] });
     expect(summary.stores).toEqual({ totalActiveCount: 0, preview: [] });
+    expect(summary.venueProviders).toEqual({
+      totalActiveCount: 0,
+      totalStoreCount: 0,
+      preview: [],
+    });
   });
 
   it("forbids wholesaler_event_team (S-052 ハブは admin 専用 / docs/04 §1.3)", async () => {
