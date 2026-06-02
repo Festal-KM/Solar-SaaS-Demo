@@ -6,6 +6,7 @@ import {
   LineChart,
   Settings,
   Wallet,
+  Package,
   type NavEntry,
 } from "@/components/layout/role-shell";
 
@@ -28,6 +29,7 @@ const wholesalerNav: NavEntry[] = [
     icon: Users,
     children: [
       { label: "顧客一覧", href: "/customers" },
+      { label: "マエカク一覧", href: "/customers/maekaku" },
       { label: "アポイント一覧", href: "/appointments" },
       { label: "契約一覧", href: "/contracts" },
       { label: "施工一覧", href: "/constructions" },
@@ -40,6 +42,14 @@ const wholesalerNav: NavEntry[] = [
     children: [
       { label: "手数料一覧", href: "/commissions" },
       { label: "手数料設定", href: "/commissions/settings" },
+    ],
+  },
+  {
+    label: "製品カタログ",
+    icon: Package,
+    children: [
+      { label: "PVカタログ", href: "/product-catalog/pv" },
+      { label: "BTカタログ", href: "/product-catalog/bt" },
     ],
   },
   {

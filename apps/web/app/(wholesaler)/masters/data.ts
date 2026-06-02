@@ -89,11 +89,16 @@ export interface WholesalerSettingsTabSummary {
 export interface AreaTabRow {
   id: string;
   name: string;
+  description: string | null;
+  isActive: boolean;
   updatedAt: string;
 }
 
 export interface AreaTabSummary {
   totalActiveCount: number;
+  eventAreas: AreaTabRow[];
+  customerAreas: AreaTabRow[];
+  /** 後方互換: 先頭 5 件のみのプレビュー（旧コードが参照する）。 */
   preview: AreaTabRow[];
 }
 
@@ -227,13 +232,16 @@ export async function getMastersHubSummary(): Promise<MastersHubSummary> {
           },
         }),
         tx.area.count({ where: { isActive: true } }),
+        // ハブのエリア設定タブはイベント・顧客の両一覧をその場で表示する
+        // ため、prefix=AREA_PREVIEW_LIMIT には縛られず両 type を全件取る。
         tx.area.findMany({
-          where: { isActive: true },
-          orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
-          take: AREA_PREVIEW_LIMIT,
+          orderBy: [{ isActive: "desc" }, { name: "asc" }],
           select: {
             id: true,
             name: true,
+            type: true,
+            description: true,
+            isActive: true,
             updatedAt: true,
           },
         }),
@@ -334,14 +342,28 @@ export async function getMastersHubSummary(): Promise<MastersHubSummary> {
         fiscalYearStartMonth: settings?.fiscalYearStartMonth ?? 4,
         lastUpdatedAt: settings ? settings.updatedAt.toISOString() : null,
       },
-      areas: {
-        totalActiveCount: areaActiveCount,
-        preview: areaPreview.map((r) => ({
+      areas: (() => {
+        const rows = areaPreview.map((r) => ({
           id: r.id,
           name: r.name,
+          type: r.type,
+          description: r.description,
+          isActive: r.isActive,
           updatedAt: r.updatedAt.toISOString(),
-        })),
-      },
+        }));
+        const eventAreas = rows
+          .filter((r) => r.type === "EVENT")
+          .map(({ type: _t, ...rest }) => rest);
+        const customerAreas = rows
+          .filter((r) => r.type === "CUSTOMER")
+          .map(({ type: _t, ...rest }) => rest);
+        return {
+          totalActiveCount: areaActiveCount,
+          eventAreas,
+          customerAreas,
+          preview: eventAreas.slice(0, AREA_PREVIEW_LIMIT),
+        };
+      })(),
       stores: {
         totalActiveCount: storeActiveCount,
         preview: storePreview.map((r) => ({

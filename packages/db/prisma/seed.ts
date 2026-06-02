@@ -653,15 +653,48 @@ export async function seedAll(): Promise<SeedSummary> {
     // Seed a few Areas for pilotWholesaler so the イベント候補登録フォームの
     // エリア選択肢が空にならない。Area has no schema-level UNIQUE constraint
     // beyond `id`, so we find-or-create manually per (wholesalerId, name).
-    const AREA_NAMES = ["東京都", "神奈川県", "埼玉県", "千葉県"];
-    for (const areaName of AREA_NAMES) {
+    // イベント開催エリア (EVENT) — イベント候補登録時に選択する開催地区分。
+    const EVENT_AREA_NAMES = ["東京都", "神奈川県", "埼玉県", "千葉県"];
+    for (const areaName of EVENT_AREA_NAMES) {
       const existingArea = await tx.area.findFirst({
-        where: { wholesalerId: pilot.id, name: areaName },
+        where: { wholesalerId: pilot.id, name: areaName, type: "EVENT" },
         select: { id: true },
       });
       if (!existingArea) {
         await tx.area.create({
-          data: { wholesalerId: pilot.id, name: areaName, isActive: true },
+          data: {
+            wholesalerId: pilot.id,
+            name: areaName,
+            type: "EVENT",
+            isActive: true,
+          },
+        });
+      }
+    }
+
+    // 顧客エリア (CUSTOMER) — 顧客マスタで参照する営業対象エリア区分。
+    // 同名でも EVENT と CUSTOMER は別レコードで管理する。
+    const CUSTOMER_AREA_NAMES = [
+      "東京都北部",
+      "東京都南部",
+      "神奈川北部",
+      "神奈川南部",
+      "埼玉エリア",
+      "千葉エリア",
+    ];
+    for (const areaName of CUSTOMER_AREA_NAMES) {
+      const existingArea = await tx.area.findFirst({
+        where: { wholesalerId: pilot.id, name: areaName, type: "CUSTOMER" },
+        select: { id: true },
+      });
+      if (!existingArea) {
+        await tx.area.create({
+          data: {
+            wholesalerId: pilot.id,
+            name: areaName,
+            type: "CUSTOMER",
+            isActive: true,
+          },
         });
       }
     }

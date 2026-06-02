@@ -13,10 +13,14 @@ import { revalidatePath } from "next/cache";
 
 import {
   CustomerActivityCreateSchema,
+  CustomerFileRecordSchema,
+  CustomerTaskCreateSchema,
   PresignCustomerFileSchema,
 } from "@solar/contracts";
 import type {
   CustomerActivityCreateInput,
+  CustomerFileRecordInput,
+  CustomerTaskCreateInput,
   PresignCustomerFileInput,
 } from "@solar/contracts";
 import { presignDownload, presignUpload } from "@solar/storage";
@@ -89,6 +93,7 @@ export const createCustomerActivity = withServerActionContext<
         occurredAt: new Date(parsed.occurredAt),
         category: parsed.category,
         detail: parsed.detail,
+        amount: parsed.category === "quote" ? (parsed.amount ?? null) : null,
         createdByUserId: ctx.actorUserId,
       },
       select: { id: true },
@@ -123,6 +128,67 @@ export const createCustomerActivity = withServerActionContext<
 
     revalidatePath(DETAIL_PATH(parsed.customerId));
     return { id: activity.id };
+  },
+);
+
+// 関連ファイルタブの直接アップロード後、CustomerFile を 1 件記録する（activityId は null）。
+export const createCustomerFile = withServerActionContext<CustomerFileRecordInput, { id: string }>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = CustomerFileRecordSchema.parse(input);
+
+    const customer = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true },
+    });
+    if (!customer) {
+      throw new NotFoundError("顧客が見つかりません");
+    }
+
+    const file = await tx.customerFile.create({
+      data: {
+        customerId: parsed.customerId,
+        fileKey: parsed.fileKey,
+        fileName: parsed.fileName,
+        contentType: parsed.contentType ?? null,
+        size: parsed.size ?? null,
+        uploadedByUserId: ctx.actorUserId,
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(DETAIL_PATH(parsed.customerId));
+    return { id: file.id };
+  },
+);
+
+// ToDo タブの新規起票（CustomerTask を 1 件作成。activityId は null）。
+export const createCustomerTask = withServerActionContext<CustomerTaskCreateInput, { id: string }>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = CustomerTaskCreateSchema.parse(input);
+
+    const customer = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true },
+    });
+    if (!customer) {
+      throw new NotFoundError("顧客が見つかりません");
+    }
+
+    const task = await tx.customerTask.create({
+      data: {
+        customerId: parsed.customerId,
+        content: parsed.content,
+        dueDate: parsed.dueDate ? new Date(parsed.dueDate) : null,
+        assigneeUserId: parsed.assigneeUserId ?? null,
+        createdByUserId: ctx.actorUserId,
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(DETAIL_PATH(parsed.customerId));
+    return { id: task.id };
   },
 );
 

@@ -41,6 +41,10 @@ export const createAreaAction = withServerActionContext<AreaInput, CreateAreaRes
       data: {
         wholesalerId: ctx.wholesalerId,
         name: parsed.name,
+        type: parsed.type,
+        ...(parsed.description !== undefined
+          ? { description: parsed.description }
+          : {}),
         ...(parsed.isActive !== undefined ? { isActive: parsed.isActive } : {}),
       },
       select: { id: true },
@@ -82,6 +86,8 @@ export const updateAreaAction = withServerActionContext<UpdateAreaInput, UpdateA
       where: { id: input.id },
       data: {
         ...(parsed.name !== undefined ? { name: parsed.name } : {}),
+        ...(parsed.type !== undefined ? { type: parsed.type } : {}),
+        ...("description" in parsed ? { description: parsed.description } : {}),
         ...(parsed.isActive !== undefined ? { isActive: parsed.isActive } : {}),
       },
       select: { id: true },

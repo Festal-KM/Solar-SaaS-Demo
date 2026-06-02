@@ -134,6 +134,14 @@ export const updateCustomerAction = withServerActionContext<
         ...(parsed.registeredByUserId !== undefined
           ? { registeredByUserId: parsed.registeredByUserId }
           : {}),
+        ...(parsed.tossUpUserId !== undefined ? { tossUpUserId: parsed.tossUpUserId } : {}),
+        ...(parsed.tossUpRelationshipId !== undefined
+          ? { tossUpRelationshipId: parsed.tossUpRelationshipId }
+          : {}),
+        ...(parsed.closingUserId !== undefined ? { closingUserId: parsed.closingUserId } : {}),
+        ...(parsed.closingRelationshipId !== undefined
+          ? { closingRelationshipId: parsed.closingRelationshipId }
+          : {}),
         ...(parsed.housingType !== undefined ? { housingType: parsed.housingType } : {}),
         ...(parsed.pvInstalled !== undefined ? { pvInstalled: parsed.pvInstalled } : {}),
         ...(parsed.batteryInstalled !== undefined
@@ -143,10 +151,19 @@ export const updateCustomerAction = withServerActionContext<
         ...(parsed.household !== undefined ? { household: parsed.household } : {}),
         ...(parsed.status !== undefined ? { status: parsed.status } : {}),
         ...(parsed.note !== undefined ? { note: parsed.note } : {}),
+        ...(parsed.inflowRoute !== undefined ? { inflowRoute: parsed.inflowRoute } : {}),
+        ...(parsed.maekakuStatus !== undefined ? { maekakuStatus: parsed.maekakuStatus } : {}),
+        ...(parsed.nextAction !== undefined
+          ? { nextAction: parsed.nextAction?.trim() || null }
+          : {}),
+        ...(parsed.nextAppointmentAt !== undefined
+          ? { nextAppointmentAt: parsed.nextAppointmentAt ? new Date(parsed.nextAppointmentAt) : null }
+          : {}),
         ...(parsed.contractStatus !== undefined ? { contractStatus: parsed.contractStatus } : {}),
         ...(parsed.contractPlan !== undefined
           ? { contractPlan: parsed.contractPlan?.trim() || null }
           : {}),
+        ...(parsed.contractAmount !== undefined ? { contractAmount: parsed.contractAmount } : {}),
         ...(parsed.contractExpectedDate !== undefined
           ? { contractExpectedDate: parsed.contractExpectedDate ? new Date(parsed.contractExpectedDate) : null }
           : {}),
@@ -158,6 +175,9 @@ export const updateCustomerAction = withServerActionContext<
           : {}),
         ...(parsed.constructionCompletedDate !== undefined
           ? { constructionCompletedDate: parsed.constructionCompletedDate ? new Date(parsed.constructionCompletedDate) : null }
+          : {}),
+        ...(parsed.constructionVendor !== undefined
+          ? { constructionVendor: parsed.constructionVendor?.trim() || null }
           : {}),
         ...(parsed.subsidyStatus !== undefined ? { subsidyStatus: parsed.subsidyStatus } : {}),
         ...(parsed.subsidyType !== undefined

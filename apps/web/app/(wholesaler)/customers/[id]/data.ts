@@ -14,6 +14,7 @@ import { getTenantContext } from "@/lib/tenancy/context";
 import { withTenant } from "@/lib/tenancy/with-tenant";
 import { maskName, maskPhone, maskAddress } from "@solar/contracts/services/masking";
 import type { ViewerContext } from "@solar/contracts/services/masking";
+import type { InflowRoute } from "@solar/contracts";
 
 import type { AcquisitionChannel } from "@solar/db";
 
@@ -25,7 +26,16 @@ import type {
 import { deriveArea } from "../data";
 
 // 商談履歴のカテゴリ CODE（ラベル/チップ色は UI 側で解決）。
-export type HistoryCategory = "event" | "phone" | "appointment" | "email" | "visit" | "other";
+// "quote" は見積提示の記録（amount に提示金額を保持できる）。
+export type HistoryCategory =
+  | "tossup"
+  | "event"
+  | "phone"
+  | "appointment"
+  | "email"
+  | "visit"
+  | "quote"
+  | "other";
 
 export interface HistoryEntry {
   id: string;
@@ -33,11 +43,13 @@ export interface HistoryEntry {
   category: HistoryCategory; // CODE（UI が label / color を解決）
   assignee: string;
   body: string;
+  amount: number | null; // 見積提示カテゴリのときの提示金額（円）。それ以外は null
 }
 
 export interface ContractStatusCard {
   status: ContractStatusValue;
   plan: string | null;
+  amount: number | null; // 契約金額（円）
   expectedDate: string | null;
 }
 
@@ -45,6 +57,7 @@ export interface ConstructionStatusCard {
   status: ConstructionStatusValue;
   plannedDate: string | null;
   completedDate: string | null;
+  vendor: string | null; // 対応事業者
 }
 
 export interface SubsidyStatusCard {
@@ -69,6 +82,22 @@ export interface CustomerTask {
   done: boolean;
 }
 
+// 担当者の表示用（自社社員 or 二次店）。未設定は null。
+export type AssigneeKind = "user" | "dealer";
+export interface AssigneeDisplay {
+  name: string;
+  kind: AssigneeKind;
+}
+
+// 顧客チャット 1 件。
+export interface ChatMessage {
+  id: string;
+  authorName: string;
+  authorUserId: string;
+  body: string;
+  createdAt: string; // ISO
+}
+
 export interface CustomerDetail {
   id: string;
   name: string; // masked
@@ -79,7 +108,13 @@ export interface CustomerDetail {
   address: string | null; // masked
   area: string | null;
   channel: AcquisitionChannel;
+  inflowRoute: InflowRoute | null; // 流入経路（顧客情報で手動選択、未設定は null）
+  maekakuStatus: "pending" | "done" | "unnecessary" | null; // マエカク状況（商談履歴タブで入力）
+  nextAction: string | null; // 次回アクション（商談履歴タブで入力）
+  nextAppointmentAt: string | null; // 次回アポ日程（ISO、商談履歴タブで入力）
   assigneeName: string;
+  tossUp: AssigneeDisplay | null; // トスアップ担当（自社/二次店、未設定は null）
+  closing: AssigneeDisplay | null; // クロージング担当（自社/二次店、未設定は null）
   note: string | null;
   createdAt: string;
   updatedAt: string;
@@ -89,6 +124,8 @@ export interface CustomerDetail {
   history: HistoryEntry[];
   files: RelatedFile[];
   tasks: CustomerTask[];
+  messages: ChatMessage[];
+  currentUserId: string; // 自分のメッセージ判定用（チャット右寄せ）
 }
 
 function isoOrNull(d: Date | null | undefined): string | null {
@@ -96,11 +133,13 @@ function isoOrNull(d: Date | null | undefined): string | null {
 }
 
 const HISTORY_CATEGORIES: readonly HistoryCategory[] = [
+  "tossup",
   "event",
   "phone",
   "appointment",
   "email",
   "visit",
+  "quote",
   "other",
 ];
 
@@ -171,16 +210,26 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
         address: true,
         area: true,
         channel: true,
+        inflowRoute: true,
+        maekakuStatus: true,
+        nextAction: true,
+        nextAppointmentAt: true,
         registeredByUserId: true,
+        tossUpUserId: true,
+        tossUpRelationshipId: true,
+        closingUserId: true,
+        closingRelationshipId: true,
         note: true,
         createdAt: true,
         updatedAt: true,
         contractStatus: true,
         contractPlan: true,
+        contractAmount: true,
         contractExpectedDate: true,
         constructionStatus: true,
         constructionPlannedDate: true,
         constructionCompletedDate: true,
+        constructionVendor: true,
         subsidyStatus: true,
         subsidyType: true,
         subsidySubmittedDate: true,
@@ -215,11 +264,18 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
 
     // 商談履歴 / タスク / 関連ファイル を専用モデルから読む（RLS は Customer.wholesalerId
     // 経由の相関 EXISTS で分離を強制）。
-    const [activityRows, taskRows, fileRows] = await Promise.all([
+    const [activityRows, taskRows, fileRows, messageRows] = await Promise.all([
       tx.customerActivity.findMany({
         where: { customerId: id },
         orderBy: { occurredAt: "desc" },
-        select: { id: true, occurredAt: true, category: true, detail: true, createdByUserId: true },
+        select: {
+          id: true,
+          occurredAt: true,
+          category: true,
+          detail: true,
+          amount: true,
+          createdByUserId: true,
+        },
       }),
       tx.customerTask.findMany({
         where: { customerId: id },
@@ -231,15 +287,24 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
         orderBy: { createdAt: "desc" },
         select: { id: true, fileName: true, contentType: true, createdAt: true },
       }),
+      tx.customerMessage.findMany({
+        where: { customerId: id },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, authorUserId: true, body: true, createdAt: true },
+      }),
     ]);
 
-    // createdByUserId / assigneeUserId を 1 回でまとめて解決（RLS スコープ内）。
+    // createdByUserId / assigneeUserId / トスアップ・クロージング担当 を 1 回でまとめて
+    // 解決（RLS スコープ内）。
     const userIds = [
       ...new Set(
         [
           ...activityRows.map((a) => a.createdByUserId),
           ...taskRows.map((t) => t.assigneeUserId).filter((v): v is string => !!v),
-        ],
+          ...messageRows.map((m) => m.authorUserId),
+          customer.tossUpUserId,
+          customer.closingUserId,
+        ].filter((v): v is string => !!v),
       ),
     ];
     const userRows =
@@ -248,12 +313,45 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
         : [];
     const nameByUserId = new Map(userRows.map((u) => [u.id, u.name]));
 
+    // 担当者が二次店(Relationship)の場合の名称解決（卸業者は自テナントの relationship を
+    // 参照可能）。relationship → dealer.name を引く。
+    const relationshipIds = [
+      ...new Set(
+        [customer.tossUpRelationshipId, customer.closingRelationshipId].filter(
+          (v): v is string => !!v,
+        ),
+      ),
+    ];
+    const relationshipRows =
+      relationshipIds.length > 0
+        ? await tx.relationship.findMany({
+            where: { id: { in: relationshipIds } },
+            select: { id: true, dealer: { select: { name: true } } },
+          })
+        : [];
+    const dealerNameByRelId = new Map(relationshipRows.map((r) => [r.id, r.dealer.name]));
+
+    // 担当主体の表示解決：二次店(Relationship) を優先、無ければ自社社員(User)、共に無ければ null。
+    function resolveAssignee(
+      userId: string | null,
+      relationshipId: string | null,
+    ): AssigneeDisplay | null {
+      if (relationshipId) {
+        return { name: dealerNameByRelId.get(relationshipId) ?? "—", kind: "dealer" };
+      }
+      if (userId) {
+        return { name: nameByUserId.get(userId) ?? "—", kind: "user" };
+      }
+      return null;
+    }
+
     const history: HistoryEntry[] = activityRows.map((a) => ({
       id: a.id,
       date: a.occurredAt.toISOString(),
       category: toHistoryCategory(a.category),
       assignee: nameByUserId.get(a.createdByUserId) ?? "—",
       body: a.detail,
+      amount: a.amount ?? null,
     }));
 
     const tasks: CustomerTask[] = taskRows.map((t) => ({
@@ -271,6 +369,14 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       date: formatDateTime(f.createdAt),
     }));
 
+    const messages: ChatMessage[] = messageRows.map((m) => ({
+      id: m.id,
+      authorUserId: m.authorUserId,
+      authorName: nameByUserId.get(m.authorUserId) ?? "—",
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+    }));
+
     return {
       id: customer.id,
       name: displayName,
@@ -281,19 +387,27 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       address: customer.address ? maskAddress(customer.address, viewer) : null,
       area: customer.area ?? deriveArea(customer.address),
       channel: customer.channel,
+      inflowRoute: (customer.inflowRoute as InflowRoute | null) ?? null,
+      maekakuStatus: (customer.maekakuStatus as "pending" | "done" | "unnecessary" | null) ?? null,
+      nextAction: customer.nextAction,
+      nextAppointmentAt: isoOrNull(customer.nextAppointmentAt),
       assigneeName: assigneeDisplay,
+      tossUp: resolveAssignee(customer.tossUpUserId, customer.tossUpRelationshipId),
+      closing: resolveAssignee(customer.closingUserId, customer.closingRelationshipId),
       note: customer.note,
       createdAt: customer.createdAt.toISOString(),
       updatedAt: customer.updatedAt.toISOString(),
       contract: {
         status: customer.contractStatus as ContractStatusValue,
         plan: customer.contractPlan,
+        amount: customer.contractAmount ?? null,
         expectedDate: isoOrNull(customer.contractExpectedDate),
       },
       construction: {
         status: customer.constructionStatus as ConstructionStatusValue,
         plannedDate: isoOrNull(customer.constructionPlannedDate),
         completedDate: isoOrNull(customer.constructionCompletedDate),
+        vendor: customer.constructionVendor ?? null,
       },
       subsidy: {
         status: customer.subsidyStatus as SubsidyStatusValue,
@@ -304,6 +418,8 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       history,
       files,
       tasks,
+      messages,
+      currentUserId: ctx.actorUserId,
     };
   });
 }

@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { labels } from "@/lib/i18n/labels";
 
+import { AreasTabContent } from "./areas/areas-tab-content";
 import { getMastersHubSummary } from "./data";
+import { VenueProviderRow } from "./venue-provider-row";
 
 // /masters — マスタ管理ハブ。3 タブ構成（エリア設定 → 場所提供元 → 二次店一覧）。
 // 場所提供元は 1 : N で店舗（VenueProvider.stores）を持つ親子関係。タブ自身は
@@ -42,75 +44,23 @@ export default async function MastersHubPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* タブ 1: エリア設定 */}
+        {/* タブ 1: エリア設定 — クライアント側コンポーネントが
+            イベントエリア / 顧客エリアのサブタブ + 新規/編集モーダルを管理。 */}
         <TabsContent value="areas">
           <section
             aria-labelledby="tab-areas-heading"
             className="border-border bg-card space-y-4 rounded-md border p-6"
           >
-            <header className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <h2 id="tab-areas-heading" className="text-lg font-semibold">
-                  {t.tabs.areas.label}
-                </h2>
-                <p className="text-muted-foreground text-sm">{t.tabs.areas.description}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/masters/areas">{t.embedded.openFullPage}</Link>
-                </Button>
-                <Button asChild size="sm">
-                  <Link href="/masters/areas/new">{area.new}</Link>
-                </Button>
-              </div>
+            <header className="space-y-1">
+              <h2 id="tab-areas-heading" className="text-lg font-semibold">
+                {t.tabs.areas.label}
+              </h2>
+              <p className="text-muted-foreground text-sm">{t.tabs.areas.description}</p>
             </header>
-
-            <dl className="text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:max-w-xs">
-              <dt>{t.summary.count}</dt>
-              <dd className="text-foreground text-right tabular-nums">
-                {summary.areas.totalActiveCount.toLocaleString("ja-JP")}
-                <span className="text-muted-foreground ml-1">{t.summary.activeOnly}</span>
-              </dd>
-            </dl>
-
-            {summary.areas.preview.length === 0 ? (
-              <div className="border-border bg-muted/30 rounded-md border p-6 text-center">
-                <p className="text-foreground font-medium">{area.empty}</p>
-                <p className="text-muted-foreground mt-2 text-sm">{area.emptyCta}</p>
-              </div>
-            ) : (
-              <div className="border-border overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-left">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">{area.fields.name}</th>
-                      <th className="px-3 py-2 font-medium">{area.fields.updatedAt}</th>
-                      <th className="px-3 py-2 font-medium">
-                        <span className="sr-only">{c.edit}</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary.areas.preview.map((r) => (
-                      <tr key={r.id} className="border-border border-t">
-                        <td className="px-3 py-2 font-medium">{r.name}</td>
-                        <td className="text-muted-foreground px-3 py-2 text-xs">
-                          {new Date(r.updatedAt).toLocaleString("ja-JP")}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <Link
-                            href={`/masters/areas/${r.id}`}
-                            className="text-primary text-xs underline-offset-4 hover:underline"
-                          >
-                            {t.embedded.goToDetail}
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <AreasTabContent
+              eventAreas={summary.areas.eventAreas}
+              customerAreas={summary.areas.customerAreas}
+            />
           </section>
         </TabsContent>
 
@@ -162,36 +112,37 @@ export default async function MastersHubPage() {
                   </thead>
                   <tbody>
                     {summary.venueProviders.preview.map((r) => (
-                      <tr key={r.id} className="border-border border-t align-top">
-                        <td className="px-3 py-2 font-medium">{r.name}</td>
+                      <VenueProviderRow
+                        key={r.id}
+                        href={`/masters/venue-providers/${r.id}`}
+                      >
+                        <td className="text-primary px-3 py-2 font-medium">{r.name}</td>
                         <td className="text-muted-foreground px-3 py-2">{r.area ?? "—"}</td>
                         <td className="px-3 py-2">
                           {r.stores.length === 0 ? (
                             <span className="text-muted-foreground text-xs">支店なし</span>
                           ) : (
-                            <ul className="text-muted-foreground space-y-0.5 text-xs">
+                            <div className="flex flex-wrap gap-1">
                               {r.stores.map((s) => (
-                                <li key={s.id}>
-                                  <span className="text-foreground">└</span> {s.name}
-                                </li>
+                                <span
+                                  key={s.id}
+                                  className="bg-sky-50 text-sky-700 ring-sky-200 inline-flex items-center rounded-full px-2 py-0.5 text-xs ring-1 ring-inset"
+                                >
+                                  {s.name}
+                                </span>
                               ))}
                               {r.storeCount > r.stores.length ? (
-                                <li className="italic">
-                                  …他 {(r.storeCount - r.stores.length).toLocaleString("ja-JP")} 店舗
-                                </li>
+                                <span className="text-muted-foreground inline-flex items-center text-xs italic">
+                                  +{(r.storeCount - r.stores.length).toLocaleString("ja-JP")}
+                                </span>
                               ) : null}
-                            </ul>
+                            </div>
                           )}
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <Link
-                            href={`/masters/venue-providers/${r.id}`}
-                            className="text-primary text-xs underline-offset-4 hover:underline"
-                          >
-                            {t.embedded.goToDetail}
-                          </Link>
+                          <span className="text-muted-foreground text-xs">→</span>
                         </td>
-                      </tr>
+                      </VenueProviderRow>
                     ))}
                   </tbody>
                 </table>

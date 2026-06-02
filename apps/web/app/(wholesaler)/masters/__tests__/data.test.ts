@@ -204,8 +204,20 @@ describe("getMastersHubSummary — 5-tab summary", () => {
     });
     areaCountMock.mockResolvedValue(2);
     areaFindManyMock.mockResolvedValue([
-      { id: "area_1", name: "東京都", updatedAt: new Date("2026-05-22T00:00:00Z") },
-      { id: "area_2", name: "神奈川県", updatedAt: new Date("2026-05-21T00:00:00Z") },
+      {
+        id: "area_1",
+        name: "東京都",
+        type: "EVENT",
+        isActive: true,
+        updatedAt: new Date("2026-05-22T00:00:00Z"),
+      },
+      {
+        id: "area_2",
+        name: "神奈川県",
+        type: "EVENT",
+        isActive: true,
+        updatedAt: new Date("2026-05-21T00:00:00Z"),
+      },
     ]);
     storeCountMock.mockResolvedValue(2);
     storeFindManyMock.mockResolvedValue([
@@ -290,7 +302,12 @@ describe("getMastersHubSummary — 5-tab summary", () => {
     expect(summary.installers.preview).toEqual([]);
     expect(summary.incentiveRates.preview).toEqual([]);
     expect(summary.dealerRelationships).toEqual({ activeCount: 0, preview: [] });
-    expect(summary.areas).toEqual({ totalActiveCount: 0, preview: [] });
+    expect(summary.areas).toEqual({
+      totalActiveCount: 0,
+      eventAreas: [],
+      customerAreas: [],
+      preview: [],
+    });
     expect(summary.stores).toEqual({ totalActiveCount: 0, preview: [] });
     expect(summary.venueProviders).toEqual({
       totalActiveCount: 0,

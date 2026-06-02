@@ -433,15 +433,29 @@ model VenueProvider {
   @@index([wholesalerId, isActive])
 }
 
-// エリアマスタ — イベントの開催エリアを卸業者ごとに管理する。
+// エリアマスタの種別。
+// EVENT    — イベントの開催エリア（場所提供元 / イベント候補に紐づく）
+// CUSTOMER — 顧客のエリア（営業対象エリアの区分）
+enum AreaType {
+  EVENT
+  CUSTOMER
+}
+
+// エリアマスタ — 卸業者ごとに管理する。EVENT (開催エリア) と CUSTOMER
+// (顧客エリア) を `type` 列で区別する。同名のエリアを両方の用途で登録可能
+// （例: 「東京都」をイベント用と顧客用で別レコード）。`description` は補助
+// メモ（運用ルール・対象市区町村など）の自由テキスト。
 model Area {
   id           String   @id @default(cuid())
   wholesalerId String
   name         String
+  type         AreaType @default(EVENT)
+  description  String?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  @@index([wholesalerId, type, isActive])
   @@index([wholesalerId, isActive])
 }
 
@@ -982,23 +996,41 @@ model Customer {
   electricBill               String?
   household                  String?
   channel                    AcquisitionChannel
+  // 流入経路（顧客情報で手動選択）: "EVENT" | "OUTBOUND_CALL" | "DIRECT_VISIT"。
+  // 既存の channel（獲得チャネル、登録時確定・不変）とは別に、顧客情報セクションで
+  // 編集できる手動値として保持する。
+  inflowRoute                String?
   sourceEventId              String?
   registeredByUserId         String
   registeredByOrgType        TenantType
   registeredByRelationshipId String?
+  // 顧客対応の担当者は 2 役割で管理する：トスアップ担当（見込みを引き上げた人）と
+  // クロージング担当（契約クロージングを担う人）。どちらも任意（未設定可）で、
+  // 担当主体は「自社社員(User)」または「二次店(Relationship)」のいずれか（排他）。
+  tossUpUserId               String?
+  tossUpRelationshipId       String?
+  closingUserId              String?
+  closingRelationshipId      String?
   status                     CustomerStatus     @default(NEW)
   note                       String?
   // 顧客詳細で手動管理する 3 ステータス + 各詳細項目（自動導出ではなく手動値）。
   contractStatus             String             @default("negotiating")
   contractPlan               String?
+  contractAmount             Int? // 契約金額（円・税込）
   contractExpectedDate       DateTime?
   constructionStatus         String             @default("not_started")
   constructionPlannedDate    DateTime?
   constructionCompletedDate  DateTime?
+  constructionVendor         String? // 施工の対応事業者名
   subsidyStatus              String             @default("none")
   subsidyType                String?
   subsidySubmittedDate       DateTime?
   subsidyGrantedDate         DateTime?
+  // 商談履歴タブで手動管理する状況。マエカク状況（"present" | "absent"）/
+  // 次回アクション（自由記述）/ 次回アポ日程（日付）。商談ステータスは contractStatus を流用。
+  maekakuStatus              String?
+  nextAction                 String?
+  nextAppointmentAt          DateTime?
   createdAt                  DateTime           @default(now())
   updatedAt                  DateTime           @updatedAt
 
@@ -1009,6 +1041,7 @@ model Customer {
   activities   CustomerActivity[]
   tasks        CustomerTask[]
   files        CustomerFile[]
+  messages     CustomerMessage[]
 
   @@index([wholesalerId, phone])
   @@index([wholesalerId, status, createdAt])
@@ -1023,6 +1056,8 @@ model CustomerActivity {
   occurredAt      DateTime
   category        String
   detail          String
+  // 見積提示カテゴリ（category = "quote"）のときの提示金額（円）。それ以外は null。
+  amount          Int?
   createdByUserId String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1071,6 +1106,20 @@ model CustomerFile {
 
   @@index([customerId, createdAt])
   @@index([activityId])
+}
+
+// 顧客ごとのチャット（担当者間のやり取り）。テナント分離は Customer.wholesalerId
+// 経由の相関 EXISTS（CustomerActivity と同パターン）。
+model CustomerMessage {
+  id           String   @id @default(cuid())
+  customerId   String
+  authorUserId String
+  body         String
+  createdAt    DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
 }
 
 model Appointment {

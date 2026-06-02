@@ -12,9 +12,13 @@ import { assertCan } from "@/lib/permissions/can";
 import { getTenantContext } from "@/lib/tenancy/context";
 import { withTenant } from "@/lib/tenancy/with-tenant";
 
+import type { AreaTypeValue } from "@solar/contracts";
+
 export interface AreaListItem {
   id: string;
   name: string;
+  type: AreaTypeValue;
+  description: string | null;
   isActive: boolean;
   updatedAt: string;
 }
@@ -51,6 +55,7 @@ async function requireWholesalerCtx() {
 export interface ListFilter {
   name?: string;
   isActive?: boolean;
+  type?: AreaTypeValue;
 }
 
 export async function listAreas(filter: ListFilter = {}): Promise<AreaListItem[]> {
@@ -62,11 +67,14 @@ export async function listAreas(filter: ListFilter = {}): Promise<AreaListItem[]
           ? { name: { contains: filter.name, mode: "insensitive" } }
           : {}),
         ...(filter.isActive !== undefined ? { isActive: filter.isActive } : {}),
+        ...(filter.type ? { type: filter.type } : {}),
       },
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
       select: {
         id: true,
         name: true,
+        type: true,
+        description: true,
         isActive: true,
         updatedAt: true,
       },
@@ -74,6 +82,8 @@ export async function listAreas(filter: ListFilter = {}): Promise<AreaListItem[]
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
+      type: r.type,
+      description: r.description,
       isActive: r.isActive,
       updatedAt: r.updatedAt.toISOString(),
     }));
@@ -88,6 +98,8 @@ export async function getArea(id: string): Promise<AreaDetail | null> {
       select: {
         id: true,
         name: true,
+        type: true,
+        description: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -97,6 +109,8 @@ export async function getArea(id: string): Promise<AreaDetail | null> {
     return {
       id: r.id,
       name: r.name,
+      type: r.type,
+      description: r.description,
       isActive: r.isActive,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),

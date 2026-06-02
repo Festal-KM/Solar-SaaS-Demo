@@ -1,13 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bell,
   LogOut,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   Home,
   Calendar,
@@ -15,6 +14,7 @@ import {
   LineChart,
   Settings,
   Wallet,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 import { labels } from "@/lib/i18n/labels";
@@ -44,6 +44,73 @@ function isGroup(e: NavEntry): e is NavGroup {
 export interface RoleShellProps {
   navItems?: NavEntry[];
   children: ReactNode;
+}
+
+/* ── Brand logo ── */
+
+function BrandLogo({ className }: { className?: string }) {
+  return (
+    <Link href="/dashboard" className={["inline-flex items-center", className ?? ""].join(" ")}>
+      <Image
+        src="/logo.png"
+        alt={labels.brand}
+        width={649}
+        height={159}
+        priority
+        className="h-7 w-auto"
+      />
+    </Link>
+  );
+}
+
+/* ── Animated hamburger button (CodePen tonkec のサイドバー参考)。
+   active=true で 3 本バーが ✕ にモーフィングする。jQuery 版の
+   .button.active .top/.bottom の rotateZ(±45deg) + middle 消失を Tailwind で再現。 ── */
+
+function HamburgerButton({
+  active,
+  onClick,
+  label,
+  className,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-expanded={active}
+      className={[
+        "flex h-8 w-8 items-center justify-center rounded-md text-body-light hover:bg-surface-soft hover:text-ink transition-colors",
+        className ?? "",
+      ].join(" ")}
+    >
+      <span className="relative block h-[14px] w-[18px]">
+        <span
+          className={[
+            "absolute left-0 block h-0.5 w-full rounded-full bg-current transition-all duration-300 ease-in-out",
+            active ? "top-1/2 -translate-y-1/2 rotate-45" : "top-0",
+          ].join(" ")}
+        />
+        <span
+          className={[
+            "absolute left-0 top-1/2 block h-0.5 w-full -translate-y-1/2 rounded-full bg-current transition-all duration-300 ease-in-out",
+            active ? "opacity-0" : "opacity-100",
+          ].join(" ")}
+        />
+        <span
+          className={[
+            "absolute left-0 block h-0.5 w-full rounded-full bg-current transition-all duration-300 ease-in-out",
+            active ? "bottom-1/2 translate-y-1/2 -rotate-45" : "bottom-0",
+          ].join(" ")}
+        />
+      </span>
+    </button>
+  );
 }
 
 /* ── Sidebar group (accordion) ── */
@@ -199,14 +266,21 @@ function SidebarNav({
   pathname,
   collapsed,
   onNavigate,
+  className,
 }: {
   navItems: NavEntry[];
   pathname: string;
   collapsed: boolean;
   onNavigate?: () => void;
+  className?: string;
 }) {
   return (
-    <nav className="flex-1 px-2 pb-6 space-y-0.5 overflow-y-auto mt-2">
+    <nav
+      className={[
+        "flex-1 px-2 pb-6 space-y-0.5 overflow-y-auto mt-2",
+        className ?? "",
+      ].join(" ")}
+    >
       {navItems.map((entry, i) =>
         isGroup(entry) ? (
           <SidebarGroup key={i} group={entry} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} />
@@ -225,6 +299,26 @@ export function RoleShell({ navItems = [], children }: RoleShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // ESC でモバイルサイドバーを閉じる（CodePen 参考: keyCode 27 → toggleSidebar）。
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
+  // モバイルでドロワーを開いている間は背面スクロールを止める。
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
+
   return (
     <div className="flex min-h-screen bg-canvas-light text-body-light">
       {/* ── Desktop Sidebar ── */}
@@ -234,63 +328,70 @@ export function RoleShell({ navItems = [], children }: RoleShellProps) {
           collapsed ? "lg:w-14" : "lg:w-56",
         ].join(" ")}
       >
-        <div className="flex items-center justify-between h-14 px-2 border-b border-hairline-light">
-          {!collapsed && (
-            <Link href="/dashboard" className="text-ink text-[15px] font-semibold tracking-tight px-2">
-              {labels.brand}
-            </Link>
-          )}
-          <button
-            type="button"
+        <div
+          className={[
+            "flex items-center h-14 border-b border-hairline-light",
+            collapsed ? "justify-center px-1" : "justify-between px-3",
+          ].join(" ")}
+        >
+          {!collapsed && <BrandLogo />}
+          {/* 展開時は ✕（クリックで畳む）、折りたたみ時はハンバーガー（クリックで開く） */}
+          <HamburgerButton
+            active={!collapsed}
             onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center justify-center w-8 h-8 rounded-md text-mute-light hover:text-ink hover:bg-surface-soft transition-colors mx-auto"
-          >
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
+            label={labels.nav.menu}
+          />
         </div>
 
         <SidebarNav navItems={navItems} pathname={pathname} collapsed={collapsed} />
       </aside>
 
-      {/* ── Mobile sidebar overlay ── */}
-      {mobileOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />
-          <aside className="fixed inset-y-0 left-0 w-64 bg-canvas-light border-r border-hairline-light z-50 lg:hidden flex flex-col">
-            <div className="flex items-center justify-between h-14 px-4 border-b border-hairline-light">
-              <Link href="/dashboard" className="text-ink text-[15px] font-semibold tracking-tight">
-                {labels.brand}
-              </Link>
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-md text-mute-light hover:text-ink"
-              >
-                <ChevronLeft size={18} />
-              </button>
-            </div>
-            <SidebarNav navItems={navItems} pathname={pathname} collapsed={false} onNavigate={() => setMobileOpen(false)} />
-          </aside>
-        </>
-      )}
+      {/* ── Mobile: 固定ハンバーガー（ドロワーより前面 z-60 に置き、開いている間は
+          ✕ にモーフィングしてそのまま閉じるトグルになる） ── */}
+      <div className="fixed left-3 top-2.5 z-[60] lg:hidden">
+        <HamburgerButton
+          active={mobileOpen}
+          onClick={() => setMobileOpen((v) => !v)}
+          label={labels.nav.menu}
+        />
+      </div>
+
+      {/* ── Mobile sidebar drawer（常時マウント + translate でスライド開閉） ── */}
+      <div
+        aria-hidden={!mobileOpen}
+        onClick={() => setMobileOpen(false)}
+        className={[
+          "fixed inset-0 z-40 bg-black/30 transition-opacity duration-300 lg:hidden",
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        ].join(" ")}
+      />
+      <aside
+        className={[
+          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-hairline-light bg-canvas-light shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+      >
+        <div className="flex h-14 items-center border-b border-hairline-light pl-12 pr-4">
+          <BrandLogo />
+        </div>
+        {/* key を開閉でトグルして remount し、スタッガード表示を都度再生する */}
+        <SidebarNav
+          key={mobileOpen ? "open" : "closed"}
+          navItems={navItems}
+          pathname={pathname}
+          collapsed={false}
+          onNavigate={() => setMobileOpen(false)}
+          className={mobileOpen ? "sidebar-stagger" : ""}
+        />
+      </aside>
 
       {/* ── Main column ── */}
       <div className="flex flex-1 flex-col min-w-0">
         <header className="flex h-14 items-center justify-between border-b border-hairline-light bg-canvas-light px-4 lg:px-6 shrink-0">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              aria-label={labels.nav.menu}
-              className="lg:hidden flex items-center justify-center w-8 h-8 rounded-md text-body-light hover:bg-surface-soft"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-            <span className="lg:hidden text-[15px] font-semibold text-ink tracking-tight">
-              {labels.brand}
-            </span>
+          <div className="flex items-center gap-3 pl-10 lg:pl-0">
+            {/* モバイルではブランドロゴ（開閉ボタンは固定配置）。デスクトップは
+                サイドバー側にロゴがあるのでここは非表示。 */}
+            <BrandLogo className="lg:hidden" />
           </div>
 
           <div className="flex items-center gap-2">
@@ -331,4 +432,4 @@ export function RoleShell({ navItems = [], children }: RoleShellProps) {
 }
 
 /* ── Re-export icons for layout files ── */
-export { Home, Calendar, Users, LineChart, Settings, Wallet };
+export { Home, Calendar, Users, LineChart, Settings, Wallet, Package };

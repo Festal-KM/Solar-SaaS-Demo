@@ -22,6 +22,11 @@ export const AcquisitionChannelEnum = z.enum([
 
 export type AcquisitionChannel = z.infer<typeof AcquisitionChannelEnum>;
 
+// 流入経路（顧客情報で手動選択する 3 区分）。
+export const InflowRouteEnum = z.enum(["EVENT", "OUTBOUND_CALL", "DIRECT_VISIT"]);
+
+export type InflowRoute = z.infer<typeof InflowRouteEnum>;
+
 export const CustomerStatusEnum = z.enum([
   "NEW",
   "PRE_CALL_WAIT",
@@ -94,16 +99,31 @@ export const CustomerUpdateSchema = z.object({
   household: z.string().max(100).optional(),
   status: CustomerStatusEnum.optional(),
   note: z.string().max(2000).optional(),
-  // 担当者変更（顧客の registeredByUserId を更新）。
+  // 流入経路（顧客情報で手動選択）。null で未設定にクリアできる。
+  inflowRoute: InflowRouteEnum.nullable().optional(),
+  // 商談履歴タブの状況入力。マエカク状況 / 次回アクション / 次回アポ日程
+  // （商談ステータスは contractStatus）。日付は YYYY-MM-DD or ISO 文字列、null でクリア。
+  maekakuStatus: z.enum(["pending", "done", "unnecessary"]).nullable().optional(),
+  nextAction: z.string().max(2000).nullable().optional(),
+  nextAppointmentAt: z.string().nullable().optional(),
+  // 担当者変更（顧客の registeredByUserId = 登録者を更新）。
   registeredByUserId: z.string().min(1).optional(),
+  // トスアップ担当 / クロージング担当。担当主体は自社社員(User) か二次店(Relationship)
+  // のいずれか（排他）。各 null で未設定にクリアできる。
+  tossUpUserId: z.string().min(1).nullable().optional(),
+  tossUpRelationshipId: z.string().min(1).nullable().optional(),
+  closingUserId: z.string().min(1).nullable().optional(),
+  closingRelationshipId: z.string().min(1).nullable().optional(),
   // Manual status columns edited from the detail page status cards. Date fields
   // accept a `YYYY-MM-DD` (or ISO) string or null; the action converts to Date.
   contractStatus: z.enum(["negotiating", "contracted", "lost", "cancelled"]).optional(),
   contractPlan: z.string().max(255).nullable().optional(),
+  contractAmount: z.number().int().nonnegative().nullable().optional(),
   contractExpectedDate: z.string().nullable().optional(),
   constructionStatus: z.enum(["not_started", "in_progress", "done"]).optional(),
   constructionPlannedDate: z.string().nullable().optional(),
   constructionCompletedDate: z.string().nullable().optional(),
+  constructionVendor: z.string().max(255).nullable().optional(),
   subsidyStatus: z.enum(["none", "applying", "granted"]).optional(),
   subsidyType: z.string().max(255).nullable().optional(),
   subsidySubmittedDate: z.string().nullable().optional(),
@@ -121,11 +141,13 @@ export type CustomerUpdateInput = z.infer<typeof CustomerUpdateSchema>;
 // ---------------------------------------------------------------------------
 
 export const CustomerActivityCategoryEnum = z.enum([
+  "tossup",
   "event",
   "phone",
   "appointment",
   "email",
   "visit",
+  "quote",
   "other",
 ]);
 
@@ -136,6 +158,8 @@ export const CustomerActivityCreateSchema = z.object({
   occurredAt: z.string().min(1),
   category: CustomerActivityCategoryEnum,
   detail: z.string().trim().min(1).max(4000),
+  // 見積提示カテゴリのときの提示金額（円・整数・0 以上）。任意。
+  amount: z.number().int().nonnegative().nullable().optional(),
   tasks: z
     .array(
       z.object({
@@ -158,6 +182,38 @@ export const CustomerActivityCreateSchema = z.object({
 });
 
 export type CustomerActivityCreateInput = z.input<typeof CustomerActivityCreateSchema>;
+
+// ---------------------------------------------------------------------------
+// 顧客チャット（CustomerMessage）— 顧客詳細「チャット」タブ。
+// ---------------------------------------------------------------------------
+
+export const CustomerMessageCreateSchema = z.object({
+  customerId: z.string().min(1),
+  body: z.string().trim().min(1, "メッセージを入力してください").max(4000),
+});
+
+export type CustomerMessageCreateInput = z.infer<typeof CustomerMessageCreateSchema>;
+
+// 単体ファイル記録（関連ファイルタブの直接アップロード。activity に紐づかない）。
+export const CustomerFileRecordSchema = z.object({
+  customerId: z.string().min(1),
+  fileKey: z.string().min(1),
+  fileName: z.string().min(1).max(255),
+  contentType: z.string().nullable().optional(),
+  size: z.number().int().nonnegative().nullable().optional(),
+});
+
+export type CustomerFileRecordInput = z.infer<typeof CustomerFileRecordSchema>;
+
+// ToDo 単体作成（ToDo タブの新規起票。activity に紐づかない）。
+export const CustomerTaskCreateSchema = z.object({
+  customerId: z.string().min(1),
+  content: z.string().trim().min(1, "内容を入力してください").max(500),
+  dueDate: z.string().nullable().optional(),
+  assigneeUserId: z.string().nullable().optional(),
+});
+
+export type CustomerTaskCreateInput = z.infer<typeof CustomerTaskCreateSchema>;
 
 export const PresignCustomerFileSchema = z.object({
   customerId: z.string().min(1),

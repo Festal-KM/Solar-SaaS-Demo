@@ -3,15 +3,16 @@
 // 3 カード（右上・横並び）/ メモ（右下・横幅いっぱい）/ 商談履歴（最下部・全幅・
 // スレッド形式）。PII は data ローダーでマスク済み。
 
+import { Building2, User2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
-import type { BadgeVariant } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UnauthorizedError } from "@/lib/errors";
 import { labels } from "@/lib/i18n/labels";
 import { assertCan } from "@/lib/permissions/can";
@@ -19,65 +20,32 @@ import { getTenantContext } from "@/lib/tenancy/context";
 import { withTenant } from "@solar/db";
 
 import { listWholesalerUsers } from "../data";
-import { listActiveAreas } from "../../event-detail/data";
+import { listActiveAreas, listActiveDealers } from "../../event-detail/data";
 
-import type {
-  ContractStatusValue,
-  ConstructionStatusValue,
-  SubsidyStatusValue,
-} from "../constants";
+import type { InflowRoute } from "@solar/contracts";
 
+import { CustomerChat } from "./customer-chat";
 import { CustomerFiles } from "./customer-files";
 import { CustomerHistory } from "./customer-history";
+import { CustomerTasks } from "./customer-tasks";
 import { getCustomerDetail } from "./data";
+import type { AssigneeDisplay } from "./data";
 import { EditAssigneeDialog } from "./edit-assignee-dialog";
+import { NegotiationStatusPanel } from "./negotiation-status-panel";
 import { NewActivityDialog } from "./new-activity-dialog";
 import { EditBasicInfoDialog } from "./edit-basic-info-dialog";
 import type { EditBasicInfoInitial } from "./edit-basic-info-dialog";
 import { EditMemoDialog } from "./edit-memo-dialog";
 import {
-  EditConstructionStatusDialog,
-  EditContractStatusDialog,
-  EditSubsidyStatusDialog,
-} from "./edit-status-dialogs";
+  ContractStatusPanel,
+  ConstructionStatusPanel,
+  SubsidyStatusPanel,
+} from "./status-panels";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-}
-
-function contractVariant(v: ContractStatusValue): BadgeVariant {
-  switch (v) {
-    case "contracted":
-      return "success";
-    case "negotiating":
-      return "default";
-    case "lost":
-      return "secondary";
-    case "cancelled":
-      return "destructive";
-  }
-}
-function constructionVariant(v: ConstructionStatusValue): BadgeVariant {
-  switch (v) {
-    case "done":
-      return "success";
-    case "in_progress":
-      return "warning";
-    case "not_started":
-      return "secondary";
-  }
-}
-function subsidyVariant(v: SubsidyStatusValue): BadgeVariant {
-  switch (v) {
-    case "granted":
-      return "success";
-    case "applying":
-      return "default";
-    case "none":
-      return "secondary";
-  }
 }
 
 function formatDay(iso: string | null): string {
@@ -98,11 +66,40 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-function StatusDetailRow({ label, value }: { label: string; value: string | null }) {
+// 担当者 1 枠（トスアップ / クロージング）。自社社員 or 二次店をアバター + 名前 +
+// 種別バッジで表示。未設定は淡色のプレースホルダー。
+function AssigneeBlock({ role, assignee }: { role: string; assignee: AssigneeDisplay | null }) {
+  const d = labels.customer.detail;
+  const isDealer = assignee?.kind === "dealer";
+  const Icon = isDealer ? Building2 : User2;
+
   return (
-    <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="text-xs text-mute-light">{label}</span>
-      <span className="text-right text-ink">{value && value.length > 0 ? value : "—"}</span>
+    <div className="flex items-center gap-3 rounded-md border border-hairline-light bg-surface-soft/40 p-3">
+      <div
+        className={[
+          "flex size-9 shrink-0 items-center justify-center rounded-full",
+          assignee
+            ? isDealer
+              ? "bg-amber-100 text-amber-700"
+              : "bg-primary/10 text-primary"
+            : "bg-hairline-light text-mute-light",
+        ].join(" ")}
+      >
+        <Icon size={18} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-mute-light">{role}</p>
+        {assignee ? (
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium text-ink">{assignee.name}</span>
+            <Badge variant={isDealer ? "warning" : "secondary"} className="shrink-0">
+              {isDealer ? d.dealerBadge : d.ownStaffBadge}
+            </Badge>
+          </div>
+        ) : (
+          <p className="text-sm text-mute-light">{d.unassigned}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -115,7 +112,14 @@ function StatusDetailRow({ label, value }: { label: string; value: string | null
 async function getCustomerEditableValues(
   id: string,
 ): Promise<
-  | (EditBasicInfoInitial & { note: string | null; registeredByUserId: string })
+  | (EditBasicInfoInitial & {
+      note: string | null;
+      registeredByUserId: string;
+      tossUpUserId: string | null;
+      tossUpRelationshipId: string | null;
+      closingUserId: string | null;
+      closingRelationshipId: string | null;
+    })
   | null
 > {
   const session = await auth();
@@ -150,12 +154,19 @@ async function getCustomerEditableValues(
         postalCode: true,
         address: true,
         area: true,
+        inflowRoute: true,
         registeredByUserId: true,
+        tossUpUserId: true,
+        tossUpRelationshipId: true,
+        closingUserId: true,
+        closingRelationshipId: true,
         note: true,
       },
     }),
   );
-  return row;
+  if (!row) return null;
+  // Prisma は inflowRoute を string|null で返すので、UI 用の InflowRoute 型へ寄せる。
+  return { ...row, inflowRoute: (row.inflowRoute as InflowRoute | null) ?? null };
 }
 
 export default async function CustomerDetailPage({ params }: PageProps) {
@@ -166,13 +177,21 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   const editable = await getCustomerEditableValues(id);
   if (!editable) notFound();
 
-  const [users, areas] = await Promise.all([listWholesalerUsers(), listActiveAreas()]);
+  const [users, areas, dealers] = await Promise.all([
+    listWholesalerUsers(),
+    listActiveAreas(),
+    listActiveDealers(),
+  ]);
 
   const t = labels.customer;
   const d = t.detail;
   const bc = labels.breadcrumb.items;
 
   const postalDisplay = detail.postalCode ? `〒${detail.postalCode}` : null;
+
+  // 商談履歴タブ: 見積提示は右の見積セクションへ分離し、左の商談履歴からは除外する。
+  const quoteEntries = detail.history.filter((e) => e.category === "quote");
+  const historyEntries = detail.history.filter((e) => e.category !== "quote");
 
   return (
     <div className="space-y-6">
@@ -181,23 +200,10 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-ink">
-            {detail.name}
-            <span className="ml-1 text-xl font-medium text-body-light">{t.honorific}</span>
-          </h1>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-mute-light">
-              {d.fields.assignee}：
-              <span className="text-ink">{detail.assigneeName}</span>
-            </span>
-            <EditAssigneeDialog
-              customerId={detail.id}
-              currentUserId={editable.registeredByUserId}
-              users={users}
-            />
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold text-ink">
+          {detail.name}
+          <span className="ml-1 text-xl font-medium text-body-light">{t.honorific}</span>
+        </h1>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href="/customers">{d.backToList}</Link>
@@ -205,158 +211,222 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        {/* 基本情報 — 左・縦長 */}
-        <Card className="p-5 lg:col-start-1 lg:row-start-1 lg:row-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">{d.basicInfo}</h2>
-            <EditBasicInfoDialog
+      {/* 詳細はタブで分割 — 基本情報 / 商談履歴 / 契約 / 施工 / 補助金 / ファイル / ToDo / チャット */}
+      <Tabs defaultValue="basic" className="space-y-4">
+        <TabsList variant="underline">
+          <TabsTrigger value="basic">{d.tabs.basic}</TabsTrigger>
+          <TabsTrigger value="history">{d.tabs.history}</TabsTrigger>
+          <TabsTrigger value="contract">{d.tabs.contract}</TabsTrigger>
+          <TabsTrigger value="construction">{d.tabs.construction}</TabsTrigger>
+          <TabsTrigger value="subsidy">{d.tabs.subsidy}</TabsTrigger>
+          <TabsTrigger value="files">{d.tabs.files}</TabsTrigger>
+          <TabsTrigger value="todo">{d.tabs.todo}</TabsTrigger>
+          <TabsTrigger value="chat">{d.tabs.chat}</TabsTrigger>
+        </TabsList>
+
+        {/* 基本情報タブ — 担当者 + 基本情報 + メモ */}
+        <TabsContent value="basic" className="space-y-4">
+          {/* 担当者 — トスアップ / クロージングを自社社員 or 二次店から登録。 */}
+          <Card className="p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-ink">{d.assigneeLabel}</h2>
+              <EditAssigneeDialog
+                customerId={detail.id}
+                currentTossUpUserId={editable.tossUpUserId}
+                currentTossUpRelationshipId={editable.tossUpRelationshipId}
+                currentClosingUserId={editable.closingUserId}
+                currentClosingRelationshipId={editable.closingRelationshipId}
+                users={users}
+                dealers={dealers}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <AssigneeBlock role={d.fields.tossUpAssignee} assignee={detail.tossUp} />
+              <AssigneeBlock role={d.fields.closingAssignee} assignee={detail.closing} />
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <Card className="p-5 lg:col-span-2">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-ink">{d.customerInfo}</h2>
+                <EditBasicInfoDialog
+                  customerId={detail.id}
+                  initial={{
+                    name: editable.name,
+                    kana: editable.kana,
+                    phone: editable.phone,
+                    email: editable.email,
+                    postalCode: editable.postalCode,
+                    address: editable.address,
+                    area: editable.area,
+                    inflowRoute: editable.inflowRoute,
+                  }}
+                  areas={areas}
+                />
+              </div>
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                <InfoRow label={d.fields.kana} value={detail.kana} />
+                <InfoRow
+                  label={d.fields.inflowRoute}
+                  value={detail.inflowRoute ? d.inflowRouteLabels[detail.inflowRoute] : null}
+                />
+                <InfoRow label={d.fields.postalCode} value={postalDisplay} />
+                <InfoRow label={d.fields.area} value={detail.area} />
+                <InfoRow label={d.fields.address} value={detail.address} />
+                <InfoRow label={d.fields.phone} value={detail.phone} />
+                <InfoRow label={d.fields.email} value={detail.email} />
+              </dl>
+            </Card>
+
+            <Card className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-ink">{d.memo}</h2>
+                <EditMemoDialog customerId={detail.id} initial={{ note: editable.note }} />
+              </div>
+              <p className="whitespace-pre-wrap text-sm text-body-light">
+                {detail.note && detail.note.length > 0 ? detail.note : d.noMemo}
+              </p>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* 商談履歴 — 現在の商談状況の入力 + 履歴スレッド */}
+        <TabsContent value="history" className="space-y-4">
+          <Card className="p-5">
+            <h2 className="mb-3 text-sm font-semibold text-ink">{d.negotiation.title}</h2>
+            <NegotiationStatusPanel
+              customerId={detail.id}
+              initialMaekaku={detail.maekakuStatus}
+              initialContractStatus={detail.contract.status}
+              initialNextAction={detail.nextAction}
+              initialNextAppointmentAt={detail.nextAppointmentAt}
+            />
+          </Card>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* 左: 商談履歴（見積提示は右の見積セクションに分離） */}
+            <Card className="p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-ink">{d.history.title}</h2>
+                <NewActivityDialog customerId={detail.id} users={users} />
+              </div>
+              <CustomerHistory entries={historyEntries} />
+            </Card>
+
+            {/* 右: 見積（見積提示の記録一覧） */}
+            <Card className="p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-ink">{d.quoteSection.title}</h2>
+                <NewActivityDialog
+                  customerId={detail.id}
+                  users={users}
+                  defaultCategory="quote"
+                  triggerLabel={d.quoteSection.record}
+                />
+              </div>
+              {quoteEntries.length === 0 ? (
+                <p className="text-sm text-mute-light">{d.quoteSection.empty}</p>
+              ) : (
+                <ul className="space-y-3">
+                  {quoteEntries.map((q) => (
+                    <li
+                      key={q.id}
+                      className="border-hairline-light relative overflow-hidden rounded-lg border pl-4"
+                    >
+                      <span className="absolute inset-y-0 left-0 w-1 bg-amber-500" aria-hidden />
+                      <div className="p-3">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="text-xs tabular-nums text-mute-light">
+                            {formatDay(q.date)}
+                          </span>
+                          <span className="text-lg font-semibold tabular-nums text-amber-700">
+                            {q.amount != null ? `¥${q.amount.toLocaleString("ja-JP")}` : "—"}
+                          </span>
+                        </div>
+                        {q.body ? (
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-body-light">{q.body}</p>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* 契約状況 — 契約プラン / 金額 / 契約予定日（インライン編集） */}
+        <TabsContent value="contract">
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.contract}</h2>
+            <ContractStatusPanel
               customerId={detail.id}
               initial={{
-                name: editable.name,
-                kana: editable.kana,
-                phone: editable.phone,
-                email: editable.email,
-                postalCode: editable.postalCode,
-                address: editable.address,
-                area: editable.area,
+                plan: detail.contract.plan,
+                amount: detail.contract.amount,
+                expectedDate: detail.contract.expectedDate,
               }}
-              areas={areas}
             />
-          </div>
-          <dl className="space-y-2.5">
-            <InfoRow label={d.fields.kana} value={detail.kana} />
-            <InfoRow label={d.fields.postalCode} value={postalDisplay} />
-            <InfoRow label={d.fields.area} value={detail.area} />
-            <InfoRow label={d.fields.address} value={detail.address} />
-            <InfoRow label={d.fields.phone} value={detail.phone} />
-            <InfoRow label={d.fields.email} value={detail.email} />
-          </dl>
-        </Card>
+          </Card>
+        </TabsContent>
 
-        {/* 契約状況 */}
-        <Card className="p-5 lg:col-start-2 lg:row-start-1">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">{d.cards.contract}</h2>
-            <EditContractStatusDialog customerId={detail.id} initial={detail.contract} />
-          </div>
-          <Badge variant={contractVariant(detail.contract.status)} className="mb-3">
-            {t.contractStatusLabels[detail.contract.status]}
-          </Badge>
-          <div className="space-y-2">
-            <StatusDetailRow label={d.contractFields.plan} value={detail.contract.plan} />
-            <StatusDetailRow
-              label={d.contractFields.expectedDate}
-              value={formatDay(detail.contract.expectedDate)}
+        {/* 施工状況 — ステータス（プルダウン）/ 工事予定日 / 対応事業者 */}
+        <TabsContent value="construction">
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.construction}</h2>
+            <ConstructionStatusPanel
+              customerId={detail.id}
+              initial={{
+                status: detail.construction.status,
+                plannedDate: detail.construction.plannedDate,
+                vendor: detail.construction.vendor,
+              }}
             />
-          </div>
-        </Card>
+          </Card>
+        </TabsContent>
 
-        {/* 施工状況 */}
-        <Card className="p-5 lg:col-start-3 lg:row-start-1">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">{d.cards.construction}</h2>
-            <EditConstructionStatusDialog customerId={detail.id} initial={detail.construction} />
-          </div>
-          <Badge variant={constructionVariant(detail.construction.status)} className="mb-3">
-            {t.constructionStatusLabels[detail.construction.status]}
-          </Badge>
-          <div className="space-y-2">
-            <StatusDetailRow
-              label={d.constructionFields.plannedDate}
-              value={formatDay(detail.construction.plannedDate)}
+        {/* 補助金申請状況 — ステータス（プルダウン）/ 申請種別 / 申請日 / 交付決定日 */}
+        <TabsContent value="subsidy">
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.subsidy}</h2>
+            <SubsidyStatusPanel
+              customerId={detail.id}
+              initial={{
+                status: detail.subsidy.status,
+                type: detail.subsidy.type,
+                submittedDate: detail.subsidy.submittedDate,
+                grantedDate: detail.subsidy.grantedDate,
+              }}
             />
-            <StatusDetailRow
-              label={d.constructionFields.completedDate}
-              value={formatDay(detail.construction.completedDate)}
+          </Card>
+        </TabsContent>
+
+        {/* 関連ファイル — ファイルピッカー + 一覧 */}
+        <TabsContent value="files">
+          <Card className="p-5">
+            <h2 className="mb-3 text-sm font-semibold text-ink">{d.files.title}</h2>
+            <CustomerFiles customerId={detail.id} files={detail.files} />
+          </Card>
+        </TabsContent>
+
+        {/* ToDo — タスク一覧 + 新規起票 */}
+        <TabsContent value="todo">
+          <Card className="p-5">
+            <CustomerTasks customerId={detail.id} tasks={detail.tasks} users={users} />
+          </Card>
+        </TabsContent>
+
+        {/* チャット */}
+        <TabsContent value="chat">
+          <Card className="p-5">
+            <CustomerChat
+              customerId={detail.id}
+              messages={detail.messages}
+              currentUserId={detail.currentUserId}
             />
-          </div>
-        </Card>
-
-        {/* 補助金申請状況 */}
-        <Card className="p-5 lg:col-start-4 lg:row-start-1">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">{d.cards.subsidy}</h2>
-            <EditSubsidyStatusDialog customerId={detail.id} initial={detail.subsidy} />
-          </div>
-          <Badge variant={subsidyVariant(detail.subsidy.status)} className="mb-3">
-            {t.subsidyStatusLabels[detail.subsidy.status]}
-          </Badge>
-          <div className="space-y-2">
-            <StatusDetailRow label={d.subsidyFields.type} value={detail.subsidy.type} />
-            <StatusDetailRow
-              label={d.subsidyFields.submittedDate}
-              value={formatDay(detail.subsidy.submittedDate)}
-            />
-            <StatusDetailRow
-              label={d.subsidyFields.grantedDate}
-              value={formatDay(detail.subsidy.grantedDate)}
-            />
-          </div>
-        </Card>
-
-        {/* メモ — 右下・横幅いっぱい（3カラム分） */}
-        <Card className="p-5 lg:col-start-2 lg:row-start-2 lg:col-span-3">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">{d.memo}</h2>
-            <EditMemoDialog customerId={detail.id} initial={{ note: editable.note }} />
-          </div>
-          <p className="whitespace-pre-wrap text-sm text-body-light">
-            {detail.note && detail.note.length > 0 ? detail.note : d.noMemo}
-          </p>
-        </Card>
-      </div>
-
-      {/* 商談履歴 — 全幅・スレッド形式 */}
-      <Card className="p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink">{d.history.title}</h2>
-          <NewActivityDialog customerId={detail.id} users={users} />
-        </div>
-        <CustomerHistory entries={detail.history} />
-      </Card>
-
-      {/* 関連ファイル / タスク — 2 カラム */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold text-ink">{d.files.title}</h2>
-          <CustomerFiles files={detail.files} />
-          <div className="mt-3 text-center">
-            <Button type="button" variant="outline" size="sm" disabled>
-              {d.files.showAll}
-            </Button>
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold text-ink">{d.tasks.title}</h2>
-          {detail.tasks.length === 0 ? (
-            <p className="text-sm text-mute-light">{d.tasks.empty}</p>
-          ) : (
-            <ul className="divide-y divide-hairline-light">
-              {detail.tasks.map((task) => (
-                <li key={task.id} className="flex items-center gap-3 py-2.5">
-                  <input
-                    type="checkbox"
-                    checked={task.done}
-                    readOnly
-                    disabled
-                    className="size-4 shrink-0 rounded border-hairline-light"
-                  />
-                  <span className="min-w-0 flex-1 truncate text-sm text-ink">{task.name}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-mute-light">{task.due}</span>
-                  <span className="shrink-0 text-xs text-mute-light">{task.assignee}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-3 text-center">
-            <Button type="button" variant="outline" size="sm" disabled>
-              {d.tasks.showAll}
-            </Button>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

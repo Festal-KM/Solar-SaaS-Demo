@@ -19,12 +19,16 @@ function formatDate(iso: string): string {
 
 function chipClass(category: HistoryCategory): string {
   switch (category) {
+    case "tossup":
+      return "bg-indigo-50 text-indigo-700";
     case "event":
       return "bg-teal-50 text-teal-700";
     case "appointment":
       return "bg-emerald-50 text-emerald-700";
     case "visit":
       return "bg-blue-50 text-blue-700";
+    case "quote":
+      return "bg-amber-50 text-amber-700";
     case "phone":
     case "email":
     case "other":
@@ -34,17 +38,25 @@ function chipClass(category: HistoryCategory): string {
 
 function dotClass(category: HistoryCategory): string {
   switch (category) {
+    case "tossup":
+      return "bg-indigo-500";
     case "event":
       return "bg-teal-500";
     case "appointment":
       return "bg-emerald-500";
     case "visit":
       return "bg-blue-500";
+    case "quote":
+      return "bg-amber-500";
     case "phone":
     case "email":
     case "other":
       return "bg-slate-400";
   }
+}
+
+function yen(amount: number): string {
+  return `¥${amount.toLocaleString("ja-JP")}`;
 }
 
 interface CustomerHistoryProps {
@@ -92,6 +104,11 @@ export function CustomerHistory({ entries }: CustomerHistoryProps) {
                 {h.assignee}：{e.assignee}
               </span>
             </div>
+            {e.category === "quote" && e.amount != null ? (
+              <p className="mt-1 text-sm font-semibold tabular-nums text-amber-700">
+                {h.amountLabel}: {yen(e.amount)}
+              </p>
+            ) : null}
             {e.body ? (
               <p className="mt-1 whitespace-pre-wrap text-sm text-body-light">{e.body}</p>
             ) : null}

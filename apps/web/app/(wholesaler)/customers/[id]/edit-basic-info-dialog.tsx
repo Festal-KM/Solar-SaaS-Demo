@@ -23,6 +23,8 @@ import { labels } from "@/lib/i18n/labels";
 
 import { updateCustomerAction } from "../actions";
 
+import type { InflowRoute } from "@solar/contracts";
+
 export interface EditBasicInfoInitial {
   name: string;
   kana: string | null;
@@ -31,7 +33,10 @@ export interface EditBasicInfoInitial {
   postalCode: string | null;
   address: string | null;
   area: string | null;
+  inflowRoute: InflowRoute | null;
 }
+
+const INFLOW_UNSET = "__unset__";
 
 interface AreaChoice {
   id: string;
@@ -60,6 +65,7 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
   const [postalCode, setPostalCode] = useState(initial.postalCode ?? "");
   const [address, setAddress] = useState(initial.address ?? "");
   const [area, setArea] = useState(initial.area ?? "");
+  const [inflowRoute, setInflowRoute] = useState<string>(initial.inflowRoute ?? INFLOW_UNSET);
 
   // Reset fields to raw values whenever the dialog is (re)opened.
   function onOpenChange(next: boolean) {
@@ -71,6 +77,7 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
       setPostalCode(initial.postalCode ?? "");
       setAddress(initial.address ?? "");
       setArea(initial.area ?? "");
+      setInflowRoute(initial.inflowRoute ?? INFLOW_UNSET);
     }
     setOpen(next);
   }
@@ -88,6 +95,7 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
           postalCode: blank(postalCode),
           address: blank(address),
           area: area.trim().length > 0 ? area.trim() : null,
+          inflowRoute: inflowRoute === INFLOW_UNSET ? null : (inflowRoute as InflowRoute),
         });
         if (result.duplicatePhoneWarning) {
           toast.warning(t.feedback.duplicatePhone);
@@ -190,6 +198,20 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-basic-inflow">{d.fields.inflowRoute}</Label>
+            <select
+              id="edit-basic-inflow"
+              value={inflowRoute}
+              onChange={(e) => setInflowRoute(e.target.value)}
+              className="h-9 w-full rounded-sm border border-hairline-light bg-white px-3 text-sm text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value={INFLOW_UNSET}>{d.unassigned}</option>
+              <option value="EVENT">{d.inflowRouteLabels.EVENT}</option>
+              <option value="OUTBOUND_CALL">{d.inflowRouteLabels.OUTBOUND_CALL}</option>
+              <option value="DIRECT_VISIT">{d.inflowRouteLabels.DIRECT_VISIT}</option>
+            </select>
           </div>
         </div>
         <DialogFooter>

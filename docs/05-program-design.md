@@ -2182,9 +2182,183 @@ PM エージェントが優先度を判断する未確定事項。
 
 ---
 
-## 16. 変更履歴
+## 16. 詳細顧客・案件管理データモデル（拡張設計）
+
+> 運用要望（顧客 1 件あたり約 80 項目の管理）に対応するためのデータモデル拡張設計。
+> 現行 §3.5 の `Customer` は「連絡先＋簡易ステータス」に留まるため、契約〜施工〜入金の
+> ライフサイクル（案件）と設備明細を正規化して追加する。MVP のデモ反復で `Customer` に
+> 暫定追加した列（`inflowRoute` / `tossUpUserId` / `closingUserId` / `maekakuStatus` /
+> `nextAction` / `nextAppointmentAt` / `contractAmount` / `constructionVendor` /
+> `CustomerActivity.amount` / `CustomerMessage`）は本設計に吸収する。
+
+### 16.1 設計方針
+
+1. **3 層に正規化する。**
+   - `Customer`（個人・連絡先マスタ。1 顧客 = 1 レコード）
+   - `CustomerProject`（案件。契約〜施工〜入金のライフサイクル。1 顧客 : N 案件、MVP は主に 1 件）
+   - `ProjectEquipment`（設備明細。1 案件 : N 設備。PV / BT / EQ / IH / AC / 付帯 / プレゼント）
+2. **設備はカテゴリ判別子 + 共通列 + `attributes Json?`** で表現する（型番②・住設安心サポート・発電量保証・オプション付帯・三菱鍋型番などの長尾属性を Json に逃がし、カラム爆発を避ける）。
+3. **テナント分離**は `Customer.wholesalerId` 経由の相関 EXISTS（`CustomerActivity` と同方式、§3.9）。`CustomerProject` / `ProjectEquipment` も同じポリシーを敷く。
+4. **金額の取り扱い**: `proposalAmount`（ご提案金額）/ 契約金額は提示・契約時点の値を保持（CLAUDE.md #4 のスナップショット思想に整合）。**仕入値は持たせない / DTO で除外**（#5）。
+5. **担当の整理**: 既存の `tossUpUserId`（トスアップ担当）/ `closingUserId`（クロージング担当）に、要望の「アポ獲得者＝トスアップ」「営業担当者＝クロージング」を対応づけ、部署（`tossDept` / `belongDept`）を追加する。
+
+### 16.2 項目マッピング（要望項目 → モデル.カラム）
+
+| 要望項目 | 配置 | 備考 |
+|---|---|---|
+| お客様名 / フリガナ / 電話番号 / メールアドレス / 郵便番号 | `Customer.name/kana/phone/email/postalCode` | 既存 |
+| 都道府県 / 市区町村 / 番地 | `Customer.prefecture/city/addressLine` | **新規**（現 `address` 単一を分割。移行で分解） |
+| 生年月日 / 年齢 | `Customer.birthDate`（年齢は表示時に算出） | **新規** |
+| 築年日 | `Customer.buildYear` | **新規** |
+| アポ獲得者 / 営業担当者 | `Customer.tossUpUserId/closingUserId`（自社/二次店） | 既存（呼称対応） |
+| トス部署 / 所属部署 | `Customer.tossDept/belongDept` | **新規** |
+| 流入経路 | `Customer.inflowRoute` | 既存（暫定追加済） |
+| 商談ログ | `CustomerActivity`（§3.5 拡張、`amount` 付） | 既存 |
+| 備考 | `Customer.note` | 既存 |
+| ご契約日 | `CustomerProject.contractDate` | **新規**（現 `contractExpectedDate` は予定日として併存） |
+| ご提案金額（税込） | `CustomerProject.proposalAmount`（暫定 `Customer.contractAmount` を移設） | 既存→移設 |
+| 契約書一式URL | `CustomerProject.contractDocsUrl` | **新規**（または `CustomerFile` 連携） |
+| 設備ID | `CustomerProject.equipmentSerialId` | **新規** |
+| ローン審査コール日時 / 現地調査日時(候補) / 現調日時 / 工事日時(候補) / 着工日 / 完工日 / 売電開始日 / サンキューコール日時 | `CustomerProject.loanReviewCallAt / siteSurveyCandidates(Json) / siteSurveyAt / constructionCandidates(Json) / constructionStartDate / completionDate / powerSaleStartDate / thankYouCallAt` | **新規**（完工日は暫定 `constructionCompletedDate` を移設） |
+| 架電ステータス / 完工ステータス / 不備解消ステータス / 完工後ステータス / 認定申請ステータス / 支払いステータス | `CustomerProject.callStatus / completionStatus / defectStatus / postCompletionStatus / certApplicationStatus / paymentStatus`（各 enum） | **新規**（完工＝現 `constructionStatus`、認定申請＝現 `subsidyStatus` を移設・拡張） |
+| 不備内容 | `CustomerProject.defectDetail` | **新規** |
+| 支払い回数 / ローン会社 / 頭金 / 団体信用生命保険-契約有無 / ローン-備考 | `CustomerProject.paymentCount / loanCompany / downPayment / creditLifeInsurance / loanNote` | **新規** |
+| 入金日 / 代理店支払日 | `CustomerProject.depositDate / dealerPayoutDate` | **新規** |
+| PV/BT/EQ/IH/AC/付帯/プレゼント — 契約有無・メーカー・型番・容量・枚数/個数・設置場所・各種保証・導入状況・詳細 | `ProjectEquipment`（`category` で判別） | **新規（正規化）** |
+| PV・BT 総合保証/発電量保証・PV延長保証・自然災害保証・住設安心サポート・オプション付帯・型番②・三菱鍋型番 | `ProjectEquipment.warranty* / attributes(Json)` | **新規**（長尾は Json） |
+| パワコン設置場所(新設/交換) | `ProjectEquipment.installLocation`（PV 行の attributes で新設/交換区別） | **新規** |
+
+> **未対応→対応** の差分: 上表の「新規」が現状未管理。約 65 項目を `Customer` 追加列・`CustomerProject`・`ProjectEquipment` に収容する。
+
+### 16.3 Prisma スキーマ案
+
+```prisma
+// ── Customer 追加列（連絡先構造化・個人属性・担当組織） ──
+// （既存列は §3.5 を参照。以下は本拡張で追加するもの）
+model Customer {
+  // ...既存...
+  prefecture   String?   // 都道府県
+  city         String?   // 市区町村
+  addressLine  String?   // 番地以降（現 address を移行分解）
+  birthDate    DateTime? // 生年月日（年齢は表示時に算出）
+  buildYear    DateTime? // 築年日
+  tossDept     String?   // トス部署
+  belongDept   String?   // 所属部署
+  // 既存（暫定追加済・本設計に吸収）: inflowRoute, tossUpUserId, tossUpRelationshipId,
+  //   closingUserId, closingRelationshipId, maekakuStatus, nextAction, nextAppointmentAt
+  projects     CustomerProject[]
+}
+
+// ── 案件（契約〜施工〜入金のライフサイクル） ──
+enum CallStatus           { NONE SCHEDULED DONE NG }                 // 架電ステータス
+enum CompletionStatus     { NOT_STARTED IN_PROGRESS DONE }           // 完工ステータス
+enum DefectStatus         { NONE OPEN RESOLVED }                     // 不備解消ステータス
+enum PostCompletionStatus { NONE IN_PROGRESS DONE }                  // 完工後ステータス
+enum CertApplicationStatus{ NONE APPLYING APPROVED REJECTED }        // 認定申請ステータス
+enum ProjectPaymentStatus { UNPAID PARTIAL PAID }                    // 支払いステータス
+
+model CustomerProject {
+  id                  String   @id @default(cuid())
+  customerId          String
+  // 契約
+  contractDate        DateTime?   // ご契約日
+  proposalAmount      Int?        // ご提案金額（税込）
+  contractDocsUrl     String?     // 契約書一式URL
+  equipmentSerialId   String?     // 設備ID
+  // 工程日時
+  loanReviewCallAt    DateTime?   // ローン審査コール日時
+  siteSurveyCandidates Json?      // 現地調査日時（候補）
+  siteSurveyAt        DateTime?   // 現調日時
+  constructionCandidates Json?    // 工事日時（候補）
+  constructionStartDate DateTime? // 着工日
+  completionDate      DateTime?   // 完工日
+  powerSaleStartDate  DateTime?   // 売電開始日
+  thankYouCallAt      DateTime?   // サンキューコール日時
+  // ステータス
+  callStatus          CallStatus            @default(NONE)
+  completionStatus    CompletionStatus      @default(NOT_STARTED)
+  defectStatus        DefectStatus          @default(NONE)
+  defectDetail        String?               // 不備内容
+  postCompletionStatus PostCompletionStatus @default(NONE)
+  certApplicationStatus CertApplicationStatus @default(NONE)
+  // 入金・ローン
+  paymentStatus       ProjectPaymentStatus  @default(UNPAID)
+  paymentCount        Int?        // 支払い回数
+  loanCompany         String?     // ローン会社
+  downPayment         Int?        // 頭金
+  creditLifeInsurance Boolean?    // 団体信用生命保険-契約有無
+  loanNote            String?     // ローン-備考
+  depositDate         DateTime?   // 入金日
+  dealerPayoutDate    DateTime?   // 代理店支払日
+  note                String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  customer            Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  equipment           ProjectEquipment[]
+
+  @@index([customerId, createdAt])
+}
+
+// ── 設備明細（PV / BT / EQ / IH / AC / 付帯 / プレゼント） ──
+enum EquipmentCategory { PV BT EQ IH AC ACCESSORY GIFT }
+
+model ProjectEquipment {
+  id              String   @id @default(cuid())
+  projectId       String
+  category        EquipmentCategory
+  contracted      Boolean  @default(false) // 契約有無
+  manufacturer    String?                  // メーカー
+  model           String?                  // 型番①
+  capacity        String?                  // 容量
+  quantity        Int?                     // 枚数 / 個数
+  installLocation String?                  // 設置場所（パワコン新設/交換含む）
+  introducedStatus String?                 // 導入状況（EQ/IH）
+  warrantyStandard Boolean?                // 総合保証 / 標準保証
+  warrantyExtended Boolean?                // 延長保証
+  warrantyDisaster Boolean?                // 自然災害保証（有償）
+  detail          String?                  // 契約詳細
+  // 長尾属性: 型番②, 住設安心サポート, 発電量保証, オプション付帯, 三菱鍋型番 など
+  attributes      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project         CustomerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, category])
+}
+```
+
+### 16.4 RLS / インデックス / DTO
+
+- **RLS**: `CustomerProject` は `Customer.wholesalerId` 経由、`ProjectEquipment` は `CustomerProject → Customer.wholesalerId` 経由の相関 EXISTS（2 段）でテナント分離。§3.9 のテンプレートに 2 モデルを追加。
+- **インデックス**: `CustomerProject(customerId, createdAt)`、`ProjectEquipment(projectId, category)`。検索要件が固まり次第 `completionStatus` / `paymentStatus` の複合índ を追加。
+- **DTO / マスキング**: 二次店ロールへは仕入関連を一切返さない（本モデルは仕入値を持たないが、原価派生値を追加する際は DTO 層で destructure-and-rest）。PII（生年月日・住所詳細）は `MaskingService`（§6.5）の対象に追加する。
+
+### 16.5 段階移行プラン
+
+| 段階 | 内容 | マイグレーション |
+|---|---|---|
+| 16-A | `Customer` 連絡先構造化（prefecture/city/addressLine/birthDate/buildYear/tossDept/belongDept）＋既存 `address` の分解バックフィル | `Customer` ALTER |
+| 16-B | `CustomerProject` 新設。暫定 `Customer.contractAmount` → `proposalAmount`、`constructionCompletedDate` → `completionDate` 等を移設し、`Customer` 側の暫定列を段階的に廃止 | CREATE TABLE + データ移行 |
+| 16-C | `ProjectEquipment` + `EquipmentCategory` 新設。PV/BT の有無（現 `pvInstalled`/`batteryInstalled`）を初期行へ移行 | CREATE TABLE + 移行 |
+| 16-D | 顧客詳細 UI を案件タブ（工程・契約・入金）＋設備タブへ再編。一覧/検索フィルタの拡張 | UI のみ |
+
+> 各段階は `/iterate` 単位でタスク化。16-A→16-B→16-C の順で、移行スクリプト（既存暫定列→新モデル）を伴う。実装前に本 §16 を `design-reviewer` でレビューする。
+
+### 16.6 未確定事項（要確認）
+
+1. **1 顧客 : 案件数** — MVP は 1 件想定で良いか（複数契約＝増設・買い替えを別案件にするか）。
+2. **担当呼称の統一** — 「アポ獲得者/営業担当者」を既存「トスアップ/クロージング担当」に寄せるか、別項目として併存させるか。
+3. **設備カテゴリの粒度** — `ACCESSORY`（付帯商材）と `GIFT`（プレゼント品）・三菱鍋を分けるか、`attributes` で吸収するか。
+4. **ステータス enum の値** — 各ステータス（架電/不備/完工後/支払）の実運用上の選択肢を業務側で確定。
+
+---
+
+## 17. 変更履歴
 
 | 日付 | 内容 | 著者 |
 |---|---|---|
 | 2026-05-23 | 初版作成。`docs/01`〜`docs/04` + `product-proposal.md` + `CLAUDE.md`（A2P 由来部分を Solar SaaS 向けに読み替え）に基づき、アーキテクチャ・モノレポ構成・DB スキーマ・API/ジョブ仕様・ドメインサービス層・業務シーケンス・R2 規約・エラー処理・観測性・テスト戦略を確定。F-001〜F-058 / S-001〜S-085 のトレーサビリティを §13 で集約。 | program-design |
 | 2026-05-23 | T-01-03 実装中に検出: §3.2 `Session` モデルに `user User @relation(fields: [userId], references: [id], onDelete: Cascade)` を、逆リレーション `User.sessions Session[]` を明示。Prisma の relation 双方向宣言必須要件への形式的対応で、設計意図に変更なし。 | programmer |
+| 2026-06-02 | §16 追加: 詳細顧客・案件管理データモデル（約 80 項目）の拡張設計。`Customer` 連絡先構造化 + `CustomerProject`（案件: 契約・工程・入金・ローン）+ `ProjectEquipment`（設備明細, `attributes Json`）+ 関連 enum を定義。要望項目→モデルのマッピングと段階移行プラン（16-A〜16-D）を明記。MVP デモで暫定追加した列の吸収方針を記載。 | claude |
