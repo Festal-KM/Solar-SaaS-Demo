@@ -78,6 +78,10 @@ export default defineConfig({
         here,
         "../../packages/contracts/src/services/contract-snapshot.ts",
       ),
+      "@solar/contracts/dto/project-info": path.resolve(
+        here,
+        "../../packages/contracts/src/dto/project-info.ts",
+      ),
       "@solar/contracts/logger": path.resolve(
         here,
         "../../packages/contracts/src/logger.ts",

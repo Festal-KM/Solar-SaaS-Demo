@@ -623,16 +623,17 @@ model LineEvent {
   @@index([wholesalerId, status])
 }
 
-// F-060 二次店レーン希望 — 二次店が月単位で、卸業者の作成したレーン(LineEvent)から
-// 参加希望を優先順位付きで提出する。単発の DealerPreference が EventCandidate に
-// 紐づくのに対し、こちらは既存レーンを優先順位で選ぶ。MVP は卸業者の一覧確認
-// (S-089) のみ実装し、二次店側の提出フォームは Phase 2。
+// F-060 二次店レーン希望 — 二次店が月単位で「希望するレーン（＝希望場所 × 希望開催日）」を
+// 希望順位付きで複数件提出する（ボトムアップ）。旧仕様（卸業者が作成した確定レーン
+// (LineEvent)を二次店が優先順位付けするトップダウン）から構造改訂（§3.4.1 / §19）。
+// MVP は卸業者の一覧確認 (S-089) を中心に実装し、二次店側の提出フォームのスコープは
+// Open Q24（pm/iterate 判断）。
 model LanePreference {
   id             String   @id @default(cuid())
   wholesalerId   String
-  relationshipId String                                         // 二次店との関係
+  relationshipId String                                         // 提出二次店との関係
   targetMonth    String                                         // 'YYYY-MM'
-  comment        String?
+  note           String?                                        // 特記事項（旧 comment を改称・維持）
   submittedAt    DateTime @default(now())
   submittedBy    String
 
@@ -642,14 +643,20 @@ model LanePreference {
   @@index([wholesalerId, targetMonth])
 }
 
-// レーン希望の各選択（優先順位付き）。priority=1 が第一希望。
-// LineEvent への参照は柔リンク（FK を張らず id で結合）— VenueProvider 解決と
-// 同じく loader 層で findMany → Map で名称を結合する。
+// レーン希望の各明細（希望順位付き）。priority=1 が希望①。
+// venueLabel が一次ソース（必須）。venueProviderId / storeId / lineEventId は
+// マスタ・確定レーンへの任意リンク（FK を張らず id で柔リンク）— loader 層で
+// findMany → Map で名称を結合する（VenueProvider 解決と同方針 / §3.4.1）。
 model LanePreferenceItem {
   id               String @id @default(cuid())
   lanePreferenceId String
-  lineEventId      String                                       // 希望するレーン(LineEvent)の id
-  priority         Int                                          // 1=第一希望, 2=第二希望, ...
+  priority         Int                                          // 1=希望①, 2=希望②, ...（表示順を兼ねる）
+  venueLabel       String                                       // 希望場所ラベル（必須・一次ソース。例「カインズ 大宮店」）
+  venueProviderId  String?                                      // 場所提供元マスタへの任意リンク（FK なし）
+  storeId          String?                                      // 店舗マスタへの任意リンク（FK なし）
+  lineEventId      String?                                      // 確定レーン(LineEvent)への任意リンク（旧必須→NULL 許容に降格）
+  desiredDates     Json?                                        // 希望開催日 'YYYY-MM-DD' 配列（週単位の複数希望日。§3.4.1）
+  memo             String?                                      // レーン別メモ（任意）
 
   lanePreference LanePreference @relation(fields: [lanePreferenceId], references: [id], onDelete: Cascade)
 
@@ -767,6 +774,204 @@ model EventChange {
   @@index([eventId, changedAt])
 }
 ```
+
+#### 3.4.1 `LanePreference` 構造改訂の設計判断（F-060）
+
+docs/02 F-060 の構造改訂（トップダウン → ボトムアップ）と §9 申し送りを反映する。要点と設計判断は以下。
+
+**(1) `comment` → `note` 改称**: 提出ヘッダの自由記述を「特記事項 (`note`)」に改称（業務語との一致）。バックフィルで旧 `comment` 値を `note` にコピーする（§3.4.3 / migration A）。
+
+**(2) `venueLabel` を一次ソース・必須化**: 希望場所はマスタ（場所提供元 / 店舗）リンクを必須とせず、表示用ラベル文字列 `venueLabel` を一次ソースとして **NOT NULL** で保持する。二次店はマスタ未登録の場所も自由記述で提出できる（docs/02 申し送り 25）。卸業者が後からマスタへ寄せても `venueLabel` は破棄せず、突合用に併存する。
+
+**(3) 任意リンク（`venueProviderId` / `storeId` / `lineEventId`）は FK を張らない柔リンク**:
+
+- 既存 `LineEvent.venueProviderId`（解決を loader の `findMany` → `Map` で行う）と同方針。理由:
+  - **NULL 許容かつマスタ未登録を許す**ため、参照整合性 FK を要求すると「未登録の希望場所を保存できない」業務要件（自由記述許容）と矛盾する。
+  - マスタ行の物理削除/差し替えに対し希望明細を孤児化させず、ラベル文字列で意味を保持できる（突合は best-effort）。
+  - RLS の相関 EXISTS が `LanePreference` 親 1 経路で完結し、`venueProvider` / `store` / `lineEvent` への FK 連鎖（別テナント参照リスク）を持ち込まない。
+- 解決は loader 層で `venueProviderId` / `storeId` / `lineEventId` を集約 → 各マスタを `findMany`（`withTenant` 内）→ `Map` で名称結合（§3.4.4 / data.ts）。
+
+**(4) 希望開催日 `desiredDates` の保持方式（Open Q26 確定）**:
+
+- **確定: `Json?`（`'YYYY-MM-DD'` 文字列のフラット配列）** を採用する。週単位の「希望日帯」（例 7/7~8・7/12~13・7/14~15）は、各帯を構成する日付をフラット配列に展開して保持する（MVP は連続日を日付列挙で表現。UI 側で隣接日をチップにグルーピング）。
+- **採用理由**:
+  - 既存 `LineEvent.scheduledDates`（`Json`, `'YYYY-MM-DD'` 配列）と**方式を統一**し、loader / DTO / 表示ロジックを共通化できる（バックフィル時の互換も容易）。
+  - レーン日程は「日の集合」が本質で、`{from,to}` 範囲は連続 2 日帯の特殊形にすぎない。日付配列で全帯を表現でき、MVP の集計（希望日件数・重複検出）も配列で済む。
+  - スキーマ追加が 1 列で完結し、子テーブル 1 つ分の RLS / FK / マイグレーションを節約する。
+- **子テーブル案（`lane_preference_dates`）との比較**: 子テーブルは (a) 日帯に開催枠属性（午前/午後等）を後付けする拡張余地と (b) 日付単位の集計クエリ最適化に優れるが、MVP には属性も大量集計も不要で、追加テーブル分の RLS（親 `LanePreference.wholesalerId` 経由 EXISTS）・FK・マイグレーション・loader join のコストが見合わない。**週帯を `{from,to}` 構造や枠属性付きで持つ業務要件が確定したら Phase 2 で子テーブルへ昇格**する（§3.4.5 TBD）。`LineEvent.scheduledDates` と同列の方式で揃えることを優先。
+
+**(5) 「希望レーン数」は導出**: 冗長カラムを持たず `LanePreferenceItem` の件数から算出（docs/02 申し送り 27）。一覧バッジ・集計は常に `items.length`。
+
+##### 3.4.2 RLS（変更なし）
+
+`LanePreference` / `LanePreferenceItem` の RLS は**現行方針を踏襲し変更しない**（§3.9 / 既存 migration `20260528050000_lane_preference`）。
+
+- `LanePreference`: `relationshipId` ベースの三分岐（saas_admin 全件 / 卸業者ロールは `Relationship.wholesalerId` 経由 EXISTS / 二次店ロールは `current_relationship_ids` GUC 一致）。
+- `LanePreferenceItem`: 親 `LanePreference` 経由の相関 EXISTS で可視性を継承（既存方針）。新規列追加・`lineEventId` の NULL 許容化は RLS 述語に影響しない（分離キーは `LanePreference.relationshipId` / `wholesalerId` のままで、`venueProviderId` / `storeId` / `lineEventId` は分離キーに使わない）。
+- 任意リンク先（`VenueProvider` / `Store` / `LineEvent`）の名称解決は loader が **同一 `withTenant` トランザクション内**で `findMany` するため、各マスタの自テナント RLS が二重に効く（別テナントの id を偶発リンクしても名称は解決されず `null` になる＝漏えいなし）。
+
+##### 3.4.3 マイグレーション計画（非破壊・2 段階: migration A / B）
+
+既存連番（`20260605010000_lane_event_reports_f064` / §18.6）の後に採番。
+
+| 段階 | マイグレーション | 内容 | 破壊性 |
+|---|---|---|---|
+| A | `20260606000000_lane_preference_bottomup` | 列追加（`venueLabel` を **NULL 許容で**追加 / `venueProviderId` / `storeId` / `desiredDates` / `memo` / `note`）+ `lineEventId` を `DROP NOT NULL` + 既存データのバックフィル（`note ← comment`、各 `LanePreferenceItem` は旧必須 `lineEventId` → `LineEvent` から `venueLabel`（名称）/ `desiredDates`（`scheduledDates`）を埋める）+ `venueLabel` を **NOT NULL 化**（バックフィル済み前提） | 非破壊（既存行を更新で埋めるのみ） |
+| B | `20260606010000_lane_preference_drop_comment` | 旧 `comment` 列を **DROP**（A で `note` へコピー済み・参照削除完了後に実行） | 列 drop（A で値退避済みのため情報損失なし） |
+
+**migration A の SQL 要点**（`20260606000000_lane_preference_bottomup/migration.sql`、方針）:
+
+```sql
+-- 1) 親ヘッダ: note 追加 + comment 値をコピー（comment は B で drop するまで残置）
+ALTER TABLE "LanePreference" ADD COLUMN "note" TEXT;
+UPDATE "LanePreference" SET "note" = "comment" WHERE "comment" IS NOT NULL;
+
+-- 2) 明細: 新規列を NULL 許容で追加（venueLabel も一旦 NULL 許容）
+ALTER TABLE "LanePreferenceItem" ADD COLUMN "venueLabel"      TEXT;
+ALTER TABLE "LanePreferenceItem" ADD COLUMN "venueProviderId" TEXT;
+ALTER TABLE "LanePreferenceItem" ADD COLUMN "storeId"         TEXT;
+ALTER TABLE "LanePreferenceItem" ADD COLUMN "desiredDates"    JSONB;
+ALTER TABLE "LanePreferenceItem" ADD COLUMN "memo"            TEXT;
+
+-- 3) lineEventId を NULL 許容へ降格（任意リンク化）
+ALTER TABLE "LanePreferenceItem" ALTER COLUMN "lineEventId" DROP NOT NULL;
+
+-- 4) 既存明細を確定レーン(LineEvent)からバックフィル
+--    venueLabel ← LineEvent.name、desiredDates ← LineEvent.scheduledDates
+UPDATE "LanePreferenceItem" li
+SET "venueLabel"   = COALESCE(le."name", '（未設定）'),
+    "venueProviderId" = le."venueProviderId",
+    "desiredDates" = le."scheduledDates"
+FROM "LineEvent" le
+WHERE li."lineEventId" = le."id";
+
+-- 5) リンク先 LineEvent が無い既存明細の保険（理論上 NOT NULL FK だったので無いはず）
+UPDATE "LanePreferenceItem" SET "venueLabel" = '（未設定）' WHERE "venueLabel" IS NULL;
+
+-- 6) バックフィル完了 → venueLabel を NOT NULL 化
+ALTER TABLE "LanePreferenceItem" ALTER COLUMN "venueLabel" SET NOT NULL;
+```
+
+**migration B の SQL 要点**（`20260606010000_lane_preference_drop_comment/migration.sql`、方針）:
+
+```sql
+-- A で note へ退避済み・全参照を note へ移行完了後に実行
+ALTER TABLE "LanePreference" DROP COLUMN "comment";
+```
+
+注意:
+- **適用順序（A 内）**: ADD COLUMN（NULL 許容）→ UPDATE バックフィル → DROP NOT NULL（lineEventId）→ SET NOT NULL（venueLabel）。NOT NULL 化は必ずバックフィル後。
+- **冪等性**: バックフィル UPDATE は再実行安全（同値代入）。`venueLabel` の NOT NULL 化前に必ず保険 UPDATE（手順 5）で NULL を潰す。
+- **RLS 変更なし**: 列追加・NULL 許容化は RLS 述語に影響しないため `20260528050000_lane_preference` のポリシーを再作成しない。
+- **comment 残置 → drop の二段**: A で `note` を正にしつつ `comment` を残置（ローダ/アクション/シードの全参照を `note` へ移行）。移行完了確認後に B で `comment` を drop（ロールバック余地確保）。pm/iterate の判断で A と B を別 PR に分割可。
+- **seed 整合**: `packages/db/prisma/seed.ts`（既存 LanePreference 投入箇所）を新構造（`note` / `venueLabel` / `desiredDates`）へ更新する（programmer タスク）。
+
+##### 3.4.4 DTO / contracts（新設）
+
+`packages/contracts/src/dto/lane-preference.ts` に zod schema / DTO を新設する（現状 data.ts 内 Row 型のみで contracts に集約されていない）。
+
+```typescript
+// packages/contracts/src/dto/lane-preference.ts
+import { z } from "zod";
+
+// 希望開催日: 'YYYY-MM-DD' 配列（§3.4.1-(4)）。LineEvent.scheduledDates と同方式。
+export const DesiredDatesSchema = z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/));
+export type DesiredDates = z.infer<typeof DesiredDatesSchema>;
+
+// 卸非公開項目（固定費/成果報酬率 等）は希望明細が保持しない＝物理的に存在しない。
+// destructure-and-rest の対象キー集合（将来 venueProvider の契約条件等を結合しても
+// DTO へ漏らさないためのガード。Object.keys に出さない / CLAUDE.md #5・F-060 受入）。
+export const DEALER_OMITTED_LANE_PREFERENCE_KEYS = [
+  "fixedFee",          // 場所提供元固定費（LineEvent / VenueProvider 由来。希望明細には載せない）
+  "performanceRate",   // 場所提供元成果報酬率
+  "purchasePrice",     // 仕入値（理論上ここに現れないが防御的に列挙）
+] as const;
+
+// 明細 DTO（一覧確認ビュー用。任意リンク名は loader が解決して name を埋める）。
+export const LanePreferenceItemDtoSchema = z.object({
+  priority: z.number().int().positive(),       // 1=希望①
+  venueLabel: z.string(),                       // 一次ソース（必須）
+  venueProviderId: z.string().nullable(),
+  venueProviderName: z.string().nullable(),     // loader 解決値（任意リンク・自テナント RLS 通過時のみ）
+  storeId: z.string().nullable(),
+  storeName: z.string().nullable(),             // loader 解決値
+  lineEventId: z.string().nullable(),
+  lineName: z.string().nullable(),              // loader 解決値（確定レーン突合時）
+  desiredDates: DesiredDatesSchema,             // 既定 [] にフォールバック
+  memo: z.string().nullable(),
+});
+export type LanePreferenceItemDto = z.infer<typeof LanePreferenceItemDtoSchema>;
+
+export const LanePreferenceDtoSchema = z.object({
+  id: z.string(),
+  relationshipId: z.string(),
+  dealerName: z.string(),
+  targetMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  note: z.string().nullable(),                  // 旧 comment
+  laneCount: z.number().int().nonnegative(),    // 導出: items.length（§3.4.1-(5)）
+  submittedAt: z.string(),                      // ISO
+  items: z.array(LanePreferenceItemDtoSchema),  // priority 昇順
+});
+export type LanePreferenceDto = z.infer<typeof LanePreferenceDtoSchema>;
+
+// 二次店提出フォーム入力（§3.4.5 saveLanePreference の payload）。
+export const LanePreferenceItemInputSchema = z.object({
+  venueLabel: z.string().min(1),                // 必須
+  venueProviderId: z.string().nullable().optional(),
+  storeId: z.string().nullable().optional(),
+  lineEventId: z.string().nullable().optional(),
+  desiredDates: DesiredDatesSchema.default([]),
+  memo: z.string().nullable().optional(),
+  // priority はフォーム行順で自動採番（クライアント送信値は無視 or 検証で上書き）。
+});
+export const SaveLanePreferenceInputSchema = z.object({
+  targetMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  note: z.string().nullable().optional(),
+  items: z.array(LanePreferenceItemInputSchema).min(1),  // 希望レーン ≥ 1 件
+});
+export type SaveLanePreferenceInput = z.infer<typeof SaveLanePreferenceInputSchema>;
+```
+
+- **data.ts Row 型との関係**: 既存 `LanePreferenceRow` / `LanePreferenceItemRow`（data.ts 内）は本 DTO（`LanePreferenceDto` / `LanePreferenceItemDto`）に**置換**する。loader は contracts の型を import し、data.ts では re-export のみ残す（重複型定義を排除）。
+- **物理除外（destructure-and-rest）**: 希望明細は二次店由来の希望情報のみで、卸非公開項目（固定費/成果報酬率/仕入値）は**スキーマ上そもそも保持しない**。任意リンク先 `LineEvent` / `VenueProvider` を loader で結合する際は、`name` だけを `select` し `fixedFee` / `performanceRate` を **`select` に含めない**（Object.keys に出さない / CLAUDE.md #5）。`DEALER_OMITTED_LANE_PREFERENCE_KEYS` は将来結合拡張時のリグレッション防止用ガード集合。
+- **ラベル文言**: 「希望①/②」「希望場所」「希望開催日」「特記事項」等の表示文言は `apps/web/lib/i18n/labels.ts` に集約（CLAUDE.md #2）。DTO はキー/値のみで日本語ラベルを持たない。
+
+##### 3.4.5 ローダ / アクション
+
+**読み取り `listLanePreferences(filter)`**（`apps/web/app/(wholesaler)/lane-preferences/data.ts` 改訂）:
+
+```typescript
+export async function listLanePreferences(
+  filter: { targetMonth?: string; relationshipId?: string } = {},
+): Promise<LanePreferenceDto[]>;
+```
+
+- 三段イディオム（`auth()` → `assertCan('lane_preference.read')` → `withTenant`）は不変。
+- `select` を新構造へ: `note`、`items: { priority, venueLabel, venueProviderId, storeId, lineEventId, desiredDates, memo }`。旧 `comment` 参照を `note` に変更。
+- 任意リンク解決（同一 `withTenant` tx 内、bulk findMany → Map）:
+  - `relationshipId` → `Relationship.dealer.name`（既存）
+  - `venueProviderId`（非 null のみ集約）→ `VenueProvider.name`
+  - `storeId`（非 null のみ）→ `Store.name`
+  - `lineEventId`（非 null のみ）→ `LineEvent.name`（**`fixedFee` / `performanceRate` / `scheduledDates` は `select` しない**＝卸非公開・不要）
+- 各明細を `priority` 昇順にソート、`desiredDates` は `(Json as string[]) ?? []`、未リンク（id が null か解決失敗）の name は `null`。
+- `laneCount = items.length` を DTO に詰める（導出）。
+
+**書き込み `saveLanePreference(input)`**（二次店提出。F-021 連動。実装スコープは Open Q24 = pm/iterate 判断）:
+
+```typescript
+// apps/web/app/(dealer)/lane-preferences/actions.ts （設計のみ・実装スコープは pm/iterate 判断）
+export async function saveLanePreference(
+  input: SaveLanePreferenceInput,           // §3.4.4 zod で検証
+): Promise<{ ok: true; id: string } | { ok: false; error: string }>;
+```
+
+- `auth()` → `assertCan('lane_preference.write')`（dealer_admin） → `withTenant(ctx, ...)` 必須。
+- **upsert（対象月 × relationship 一意）**: `LanePreference.upsert({ where: { relationshipId_targetMonth: { relationshipId, targetMonth } }, ... })`。`relationshipId` は ctx から導出（クライアント送信値を信用しない）、`wholesalerId` は当該 `Relationship.wholesalerId` から解決。再提出は更新扱い（既存 `items` を `deleteMany` → 再 create、または差分更新）。
+- **priority 採番**: フォーム行順で `1..N` を**サーバ側で再採番**（クライアント送信の priority は無視）。
+- `venueLabel` 必須を zod で担保。任意リンク id はそのまま保存（FK なし・存在検証は best-effort、未登録ラベルを許容）。
+- RLS の WITH CHECK が `relationshipId` を `current_relationship_ids` で検証するため、他社 relationship への書き込みは DB 層でも拒否（二重防御）。
+
+---
 
 ### 3.5 顧客・アポ・マエカク
 
@@ -1570,6 +1775,7 @@ export class DealerScopeService {
 export function maskPhone(phone: string, viewer: ViewerContext): string;       // '****-****-1234' or 'full' depending on viewer
 export function maskAddress(address: string, viewer: ViewerContext): string;   // 都道府県+市区町村まで
 export function maskName(name: string, viewer: ViewerContext): string;         // 姓のみ
+export function maskBirthDate(birthDate: Date | null, viewer: ViewerContext): string; // 年代のみ（例 '40代'）。FULL 閲覧時は 'YYYY-MM-DD'。null は '未設定'
 export function revealPii(customerId: string, viewer: ViewerContext, reason: string): Promise<{phone:string;address:string;name:string}>;  // AuditLog(REVEAL_PII)
 ```
 
@@ -1741,6 +1947,43 @@ sequenceDiagram
     Svc->>DB: Event INSERT + EventDealer + EventChange
     Svc->>Q: enqueue notification (EVENT_ASSIGNED → 当該 dealer + 自社要員)
     Web-->>WSE: 200 OK (リダイレクト S-028)
+```
+
+### 7.1.1 二次店レーン希望 提出 → 卸業者一覧確認（F-060・ボトムアップ構造）
+
+二次店が希望場所 × 希望開催日を自由記述で複数件提出（`venueLabel` 必須・確定レーン任意リンク）、卸業者が一覧確認する流れ。提出フォームの実装スコープは Open Q24（pm/iterate 判断）。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor DLA as dealer_admin
+    actor WSE as wholesaler_event_team
+    participant Web as apps/web (Server Action)
+    participant WT as withTenant
+    participant DB as PostgreSQL(RLS)
+
+    Note over DLA,Web: 提出（F-021 連動・実装スコープは Open Q24）
+    DLA->>Web: saveLanePreference({ targetMonth, note, items:[{venueLabel, desiredDates[], 任意リンク, memo}] })
+    Web->>Web: SaveLanePreferenceInputSchema で検証（venueLabel 必須 / items ≥1 / priority はサーバ再採番）
+    alt 検証 NG
+        Web-->>DLA: 422 VALIDATION_FAILED
+    else 検証 OK
+        Web->>WT: withTenant(ctx)（relationshipId は ctx 由来・送信値を信用しない）
+        WT->>DB: LanePreference upsert [relationshipId,targetMonth]（WITH CHECK: current_relationship_ids 一致）
+        WT->>DB: items を deleteMany → priority 1..N 再採番で create（venueLabel/desiredDates/任意リンク id）
+        DB-->>Web: ok（希望レーン数は items 件数から導出）
+        Web-->>DLA: 200 OK
+    end
+
+    Note over WSE,Web: 一覧確認（卸業者側・S-089）
+    WSE->>Web: listLanePreferences({ targetMonth, relationshipId? })
+    Web->>Web: assertCan('lane_preference.read')（dealer ロールは ForbiddenError）
+    Web->>WT: withTenant(ctx)
+    WT->>DB: LanePreference findMany（RLS: relationshipId 三分岐）+ items select（新構造）
+    WT->>DB: 任意リンク bulk 解決（Relationship.dealer.name / VenueProvider.name / Store.name / LineEvent.name のみ select。fixedFee/performanceRate は select しない）
+    DB-->>Web: rows
+    Web->>Web: items を priority 昇順、laneCount=items.length、未解決 name は null
+    Web-->>WSE: LanePreferenceDto[]（卸非公開項目は物理的に不在）
 ```
 
 ### 7.2 アポ獲得 → マエカク → 結果連絡 → 商談 → 契約成立 → 粗利 → インセンティブ確定（UC-02, UC-03）
@@ -2179,12 +2422,19 @@ PM エージェントが優先度を判断する未確定事項。
 8. **R2 リージョン**: Auto vs APAC 固定（OQ-4 から継続）。
 9. **Auth.js v5 安定版リリース**: beta 採用のリスク残存。リリース時の追従コストを Sprint 後半で評価。
 10. **暦月以外の集計**: docs/01 §7.8 では年度開始月の設定可だが、本書では月次表示順のみ反映する想定。BI ダッシュボード (F-056) で会計年度別の集計が必要か再確認。
+11. **F-060 `desiredDates` の構造昇格（Open Q26 関連）**: MVP は `'YYYY-MM-DD'` フラット配列（`LineEvent.scheduledDates` と同方式・§3.4.1-(4)）。週帯を `{from,to}` 構造や開催枠属性（午前/午後等）付きで持つ業務要件が確定したら Phase 2 で子テーブル `lane_preference_dates` へ昇格を検討。
+12. **F-060 二次店提出フォームの実装スコープ（Open Q24）**: 新構造の提出フォーム (`saveLanePreference`/§3.4.5) を MVP（F-021 の一部として薄実装）に含めるか Phase 2 に回すかは pm/iterate 判断。本書は設計のみ確定し、卸業者一覧確認 (S-089) を先行実装可能とする。
+13. **F-060 旧 `comment` 列の drop タイミング（Open Q27 関連）**: migration A で `note` を正としつつ `comment` を残置、全参照移行確認後に migration B で drop。A と B を別 PR に分けるか同時かは pm 判断。再提出履歴（版）保持は監査ログ (F-055) に委ね、希望明細は最新のみ保持（上書き）を本書前提とする。
 
 ---
 
 ## 16. 詳細顧客・案件管理データモデル（拡張設計）
 
-> 運用要望（顧客 1 件あたり約 80 項目の管理）に対応するためのデータモデル拡張設計。
+> 運用要望（顧客 1 件あたり約 90 項目の管理）に対応するためのデータモデル拡張設計。
+> 本章は **F-061 顧客詳細 案件情報 統合ビュー（P0 閲覧）** と **F-062 案件情報 編集（P1）** を
+> 完全に支える設計を確定する。F-061 は「既存集約を横断する読み取り集約ビュー」であり、
+> 新規トップレベル概念・並行集約は作らない（CLAUDE.md #3）。データの正は §16.0 責務マトリクスに従い、
+> ビューは値を二重保持しない。
 > **重要な設計判断（design-reviewer 指摘反映）**: 契約・施工・申請・粗利・商談は既に
 > §3.6 の `Deal` → `Contract` → `{ContractItem, GrossProfit, Construction, Application,
 > Incentive}` が**正の源（source of truth）**として存在する。本拡張は**新たな並行集約
@@ -2214,6 +2464,13 @@ PM エージェントが優先度を判断する未確定事項。
 | 個人属性・連絡先・担当・流入経路・マエカク | `Customer`（**拡張**） | 連絡先構造化＋個人属性＋部署を追加。暫定列は維持/整理 |
 | 商談ログ・チャット・関連ファイル | `CustomerActivity` / `CustomerMessage` / `CustomerFile`（**§3.5 へ正式追記が必要**） | デモで実装済。§3.5/§3.9 への正式記載は §16.7 で補う |
 
+> **F-061 集約ビューの読み取り経路（最重要）**: 本ビューは上記の正テーブルを `Customer` を起点に
+> 横断結合して **読むだけ**。`getProjectInfo(ctx, customerId)`（§16.10）が `withTenant(ctx, ...)`
+> 経由で `Customer` → `Deal` → `Contract` →（`ContractItem`/`GrossProfit`/`Construction`/
+> `Application`/`ContractPayment`/`ContractEquipment`）と `CustomerActivity` を取得する。新規子
+> テーブル（`ContractEquipment`/`ContractPayment`）は親 `Contract.wholesalerId` 経由の相関 EXISTS
+> で分離（§16.4）。F-062 の編集は同じ正テーブルへ書き戻し、ビューは再集計のみ。
+
 ### 16.1 設計方針
 
 1. **既存集約を正とし「拡張」する。** 新たな並行案件モデルは作らない（責務重複の排除）。
@@ -2223,32 +2480,110 @@ PM エージェントが優先度を判断する未確定事項。
 5. **テナント分離**: `Contract` は `wholesalerId` を直接保持し、二次店スコープは `Contract.ownerRelationshipId`（既存）。新規子テーブルは **`Contract.wholesalerId` 経由の相関 EXISTS**（§16.4 に SQL）。`Customer` 拡張列は `Customer.wholesalerId`/`ownerRelationshipId`（既存）で従来どおり分離（CLAUDE.md #1）。
 6. **担当呼称**: 「アポ獲得者＝`tossUpUserId`」「営業担当者＝`closingUserId`」に対応づけ、部署（`tossDept`/`belongDept`）を追加（§16.6 で最終確認）。
 
-### 16.2 項目マッピング（要望 約80項目 → モデル.カラム）
+### 16.2 項目→保存先マッピング（全 約90 項目 / F-061 の 9 カテゴリ準拠）
 
-**内訳: 既存で吸収 ≈ 21、既存モデル拡張 ≈ 19、新規子テーブル ≈ 40（設備 ≈ 28 + ローン/入金 ≈ 8 + 工程/ステータス追加 ≈ 4）= 約 80。未マッピング項目なし。**
+**内訳: 既存で吸収 ≈ 22、既存モデル拡張 ≈ 20、新規 `ContractPayment` ≈ 8、新規 `ContractEquipment` ≈ 36（カテゴリ別共通列 + Json 長尾）= 約 90。未マッピング項目なし。** 各項目は §16.0 責務マトリクスの source of truth に 1 対 1 で対応する。`区分`: 既存 / 拡張(モデル) / 新規。
 
-| 要望項目 | 配置 | 区分 |
+**カテゴリ 1: 基本情報（source = `Customer`）**
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
 |---|---|---|
-| お客様名 / フリガナ / 電話番号 / メール / 郵便番号 | `Customer.name/kana/phone/email/postalCode` | 既存 |
-| 都道府県 / 市区町村 / 番地 | `Customer.prefecture/city/addressLine` | 拡張(Customer) |
-| 生年月日 / 年齢 | `Customer.birthDate`（年齢は表示時算出） | 拡張(Customer) |
-| 築年日 | `Customer.buildYear` | 拡張(Customer) |
-| アポ獲得者 / 営業担当者 | `Customer.tossUpUserId/closingUserId` | 既存(呼称) |
-| トス部署 / 所属部署 | `Customer.tossDept/belongDept` | 拡張(Customer) |
-| 流入経路 / マエカク / 備考 | `Customer.inflowRoute/maekakuStatus/note` | 既存 |
-| 商談ログ | `CustomerActivity`（§16.7） | 既存(要正式記載) |
-| ご提案金額（税込） | `Deal.proposedAmount` | 既存（暫定 `Customer.contractAmount` を移設） |
+| お客様名 | `Customer.name` | 既存 |
+| フリガナ | `Customer.kana` | 既存 |
+| 生年月日 | `Customer.birthDate` | 拡張(Customer/16-A) |
+| 年齢 | （算出: `Customer.birthDate` から表示時。DB 非保持） | 算出 |
+| 郵便番号 | `Customer.postalCode` | 既存 |
+| 都道府県 | `Customer.prefecture` | 拡張(Customer/16-A) |
+| 市区町村 | `Customer.city` | 拡張(Customer/16-A) |
+| 番地 | `Customer.addressLine` | 拡張(Customer/16-A) |
+| 電話番号 | `Customer.phone` | 既存 |
+| メールアドレス | `Customer.email` | 既存 |
+| 築年日 | `Customer.buildYear` | 拡張(Customer/16-A) |
+
+**カテゴリ 2: 体制（source = `Customer`）**
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
+|---|---|---|
+| アポ獲得者 | `Customer.tossUpUserId`（+ `tossUpRelationshipId`） | 既存(呼称) |
+| 営業担当者 | `Customer.closingUserId`（+ `closingRelationshipId`） | 既存(呼称) |
+| トス部署 | `Customer.tossDept` | 拡張(Customer/16-A) |
+| 所属部署 | `Customer.belongDept` | 拡張(Customer/16-A) |
+
+**カテゴリ 3: 契約・金額（source = `Deal` / `Contract` / `ContractPayment`）**
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
+|---|---|---|
 | ご契約日 | `Contract.contractDate` | 既存 |
-| 契約書一式URL | `Contract.fileKey`（R2）/ 任意で外部URL列 `Contract.docsUrl` | 既存/拡張(Contract) |
-| 設備ID | `Contract.equipmentSerialId` | 拡張(Contract) |
-| ローン審査コール日時 / サンキューコール日時 / 架電ステータス | `Contract.loanReviewCallAt / thankYouCallAt / callStatus` | 拡張(Contract) |
-| 不備解消ステータス / 不備内容 / 完工後ステータス | `Contract.defectStatus / defectDetail / postCompletionStatus` | 拡張(Contract) |
-| 現地調査日時(候補) / 現調日時 / 工事日時(候補) / 工事予定 / 着工日 / 完工日 / 完工ステータス / 対応事業者 / 売電開始日 | `Construction.surveyCandidates(Json)/surveyDate/constructionCandidates(Json)/plannedDate/startedDate/completedDate/status/installerId|vendorName/powerSaleStartDate` | 既存＋拡張(Construction) |
-| 認定申請ステータス / 申請種別 / 申請日 / 交付決定日 / 交付額 | `Application.status/type/submittedDate/approvedDate/grantedAmount` | 既存 |
-| 支払い回数 / ローン会社 / 頭金 / 団信契約有無 / ローン備考 / 入金日 / 代理店支払日 / 支払いステータス | `ContractPayment.*` | 新規 |
-| PV/BT/EQ/IH/AC/付帯/プレゼント — 契約有無/メーカー/型番/容量/枚数・個数/設置場所/導入状況/各種保証/詳細 | `ContractEquipment`（`category` 判別） | 新規(正規化) |
-| 総合保証・発電量保証・延長保証・自然災害保証・住設安心サポート・オプション付帯・型番②・三菱鍋型番・パワコン設置場所(新設/交換) | `ContractEquipment.warranty* / installLocation / attributes(Json)` | 新規(長尾 Json) |
-| 電気料金 / 世帯 / 住居種別 / PV・BT 契約有無(概況) | `Customer.electricBill/household/housingType/pvInstalled/batteryInstalled` | 既存（概況。詳細は ContractEquipment） |
+| 契約書一式URL | `Contract.fileKey`（R2）優先、外部 URL は `Contract.docsUrl` | 既存/拡張(Contract/16-B) |
+| ご提案金額（税込） | `Deal.proposedAmount`（契約後は `Contract.contractAmount` を併記表示） | 既存 |
+| 支払い回数 | `ContractPayment.paymentCount` | 新規(16-C) |
+| 支払いステータス | `ContractPayment.paymentStatus`（enum） | 新規(16-C) |
+| 入金日 | `ContractPayment.depositDate` | 新規(16-C) |
+| 代理店支払日 | `ContractPayment.dealerPayoutDate` | 新規(16-C) |
+
+**カテゴリ 4: ローン・団信（source = `Contract` / `ContractPayment`）**
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
+|---|---|---|
+| ローン審査コール日時 | `Contract.loanReviewCallAt` | 拡張(Contract/16-B) |
+| ローン会社 | `ContractPayment.loanCompany` | 新規(16-C) |
+| 頭金 | `ContractPayment.downPayment` | 新規(16-C) |
+| 団信契約有無 | `ContractPayment.creditLifeInsurance` | 新規(16-C) |
+| ローン備考 | `ContractPayment.loanNote` | 新規(16-C) |
+| 架電ステータス | `Contract.callStatus`（enum） | 拡張(Contract/16-B) |
+
+**カテゴリ 5: 工事・完工（source = `Construction`）**
+
+> **Construction 1:N の行選択ルール（最重要）**: `Contract.constructions` は 1:N（§3.6 / 946 行）。
+> F-061 集約ビューはカテゴリ 5 を **契約タブ（`Contract`）ごとに 1 行**で表示し、`getProjectInfo`（§16.10）は
+> 各 `Contract` に紐づく `Construction` のうち **「代表 1 件」を `pickRepresentativeConstruction()` で選定**する。
+> 選定順: ① `surveyDate`/`plannedDate`/`startedDate`/`completedDate` のいずれかが最新（= 進行中・直近の施工）の行、
+> ② 同点時は `updatedAt` 降順、③ いずれの日付も null なら `createdAt` 降順の先頭。
+> 複数 `Construction` を持つ契約（再施工・分割工事）は **代表行をカテゴリ 5 に、全 `Construction` 行を施工タブ（S-046）に展開**して欠落させない。
+> `ProjectInfoDto.constructions`（§16.9）は全件配列を保持し、`representativeConstructionId` で代表行を指す。
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
+|---|---|---|
+| 現地調査日時(候補) | `Construction.surveyCandidates`（Json） | 拡張(Construction/16-B) |
+| 工事日時(候補) | `Construction.constructionCandidates`（Json） | 拡張(Construction/16-B) |
+| 現調日時 | `Construction.surveyDate` | 既存 |
+| 着工日 | `Construction.startedDate` | 拡張(Construction/16-B) |
+| 完工日 | `Construction.completedDate` | 既存 |
+| サンキューコール日時 | `Contract.thankYouCallAt` | 拡張(Contract/16-B) |
+| 完工ステータス | `Construction.status`（enum、既存 `ConstructionStatus`） | 既存 |
+| 完工後ステータス | `Contract.postCompletionStatus`（enum） | 拡張(Contract/16-B) |
+| 不備解消ステータス | `Contract.defectStatus`（enum） | 拡張(Contract/16-B) |
+| 不備内容 | `Contract.defectDetail` | 拡張(Contract/16-B) |
+| 対応事業者名 | `Construction.installerId`（マスタ）優先 / `Construction.vendorName`（フォールバック） | 既存/拡張(Construction/16-B) |
+
+**カテゴリ 6: 認定・設備（source = `Application` / `Contract`）**
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
+|---|---|---|
+| 認定申請ステータス | `Application.status`（enum、既存 `ApplicationStatus`） | 既存 |
+| 設備ID | `Contract.equipmentSerialId` | 拡張(Contract/16-B) |
+| 売電開始日 | `Construction.powerSaleStartDate` | 拡張(Construction/16-B) |
+
+**カテゴリ 7: 設備明細（source = `ContractEquipment`、`category` 判別。1 契約に複数行）**
+
+| カテゴリ | 要望項目 | 保存先（列 or attributes キー） |
+|---|---|---|
+| PV | 契約有無 / メーカー / 型番 / 容量 / 枚数 | `contracted` / `manufacturer` / `model` / `capacity` / `quantity` |
+| PV | 総合保証・発電量保証 / 延長保証 | `warrantyStandard` / `warrantyExtended`（発電量保証は `attributes.pvOutputWarranty`） |
+| PV | パワコン設置場所(新設) / オプション付帯 | `installLocation`（種別 `attributes.pcsType="NEW"`） / `attributes.pvOption` |
+| BT | 契約有無 / 設置場所 / メーカー / 型番 / 容量 | `contracted` / `installLocation` / `manufacturer` / `model` / `capacity` |
+| BT | 自然災害保証(有償) / 延長保証 | `warrantyDisaster` / `warrantyExtended` |
+| EQ | 契約有無 / 延長保証 / 導入状況 / 型番 | `contracted` / `warrantyExtended` / `introducedStatus`（enum 文字列） / `model` |
+| IH | 契約有無 / 導入状況 / 型番 | `contracted` / `introducedStatus` / `model` |
+| AC | 契約有無 / 住設安心サポート / 契約個数 / 型番①② | `contracted` / `attributes.acWarrantySupport` / `quantity` / `model` + `attributes.model2` |
+| 付帯商材 | 契約有無 / 契約個数 / 契約詳細 / 型番①② / パワコン設置場所(交換) | `contracted` / `quantity` / `detail` / `model` + `attributes.model2` / `installLocation`（`attributes.pcsType="REPLACE"`） |
+| プレゼント品 | 契約有無 / 個数 / 詳細 / 三菱鍋型番 | `contracted` / `quantity` / `detail` / `attributes.nabeModel` |
+
+**カテゴリ 8: 商談ログ（source = `CustomerActivity`、§16.7）** — 時系列表示（F-038）。`category`/`amount`/`occurredAt`/`body` を読む。
+
+**カテゴリ 9: 備考（source = `Customer.note`）**
+
+**（概況・補助）** 電気料金 / 世帯 / 住居種別 / PV・BT 契約有無(概況) = `Customer.electricBill/household/housingType/pvInstalled/batteryInstalled`（既存。詳細スペックは `ContractEquipment`）。申請種別 / 申請日 / 交付決定日 / 交付額 = `Application.type/submittedDate/approvedDate/grantedAmount`（既存）。流入経路 / マエカク = `Customer.inflowRoute/maekakuStatus`（既存）。
 
 ### 16.3 Prisma スキーマ案（既存モデルへの追加 + 新規 2 テーブル）
 
@@ -2270,9 +2605,12 @@ model Customer {
 }
 
 // ── Contract 追加列（運用ステータス・コール・設備ID） ──
-enum CallStatus           { NONE SCHEDULED DONE NG }            // 架電ステータス
-enum DefectStatus         { NONE OPEN RESOLVED }               // 不備解消ステータス
-enum PostCompletionStatus { NONE IN_PROGRESS DONE }            // 完工後ステータス
+// 架電ステータス: 未架電 / 予定 / 完了 / 不在・折返し待ち / 不通
+enum CallStatus           { NONE SCHEDULED DONE CALLBACK_WAIT NG }
+// 不備解消ステータス: なし / 不備あり(未解消) / 解消済み
+enum DefectStatus         { NONE OPEN RESOLVED }
+// 完工後ステータス: 未着手 / 対応中 / 完了
+enum PostCompletionStatus { NONE IN_PROGRESS DONE }
 
 model Contract {
   // ...既存（§3.6）...
@@ -2300,6 +2638,8 @@ model Construction {
 
 // ── 新規 1: 設備スペック明細（PV/BT/EQ/IH/AC/付帯/プレゼント） ──
 enum EquipmentCategory { PV BT EQ IH AC ACCESSORY GIFT }
+// 設備導入状況（EQ/IH 等）: 未導入 / 既設 / 新規導入
+enum EquipmentIntroStatus { NONE EXISTING NEW }   // introducedStatus に文字列として格納（または enum 化、§16.8-3）
 
 model ContractEquipment {
   id              String   @id @default(cuid())
@@ -2335,6 +2675,7 @@ model ContractEquipment {
 }
 
 // ── 新規 2: ローン・入金 ──
+// 支払いステータス: 未入金 / 一部入金 / 入金済み
 enum ContractPaymentStatus { UNPAID PARTIAL PAID }
 
 model ContractPayment {
@@ -2356,6 +2697,8 @@ model ContractPayment {
 ```
 
 > `ContractItem`（§3.6）に `equipment ContractEquipment[]` の逆リレーション宣言を追加（Prisma 双方向要件）。
+>
+> **enum の再利用（新規追加しない）**: 「完工ステータス」は既存 `Construction.status`（`ConstructionStatus`、§3.6）、「認定申請ステータス」は既存 `Application.status`（`ApplicationStatus`、§3.6）をそのまま F-061 に表示する（本章で別 enum を新設しない）。両者の選択肢が F-061 のバッジ表示に十分かは §16.8-4 で業務確定する。
 
 ### 16.4 RLS / インデックス / DTO
 
@@ -2377,7 +2720,7 @@ model ContractPayment {
 
   二次店スコープは `Contract.ownerRelationshipId`（既存）でアプリ層 `DealerScopeService`（§6.4）が制御。`Construction`/`Application` 追加列は既存テーブルの既存ポリシーをそのまま継承（変更不要）。
 - **インデックス**: `ContractEquipment(contractId, category)`、`ContractPayment(contractId)`（`@unique`）。検索要件確定後に `Contract(wholesalerId, callStatus)` 等の複合を追加。
-- **DTO / マスキング**: 二次店ロールへ仕入関連を返さない（本拡張は仕入値を持たない。原価派生を足す場合は DTO 層 destructure-and-rest／#5）。PII（生年月日・住所詳細）は `MaskingService`（§6.5）対象に追加（既定: 生年月日は年代のみ、住所は市区町村まで／#6）。全クエリは `withTenant(ctx, ...)` 経由（#1 二重防御）。
+- **DTO / マスキング（F-061 集約ビュー）**: F-061 のレスポンスは `ProjectInfoDto`（§16.10）に集約する。二次店ロールには **仕入値・仕入合計・その他原価・施工費内訳を DTO 層で物理除去**（destructure-and-rest、`Object.keys` に出さない／#5）。本ビューが表示する金額は二次店に対し「契約金額 / 提案金額 / インセンティブ対象粗利 / インセンティブ額」に限定。PII（氏名・電話・住所・生年月日）は `MaskingService`（§6.5）を必ず通す。`maskAddress` は都道府県+市区町村まで、`maskBirthDate(birthDate, viewer)` は年代のみ（例: `40代`）を新設し §6.5 に追加する。`wholesaler_admin` の非マスク閲覧は `revealPii()` 経由で `AuditLog(REVEAL_PII)` 記録（#6）。`saas_admin` は常時マスク。全クエリは `withTenant(ctx, ...)` 経由（#1 二重防御）、子テーブルは `Contract.wholesalerId` 経由相関 EXISTS。
 
 ### 16.5 トレーサビリティ（F / S）
 
@@ -2388,17 +2731,19 @@ model ContractPayment {
 | `Construction` 追加 | F-044（施工状況） | S-046 |
 | `Application`（既存） | F-045（申請管理） | S-047 |
 | `ContractPayment`（ローン・入金） | F-040 系の付随運用（入金管理） | S-041 / 顧客詳細 |
+| 案件情報 統合ビュー（9 カテゴリ集約読み取り） | **F-061**（顧客詳細 案件情報 統合ビュー、P0） | **S-033 / S-113 顧客詳細「案件情報」セクション** |
+| 案件情報 編集（運用情報・設備明細・ローン入金の CRUD） | **F-062**（案件情報 編集、P1） | S-113 顧客詳細（編集ダイアログ） / S-040, S-041, S-046, S-047 経路流用 |
 
 ### 16.6 段階移行プラン
 
-| 段階 | 内容 | マイグレーション / リスク対応 |
-|---|---|---|
-| 16-A | `Customer` 連絡先構造化（prefecture/city/addressLine/birthDate/buildYear/tossDept/belongDept） | `Customer` ALTER。`address`→`addressLine` は当面**併存**（破壊的分解はしない）。年齢は非保持（算出） |
-| 16-B | `Contract` 追加列 + `Construction` 追加列。暫定 `Customer.contractAmount/contractExpectedDate/constructionCompletedDate/subsidy*` を既存 `Contract`/`Construction`/`Application` へ移設 | **競合ルール**: 当該顧客に既存 `Contract` があればそれを正とし暫定列は破棄、無ければ暫定値から `Contract`(下書き) を生成。移行前にバックアップ、件数照合（暫定列 NOT NULL 件数 = 移行後件数）を実施。`Customer` 暫定列は移行確認後に DROP |
-| 16-C | 新規 `ContractEquipment` / `ContractPayment` + enum。`Customer.pvInstalled/batteryInstalled` を PV/BT 初期行（`contracted`）へ移行 | CREATE TABLE + RLS（§16.4）+ 軽量移行 |
-| 16-D | 顧客詳細 UI を「案件（契約・施工・申請・入金）」「設備」タブへ再編。一覧/検索フィルタ拡張 | UI のみ |
+| 段階 | 内容 | F/区分 | マイグレーション / リスク対応 |
+|---|---|---|---|
+| 16-A | `Customer` 連絡先構造化（prefecture/city/addressLine/birthDate/buildYear/tossDept/belongDept） | F-031 基盤 / **実装済** | `Customer` ALTER。`address`→`addressLine` は当面**併存**（破壊的分解はしない）。年齢は非保持（算出）。**完了済（現行 schema.prisma に存在）** |
+| 16-B | `Contract` 追加列 + `Construction` 追加列。暫定 `Customer.contractAmount/contractExpectedDate/constructionCompletedDate/subsidy*` を既存 `Contract`/`Construction`/`Application` へ移設。enum（`CallStatus`/`DefectStatus`/`PostCompletionStatus`）追加 | F-062 編集の前提 | **競合ルール**: 当該顧客に既存 `Contract` があればそれを正とし暫定列は破棄、無ければ暫定値から `Contract`(下書き) を生成。移行前にバックアップ、件数照合（暫定列 NOT NULL 件数 = 移行後件数）を実施。`Customer` 暫定列は移行確認後に DROP |
+| 16-C | 新規 `ContractEquipment` / `ContractPayment` + enum（`EquipmentCategory`/`ContractPaymentStatus`）。`Customer.pvInstalled/batteryInstalled` を PV/BT 初期行（`contracted`）へ移行 | F-062 設備明細・ローン入金編集の前提 | CREATE TABLE + RLS（§16.4）+ 軽量移行 |
+| 16-D | **F-061 集約読み取りローダ `getProjectInfo`（§16.10）+ 顧客詳細「案件情報」9 カテゴリ表示**。続けて F-062 編集 UI（運用情報・設備明細・ローン入金）と一覧/検索フィルタ拡張 | **F-061（P0 閲覧）/ F-062（P1 編集）** | UI + 読み取りローダ（DDL なし）。**F-061 閲覧は 16-B/16-C の列・テーブルが揃った時点で有効化**（未入力項目は「未設定」表示で欠落させない）。F-062 編集は各 source of truth へ書き戻し |
 
-> 16-B は Required Change 1 の責務確定（§16.0）に依存。各段階は `/iterate` 単位。移行スクリプトは冪等・ロールバック可能に書く。
+> 16-B は責務確定（§16.0）に依存。各段階は `/iterate` 単位。移行スクリプトは冪等・ロールバック可能に書く。**F-061（P0）は読み取り専用で DDL を伴わないため、16-B/16-C の列が揃えば 16-D の前半（`getProjectInfo` + 表示）として優先実装でき、F-062（P1 編集）と分離してリリース可能**。
 
 ### 16.7 既存子テーブルの正式記載（§3.5 / §3.9 への補追記が必要）
 
@@ -2418,13 +2763,969 @@ model ContractPayment {
 4. **ステータス enum 値** — 架電 / 不備 / 完工後 / 支払の実運用選択肢を業務側で確定。
 5. **`ContractEquipment` と `ContractItem` の関係** — 価格明細(`ContractItem`)とスペック明細(`ContractEquipment`)を `contractItemId` で 1:1 リンクするか、独立運用とするか（粗利計算は `ContractItem` 側で完結する前提）。
 
+### 16.9 `ProjectInfoDto`（F-061 集約ビューのレスポンス型）
+
+F-061「顧客詳細 案件情報 統合ビュー」の `getProjectInfo`（§16.10）が返す型。**9 カテゴリ（§16.2）に対応する
+ネスト構造**を持ち、設備明細はカテゴリ別配列、年齢は算出値（DB 非保持）として含める。
+
+**仕入値・原価系フィールドの物理除外（CLAUDE.md #5 / F-061 受け入れ基準「二次店 JSON に仕入値非存在」）**:
+二次店ロール（`DEALER_*`）向けレスポンスでは、下表の原価系フィールドを **DTO 層 destructure-and-rest で物理除去**し、
+**`Object.keys(dto)` に一切現れない**こと（`null`/`undefined` で残さない＝シリアライズ後の JSON 文字列にキー名が出ない）。
+
+| 物理除外フィールド | 所在 | 二次店での扱い |
+|---|---|---|
+| `snapshotPurchasePrice` | `contractItems[].`（仕入スナップショット） | キーごと削除 |
+| `purchaseTotal` | `financials.`（仕入合計） | キーごと削除 |
+| `dealerTotal` | `financials.`（代理店仕入合計） | キーごと削除 |
+| `constructionFee` / `constructionFeeBreakdown` | `financials.` / `constructions[].fee` | キーごと削除 |
+| `otherCost` | `financials.`（その他原価） | キーごと削除 |
+
+二次店に表示可能な金額は **`contractAmount` / `proposedAmount` / `incentiveGrossProfit` / `incentiveAmount`** に限定（§16.4）。
+
+```typescript
+// 二次店レスポンスで物理除外するキーの共通集合（Object.keys に出さない）
+export const DEALER_OMITTED_FINANCIAL_KEYS = [
+  'snapshotPurchasePrice', 'purchaseTotal', 'dealerTotal',
+  'constructionFee', 'constructionFeeBreakdown', 'otherCost',
+] as const;
+
+// ── 集約レスポンス（9 カテゴリ） ──
+export type ProjectInfoDto = {
+  // カテゴリ 1: 基本情報（PII は MaskingService 適用済み文字列）
+  basic: {
+    customerId: string;
+    name: string;            // maskName 適用後
+    kana: string | null;
+    birthDate: string;       // maskBirthDate 適用後（'40代' / 'YYYY-MM-DD' / '未設定'）
+    age: number | null;      // 算出値（FULL 閲覧者のみ数値、マスク時は null）
+    postalCode: string | null;
+    address: string;         // maskAddress 適用後（都道府県+市区町村まで or full）
+    phone: string;           // maskPhone 適用後
+    email: string | null;
+    buildYear: string | null;
+  };
+  // カテゴリ 2: 体制
+  organization: {
+    tossUpUserName: string | null;   // アポ獲得者（表示名）
+    closingUserName: string | null;  // 営業担当者（表示名）
+    tossDept: string | null;
+    belongDept: string | null;
+  };
+  // カテゴリ 3+4: 契約・金額・ローン・団信（契約タブごとに 1 件。1:N 対応）
+  contracts: Array<{
+    contractId: string;
+    contractDate: string | null;
+    docsUrl: string | null;          // fileKey は 15 分 pre-signed URL に解決済（§9）
+    proposedAmount: number | null;
+    contractAmount: number | null;
+    // ローン・団信（ContractPayment）
+    paymentCount: number | null;
+    paymentStatus: 'UNPAID' | 'PARTIAL' | 'PAID' | null;
+    depositDate: string | null;
+    dealerPayoutDate: string | null;
+    loanReviewCallAt: string | null;
+    loanCompany: string | null;
+    downPayment: number | null;
+    creditLifeInsurance: boolean | null;
+    loanNote: string | null;
+    callStatus: 'NONE' | 'SCHEDULED' | 'DONE' | 'CALLBACK_WAIT' | 'NG';
+    // カテゴリ 5 代表行 + 設備明細はこの contractId に紐づく
+    representativeConstructionId: string | null;
+    equipment: EquipmentByCategory;  // ↓カテゴリ 7
+  }>;
+  // カテゴリ 5: 工事・完工（全 Construction 行。代表行は各 contract.representativeConstructionId が指す）
+  constructions: Array<{
+    constructionId: string;
+    contractId: string;
+    surveyDate: string | null;
+    surveyCandidates: unknown | null;
+    constructionCandidates: unknown | null;
+    startedDate: string | null;
+    completedDate: string | null;
+    powerSaleStartDate: string | null;
+    status: string;                  // 既存 ConstructionStatus
+    postCompletionStatus: 'NONE' | 'IN_PROGRESS' | 'DONE';
+    defectStatus: 'NONE' | 'OPEN' | 'RESOLVED';
+    defectDetail: string | null;
+    vendorName: string | null;       // installer マスタ名 or フォールバック
+    thankYouCallAt: string | null;
+    // fee は二次店レスポンスで物理除外（DEALER_OMITTED_FINANCIAL_KEYS）
+    fee?: number | null;             // wholesaler/saas のみ存在
+  }>;
+  // カテゴリ 6: 認定・設備
+  applications: Array<{
+    applicationId: string;
+    status: string;                  // 既存 ApplicationStatus
+    type: string | null;
+    submittedDate: string | null;
+    approvedDate: string | null;
+    grantedAmount: number | null;
+    equipmentSerialId: string | null;
+  }>;
+  // カテゴリ 8: 商談ログ（CustomerActivity、時系列）
+  activities: Array<{
+    activityId: string;
+    category: string;                // 'quote' / 'tossup' 等
+    amount: number | null;
+    occurredAt: string;
+    body: string | null;
+  }>;
+  // カテゴリ 9: 備考 + 概況
+  note: string | null;
+  overview: {
+    electricBill: number | null;
+    household: number | null;
+    housingType: string | null;
+    inflowRoute: string | null;
+    maekakuStatus: string | null;
+  };
+  // 金額サマリ。二次店レスポンスでは purchaseTotal/dealerTotal/constructionFee/otherCost が
+  // Object.keys に出ない（DEALER_OMITTED_FINANCIAL_KEYS）。
+  financials: {
+    contractAmount: number | null;
+    proposedAmount: number | null;
+    incentiveGrossProfit: number | null;  // インセンティブ対象粗利（二次店可視）
+    incentiveAmount: number | null;        // インセンティブ額（二次店可視）
+    purchaseTotal?: number;                // wholesaler/saas のみ存在
+    dealerTotal?: number;                  // wholesaler/saas のみ存在
+    constructionFee?: number;              // wholesaler/saas のみ存在
+    constructionFeeBreakdown?: unknown;    // wholesaler/saas のみ存在
+    otherCost?: number;                    // wholesaler/saas のみ存在
+  };
+};
+
+// カテゴリ 7: 設備明細（ContractEquipment、category 判別。1 契約に複数行）
+export type EquipmentByCategory = {
+  PV: EquipmentItemDto[];
+  BT: EquipmentItemDto[];
+  EQ: EquipmentItemDto[];
+  IH: EquipmentItemDto[];
+  AC: EquipmentItemDto[];
+  ACCESSORY: EquipmentItemDto[];
+  GIFT: EquipmentItemDto[];
+};
+
+export type EquipmentItemDto = {
+  id: string;
+  contracted: boolean;
+  manufacturer: string | null;
+  model: string | null;
+  capacity: string | null;
+  quantity: number | null;
+  installLocation: string | null;
+  introducedStatus: string | null;
+  warrantyStandard: boolean | null;
+  warrantyExtended: boolean | null;
+  warrantyDisaster: boolean | null;
+  detail: string | null;
+  attributes: Record<string, unknown> | null;  // §16.3 の長尾キー
+  // snapshotPurchasePrice は二次店レスポンスで物理除外（contractItem 経由原価を出さない）
+  snapshotPurchasePrice?: number | null;        // wholesaler/saas のみ存在
+};
+```
+
+### 16.10 `getProjectInfo(ctx, customerId)`（F-061 集約読み取りローダ）
+
+**責務**: F-061 集約ビューを `Customer` 起点に正テーブルを横断結合して **読むだけ**（§16.0 / 16-D）。書き込みは行わない。
+
+```typescript
+// apps/web/lib/customer/get-project-info.ts
+export function getProjectInfo(
+  ctx: TenantContext,
+  customerId: string,
+): Promise<ProjectInfoDto>;
+```
+
+**読み取り経路（`withTenant(ctx, ...)` 経由・二重防御 #1）**:
+
+1. `withTenant(ctx, tx => ...)` の内側で `Customer`（`@id = customerId`）を起点に取得。RLS は
+   `Customer.wholesalerId`、二次店スコープは `Customer.ownerRelationshipId`（既存）。
+2. `Customer` → `Deal` →（`Contract`）の順にたどり、各 `Contract` 配下の
+   `ContractItem` / `GrossProfit` / `Construction[]` / `Application` / `ContractPayment` / `ContractEquipment` を取得。
+   新規子テーブル（`ContractEquipment` / `ContractPayment`）は親 `Contract.wholesalerId` 経由の相関 EXISTS（§16.4）で分離。
+3. `CustomerActivity`（カテゴリ 8）は `Customer` 起点の相関 EXISTS（§16.7）で取得し `occurredAt` 降順。
+4. `Construction[]`（1:N）は **`pickRepresentativeConstruction()`（§16.2 行選択ルール）で契約ごとに代表 1 件を選定**し、
+   `contracts[].representativeConstructionId` に格納。全行は `constructions[]` 配列に保持して欠落させない。
+5. 設備明細は `category` で `EquipmentByCategory` の 7 配列に振り分け（§16.2 カテゴリ 7）。
+6. `age` は `Customer.birthDate` から実行時に算出（DB 非保持。§16.2 算出）。
+
+**マスキング・スコープの適用順序（必須）**:
+
+1. **`withTenant` で RLS/extension の二重防御を確立**（最外）。
+2. **`DealerScopeService`（§6.4）で二次店スコープ判定** → `ViewerContext` を構築。
+3. **DTO 整形時に `MaskingService`（§6.5）を適用**: `maskName` / `maskPhone` / `maskAddress` /
+   `maskBirthDate`（年代のみ）を `basic.*` に適用。`age` はマスク時 `null`。
+   `wholesaler_admin` の非マスク閲覧は `revealPii()` 経由で `AuditLog(REVEAL_PII)` 記録（#6）。`saas_admin` は常時マスク。
+4. **二次店ロールでは原価系フィールドを destructure-and-rest で物理除去**（`DEALER_OMITTED_FINANCIAL_KEYS`、
+   `Object.keys` に出さない／#5）。`financials.purchaseTotal/dealerTotal/constructionFee/otherCost` /
+   `constructions[].fee` / `equipment.*[].snapshotPurchasePrice` を削除し、
+   表示金額は `contractAmount` / `proposedAmount` / `incentiveGrossProfit` / `incentiveAmount` に限定（§16.4）。
+
+> エラー処理: `customerId` が現テナントスコープ外（RLS で 0 件）の場合は `NotFoundError`（§9 各層方針）を throw。
+> F-062 編集（P1）は本ローダを使わず各 source of truth へ書き戻し、F-061 ビューは再集計のみ。
+
 ---
 
-## 17. 変更履歴
+## 17. アポ取り顧客 住環境・家族属性ヒアリングデータモデル（F-063 拡張設計）
+
+> レーンイベント等の催事でトスアップされたアポ取り顧客について、現場ヒアリングで取得した
+> **住環境（既設設備の現況）・家族属性（年齢構成）・提案商材** を構造化して永続化する拡張設計。
+> 本章は **F-063 アポ取り顧客 住環境・家族属性ヒアリング管理（P1）** を完全に支える。
+> 設計方針は §16 を踏襲する。すなわち **F-063 は F-031 顧客登録・編集の入力範囲拡張**であり、
+> 新規トップレベル概念・並行集約は作らない（CLAUDE.md #3）。顧客本人属性・家族属性・提案商材・
+> 分離電話・マエカク希望日時は `Customer`（拡張）を、アポ取得日は `Appointment`（拡張）を、
+> 既設設備の現況のみ新規子テーブル `CustomerExistingEquipment`（`Customer` の子）を source of truth とする。
+>
+> **重要な概念分離（design-reviewer 指摘の事前反映 / docs/02 F-063）**: 本章が扱う「既設設備」は
+> **ヒアリング時点の顧客宅の現況**（ガス給湯機が付いている / エコキュート設置済み / 太陽光が乗っている）であり、
+> **提案前のクロスセル判定材料**である。§16-C の `ContractEquipment` は **契約成立後に当社が販売・施工する
+> 設備のスペック明細**（価格スナップショット連動）であり、目的・ライフサイクル・source of truth が異なる。
+> 両者は **別概念として別テーブル**（既設設備は `Customer` 子、契約後設備は `Contract` 子）で管理し、
+> データを混在・相互参照させない。F-061 統合ビューでも「既設（現況）」と「契約設備」を別カテゴリ表示する（§17.7）。
+
+### 17.0 既存モデルとの責務マトリクス（最重要）
+
+F-063 で追加・拡張する項目の **source of truth を一意に確定**する。§16.0 の責務マトリクスを拡張するものであり、
+顧客本人属性は `Customer`（既存・拡張）、既設設備の現況のみ新規子テーブルを担う。
+
+| 概念 | source of truth（正） | 本拡張での扱い |
+|---|---|---|
+| 顧客本人年齢 | （算出: `Customer.birthDate` から表示時。DB 非保持。§16.2 算出） | 既存を踏襲。**家族年齢とは別概念** |
+| 家族年齢（ご主人 / 奥様 / お子様） | `Customer.husbandAge` / `wifeAge` / `childAge`（**拡張**） | **ヒアリング時点のスナップショット値を保持**（生年月日でなく年齢値。docs/02 Assumption 20）。本人年齢の算出とは異なる |
+| 家族構成 | `Customer.household`（既存・自由記述） | 既存を流用（docs/02 Open Question 20: MVP は自由記述 + 代表 3 年齢） |
+| 案内者（ご主人のみ / 奥様のみ / ご夫婦お揃い / その他） | `Customer.guideAttendee`（**拡張**、enum） | 新設。`faceToFace`（主権者同席フラグ）とは別概念・別列（§17.1.6） |
+| 主権者同席フラグ（現状デモ層のみ） | `Customer.faceToFace`（**拡張**、Boolean?） | デモ層（`customer-report-data.ts` 等）から永続化。`guideAttendee` と別列 |
+| ご提案商材 | `Customer.proposedProduct`（**拡張**、自由記述 + 任意で商品マスタ参照 `proposedProductId`） | 新設。`Deal.proposedProduct`（商談時の提案）とは別概念（トスアップ時の提案商材） |
+| 固定電話 / 携帯電話 | `Customer.landlinePhone` / `mobilePhone`（**拡張**） | 現行 `Customer.phone` 単一を 2 系統に分離。`phone` は当面**併存**（後方互換、§17.6） |
+| マエカク電話希望日時 | `Customer.maekakuPreferredAt`（**拡張**） | 現行 `maekakuStatus`（有無のみ）に加え希望日時を永続化。F-035 マエカクキューの並びに利用 |
+| 既設設備の現況（ガス給湯機 / エコキュート / 太陽光） | **新規 `CustomerExistingEquipment`**（`Customer` の子） | `ContractEquipment`（契約後設備）とは別概念・別テーブル。混在禁止 |
+| アポイント取得日 | `Appointment.acquiredAt`（**拡張**） | 現行 `Appointment.createdAt`（レコード作成日時）を近似運用していたものを明示項目化（§17.1.7） |
+
+> **読み取り経路**: F-063 のヒアリング項目は F-031 顧客フォーム（編集ダイアログ）と F-061 統合ビューの
+> 「ヒアリング（住環境・家族）」カテゴリ（§17.7）で読まれる。`getProjectInfo`（§16.10）と
+> `getCustomerHearing`（§17.9）が `withTenant(ctx, ...)` 経由で `Customer` → `CustomerExistingEquipment[]`
+> と `Appointment.acquiredAt` を取得する。新規子テーブルは親 `Customer.wholesalerId` 経由の相関 EXISTS で分離（§17.4）。
+
+### 17.1 設計方針
+
+1. **F-031 顧客モデルを正とし「拡張」する。** 新たな並行ヒアリングモデルは作らない（責務重複の排除、§16.1.1 と同方針）。
+2. **新設は 1 テーブルのみ**: `CustomerExistingEquipment`（既設設備の現況）。`Customer` の子。`ContractEquipment` と**別テーブル**。
+3. **家族年齢は値を保持**（生年月日から算出しない）。ヒアリング時点のスナップショットであり、`Customer.birthDate` から算出する本人年齢（§16.2）とは別概念（docs/02 Assumption 20）。`husbandAge` / `wifeAge` / `childAge` を `Int?` で持つ。
+4. **既設設備は「カテゴリ判別子 + 有無 + 設置日 + メーカー + 容量 + 枚数 + `attributes Json?`」**。ガス給湯機は有無 3 値のみ、エコキュート・太陽光は詳細列を持つ（§17.3）。長尾属性は `attributes` に逃がす（§16.3 と同方針）。
+5. **テナント分離**: 既設設備は親 `Customer.wholesalerId` 経由の相関 EXISTS（§17.4 に SQL、§16.4 と同パターン）。`Customer` 拡張列は `Customer.wholesalerId`/`ownerRelationshipId`（既存）で従来どおり分離。`Appointment.acquiredAt` は親 `Appointment`（`customer` 経由）の既存ポリシーを継承（変更不要）。
+6. **`guideAttendee`（案内者）と `faceToFace`（主権者同席フラグ）は別概念・別列**。`guideAttendee` は「誰が案内ブースに来たか（ご主人のみ / 奥様のみ / ご夫婦お揃い / その他）」、`faceToFace` は「主権者が同席して話を聞いたか」を表す。docs/02 F-063 の明示に従い別列化する。`faceToFace` は現状 DB 未存在（デモ層 `customer-report-data.ts` のみ）であり、本拡張で `Boolean?` として永続化する。
+7. **金額・粗利は持たない**。本機能は仕入値・原価を一切扱わず、該当フィールドが DTO に存在しない（CLAUDE.md #5）。既設設備の容量・枚数は**スペック値**であり価格ではない。
+
+### 17.2 項目→保存先マッピング（docs/02 F-063 全項目 / 19 項目準拠）
+
+各項目は §17.0 責務マトリクスの source of truth に 1 対 1 で対応する。`区分`: 既存 / 拡張(Customer/17-A) / 拡張(Appointment/17-A) / 新規(17-B)。
+**既存再利用 ≈ 7、`Customer` 拡張 ≈ 8、`Appointment` 拡張 ≈ 1、新規 `CustomerExistingEquipment` ≈ 9（カテゴリ別共通列 + Json 長尾）。未マッピング項目なし。**
+
+**A. 顧客本人・連絡先・体制（source = `Customer`、F-031 既存項目の再利用 + 構造化）**
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
+|---|---|---|
+| お客様名 / フリガナ | `Customer.name` / `Customer.kana` | 既存 |
+| 郵便番号 / 都道府県 / 市区町村・番地 | `Customer.postalCode` / `prefecture` / `city` + `addressLine` | 既存（§16-A 構造化済） |
+| トスアップ部署 | `Customer.tossDept` | 既存（§16-A） |
+| 営業担当者（トスアップ / クロージング） | `Customer.tossUpUserId`（+`tossUpRelationshipId`） / `closingUserId`（+`closingRelationshipId`） | 既存（呼称、§16.1.6） |
+| 家族構成 | `Customer.household` | 既存（自由記述、流用） |
+| 固定電話 | `Customer.landlinePhone` | 拡張(Customer/17-A) |
+| 携帯電話 | `Customer.mobilePhone` | 拡張(Customer/17-A) |
+
+**B. 家族属性・案内者・提案商材・マエカク希望（source = `Customer`、新規ヒアリング項目）**
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
+|---|---|---|
+| ご主人年齢 | `Customer.husbandAge`（`Int?`、ヒアリング値） | 拡張(Customer/17-A) |
+| 奥様年齢 | `Customer.wifeAge`（`Int?`） | 拡張(Customer/17-A) |
+| お子様年齢 | `Customer.childAge`（`Int?`、代表 1 名。複数子は MVP 範囲外、Open Question 20） | 拡張(Customer/17-A) |
+| 案内者 | `Customer.guideAttendee`（enum: `HUSBAND` / `WIFE` / `BOTH` / `OTHER`） | 拡張(Customer/17-A) |
+| 主権者同席フラグ | `Customer.faceToFace`（`Boolean?`、`guideAttendee` と別概念・別列。§17.1.6） | 拡張(Customer/17-A) |
+| ご提案商材（自由記述） | `Customer.proposedProduct`（`String?`） | 拡張(Customer/17-A) |
+| ご提案商材（商品マスタ参照、任意） | `Customer.proposedProductId`（`String?` → `Product.id`） | 拡張(Customer/17-A) |
+| マエカク電話希望日時 | `Customer.maekakuPreferredAt`（`DateTime?`） | 拡張(Customer/17-A) |
+
+**C. 既設設備の現況（source = `CustomerExistingEquipment`、`category` 判別。1 顧客に複数行）**
+
+> **`ContractEquipment`（契約後設備）と別概念・別テーブル**（§17 冒頭の重要分離 / docs/02 F-063）。
+> ヒアリング時点の現況のみを保持し、契約・価格・粗利には一切連動しない。
+
+| カテゴリ (`category`) | 要望項目 | 保存先（列 or attributes キー） | 区分 |
+|---|---|---|---|
+| `GAS_WATER_HEATER`（ガス給湯機） | 設置有無（あり / なし / 不明） | `installed`（enum `ExistingEquipmentPresence`: `YES` / `NO` / `UNKNOWN`） | 新規(17-B) |
+| `ECO_CUTE`（エコキュート） | 設置有無 / 設置日 / メーカー | `installed` / `installDate` / `maker` | 新規(17-B) |
+| `PV`（太陽光既設） | 設置有無 / 設置日 / メーカー / 容量[kW] / 枚数 | `installed` / `installDate` / `maker` / `capacityKw`(`Decimal?`) / `panelCount`(`Int?`) | 新規(17-B) |
+| （拡張余地） | 長尾属性（機種・型番等） | `attributes`（Json?、`{ model?: string, note?: string }`） | 新規(17-B) |
+
+> **クロスセル判定材料（docs/02 F-063 業務ルール）**: `GAS_WATER_HEATER` の `installed=YES` → エコキュート提案候補、
+> `ECO_CUTE` の `installed=YES`（設置日・メーカー保持）→ 蓄電池/太陽光クロスセル、`PV` の `installed=YES`（容量・枚数保持）→
+> 蓄電池/増設提案。判定は **材料保持のみ**で自動提案はしない（人間判断、docs/01 §4.3）。F-035 / F-038 でクロスセル候補バッジ表示（§17.8）。
+> MVP のバッジ判定は **有無ベース**（経年判定は Phase 2、docs/02 Open Question 21）。
+
+**D. アポ取得日（source = `Appointment`）**
+
+| 要望項目 | 保存先（1 対 1） | 区分 |
+|---|---|---|
+| アポイント取得日 | `Appointment.acquiredAt`（`DateTime?`、明示項目。現行 `createdAt` 近似運用を項目化。§17.1.7） | 拡張(Appointment/17-A) |
+
+### 17.3 Prisma スキーマ案（既存モデルへの追加 + 新規 1 テーブル）
+
+```prisma
+// ── Customer 追加列（連絡先分離・家族属性・案内者・提案商材・マエカク希望） ──
+// 案内者: ご主人のみ / 奥様のみ / ご夫婦お揃い / その他
+enum GuideAttendee { HUSBAND WIFE BOTH OTHER }
+
+model Customer {
+  // ...既存（§3.5 / §16.3）...
+  landlinePhone     String?        // 固定電話（現 phone 単一を分離。phone は当面併存／§17.6）
+  mobilePhone       String?        // 携帯電話
+  husbandAge        Int?           // ご主人年齢（ヒアリング値。本人年齢算出とは別概念）
+  wifeAge           Int?           // 奥様年齢
+  childAge          Int?           // お子様年齢（代表 1 名。MVP）
+  guideAttendee     GuideAttendee? // 案内者（faceToFace と別概念・別列）
+  faceToFace        Boolean?       // 主権者同席フラグ（デモ層から永続化。guideAttendee と別列）
+  proposedProduct   String?        // ご提案商材（自由記述・トスアップ時の提案）
+  proposedProductId String?        // ご提案商材（商品マスタ参照、任意）
+  maekakuPreferredAt DateTime?     // マエカク電話希望日時（maekakuStatus と併存）
+  // household（家族構成・自由記述）は既存を流用
+
+  existingEquipments CustomerExistingEquipment[]
+  proposedProductRef Product? @relation("CustomerProposedProduct", fields: [proposedProductId], references: [id], onDelete: SetNull)
+}
+
+// ── Appointment 追加列（アポ取得日） ──
+model Appointment {
+  // ...既存（§3.5 / schema.prisma 1136 行）...
+  acquiredAt DateTime?  // アポイント取得日（現 createdAt 近似運用を明示項目化／§17.1.7）
+}
+
+// ── 新規: 既設設備の現況（ヒアリング時点。ContractEquipment とは別概念・別テーブル） ──
+// !! ContractEquipment（§16-C, 契約後の販売・施工設備のスペック明細）と混同しないこと。
+//    本テーブルは提案前のクロスセル判定材料であり、契約・価格・粗利に一切連動しない。
+enum ExistingEquipmentCategory { GAS_WATER_HEATER ECO_CUTE PV }
+// 設置有無 3 値: あり / なし / 不明
+enum ExistingEquipmentPresence { YES NO UNKNOWN }
+
+model CustomerExistingEquipment {
+  id          String                    @id @default(cuid())
+  customerId  String
+  category    ExistingEquipmentCategory
+  installed   ExistingEquipmentPresence @default(UNKNOWN) // 設置有無
+  installDate DateTime?                 // 設置日（ECO_CUTE/PV。未来日不可・§17.4）
+  maker       String?                   // メーカー（ECO_CUTE/PV）
+  capacityKw  Decimal? @db.Decimal(8, 2) // 容量[kW]（PV のみ。0 以上）
+  panelCount  Int?                      // 枚数（PV のみ。0 以上）
+  // attributes Json キー定義（任意）:
+  //   model: string  機種・型番
+  //   note: string   補足
+  attributes  Json?
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // 1 顧客 × 1 カテゴリ 1 行（ガス給湯機/エコキュート/太陽光は各 1 行）。
+  @@unique([customerId, category])
+  @@index([customerId])
+}
+```
+
+> `Product`（§3.3）に `customersProposed Customer[] @relation("CustomerProposedProduct")` の逆リレーション宣言を追加（Prisma 双方向要件）。
+>
+> **enum の再利用 / 新設**: `GuideAttendee` / `ExistingEquipmentCategory` / `ExistingEquipmentPresence` を新設する。
+> 既設設備カテゴリは `ContractEquipment` の `EquipmentCategory`（§16.3）と**別 enum**とする（値域・意味が異なり、混同を避けるため共有しない）。
+
+### 17.4 RLS / インデックス / DTO
+
+- **RLS（具体 SQL）**: `CustomerExistingEquipment` は親 `Customer.wholesalerId` 経由の相関 EXISTS（§16.4 と同パターン）:
+
+  ```sql
+  ALTER TABLE "CustomerExistingEquipment" ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE "CustomerExistingEquipment" FORCE  ROW LEVEL SECURITY;
+  DROP POLICY IF EXISTS "CustomerExistingEquipment_isolation" ON "CustomerExistingEquipment";
+  CREATE POLICY "CustomerExistingEquipment_isolation" ON "CustomerExistingEquipment"
+    AS PERMISSIVE FOR ALL TO PUBLIC
+    USING (EXISTS (
+      SELECT 1 FROM "Customer" cu
+      WHERE cu."id" = "CustomerExistingEquipment"."customerId"
+        AND (cu."wholesalerId" = current_setting('app.current_wholesaler_id', true)::text
+             OR current_setting('app.is_saas_admin', true)::text = 'true')))
+    WITH CHECK (EXISTS ( /* 同上 */ ));
+  ```
+
+  二次店スコープは `Customer.ownerRelationshipId`（既存）でアプリ層 `DealerScopeService`（§6.4）が制御。`Customer`/`Appointment` 追加列は既存テーブルの既存ポリシーをそのまま継承（変更不要）。
+- **入力バリデーション（Zod、`@solar/contracts`）**: `capacityKw` ≥ 0、`panelCount` ≥ 0（整数）、`installDate` は当日 or 過去日（未来日拒否、docs/02 受け入れ基準）。`husbandAge`/`wifeAge`/`childAge` は 0..120 の整数（任意）。`maekakuPreferredAt` は日時。`guideAttendee` は enum。
+- **インデックス**: `CustomerExistingEquipment(customerId)` + `@@unique([customerId, category])`。`Appointment.acquiredAt` は検索要件確定後に `Appointment(acquiredRelationshipId, acquiredAt)` を追加検討。
+- **DTO / マスキング（F-063）**: ヒアリング項目のレスポンスは `CustomerHearingDto`（§17.9）に集約する。**二次店ロール（`DEALER_*`）には既設設備の詳細（設置日・メーカー・容量・枚数）を DTO 層で物理除去**（destructure-and-rest、`Object.keys` に出さない／#5・docs/02 §9.4）。二次店には「有無＋大分類」（`category` + `installed`）まで。家族年齢は既定マスキングで「年代/未開示」、固定/携帯電話は下 4 桁マスク（§17.5）。
+
+### 17.5 マスキング（`MaskingService` への追記 / §6.5 拡張）
+
+CLAUDE.md #6 / docs/02 §5.3・F-063 個人情報マスキングに従い、新規 PII 項目（家族年齢・分離電話・既設設備詳細）を `MaskingService`（§6.5）に追加する。
+
+```typescript
+// apps/web/lib/masking/ への追記（§6.5 に統合）
+// 家族年齢を年代に丸める。FULL 閲覧時は数値、マスク時は '40代' / '未開示'、null は '未設定'
+export function maskFamilyAge(age: number | null, viewer: ViewerContext): string;
+// 固定/携帯電話を下 4 桁マスク（既存 maskPhone を 2 系統に適用するラッパ）
+export function maskLandlinePhone(phone: string | null, viewer: ViewerContext): string;
+export function maskMobilePhone(phone: string | null, viewer: ViewerContext): string;
+// 既設設備を二次店向けに「有無＋大分類」へ縮約（設置日/メーカー/容量/枚数を落とす）
+export function maskExistingEquipmentForDealer(
+  eq: ExistingEquipmentDto,
+): Pick<ExistingEquipmentDto, 'category' | 'installed'>;
+```
+
+- **家族年齢（ご主人/奥様/お子様）・家族構成は PII**。既定マスキング下では年齢を具体値で出さず「年代」または「未開示」、家族構成（`household`）は概要に丸める。二次店ロール・`saas_admin` には年代まで。`wholesaler_admin` は `FULL` がデフォルト（§6.5 基本ルール）。
+- **既設設備の現況**は機微度が低い住環境情報として既定では非マスク表示を許容するが、**設置日・メーカー・容量・枚数は二次店ロールに不可視**（卸業者ロール限定、docs/02 Assumption 22 / docs/01 §9.4）。二次店向けは `maskExistingEquipmentForDealer` で「有無＋大分類」へ縮約し、DTO 層で詳細キーを **destructure-and-rest 物理除去**（`Object.keys` に出さない／#5・§17.9）。
+- **pino redact + Sentry beforeSend** のフィールドリストに新規 PII（`husbandAge` / `wifeAge` / `childAge` / `landlinePhone` / `mobilePhone`）を追加（§10.1）。監査ログ・エラー報告にもマスキングを適用。
+- 非マスク表示（`REVEAL_PII`）は `revealPii()` 経由で `AuditLog(REVEAL_PII)` 記録（§6.9 / #6）。`saas_admin` は常時マスク。
+
+### 17.6 段階移行プラン
+
+| 段階 | 内容 | F/区分 | マイグレーション / リスク対応 |
+|---|---|---|---|
+| 17-A | `Customer` 追加列（`landlinePhone`/`mobilePhone`/`husbandAge`/`wifeAge`/`childAge`/`guideAttendee`/`faceToFace`/`proposedProduct`/`proposedProductId`/`maekakuPreferredAt`）+ enum `GuideAttendee` + `Appointment.acquiredAt` | F-063 / F-031 入力拡張 | `Customer`/`Appointment` ALTER（**追加列のみ・破壊的変更なし**）。電話は **`phone` を残しつつ `landlinePhone`/`mobilePhone` を追加**（後方互換）。移行時、`phone` の値は分類できないため **当面 `phone` を読み取りのフォールバックに使い、新規入力から 2 系統へ蓄積**（既存 `phone` の自動分解はしない）。`proposedProductId` FK は `Product` へ `ON DELETE SET NULL` |
+| 17-B | 新規 `CustomerExistingEquipment` + enum（`ExistingEquipmentCategory`/`ExistingEquipmentPresence`）+ RLS（§17.4）。`Customer.pvInstalled=true` の顧客に **`category=PV, installed=YES` の初期行を軽量移行**（既設太陽光現況として。`ContractEquipment` には移行しない＝別概念） | F-063 既設設備ヒアリングの前提 | CREATE TYPE + CREATE TABLE + RLS。`@@unique([customerId, category])` のため移行は upsert で冪等化 |
+| 17-C | **F-031 顧客フォームへ「住環境・家族ヒアリング」セクション追加**（入力 UI）+ `getCustomerHearing`（§17.9）読み取り + F-061 統合ビューの「ヒアリング（住環境・家族）」カテゴリ表示（§17.7）+ F-035/F-038 クロスセル候補バッジ（§17.8） | F-063（P1） | UI + ローダ（DDL なし）。各 source of truth へ書き戻し。既設設備（現況）と契約設備（`ContractEquipment`）を別カテゴリ表示 |
+
+> 各段階は `/iterate` 単位。移行スクリプトは冪等・ロールバック可能に書く（§16.6 と同方針）。**17-A/17-B は追加列・追加テーブルのみで破壊的変更を避ける**（既存本番 DB への安全な追加、§17.10 と整合）。電話 2 系統分離は `phone` 併存で後方互換を保つ。
+
+### 17.7 F-061 統合ビューへの「ヒアリング（住環境・家族）」カテゴリ追加
+
+F-061 `ProjectInfoDto`（§16.9）に **「既設設備（現況）」を契約後設備（カテゴリ 7）と別カテゴリ**として追加表示する（docs/02 F-063 受け入れ基準）。既存 9 カテゴリは変更せず、追加カテゴリとして拡張する。
+
+```typescript
+// ProjectInfoDto への追加フィールド（§16.9 を拡張）
+export type ProjectInfoDto = {
+  // ...既存 9 カテゴリ（§16.9）...
+  // 追加カテゴリ: ヒアリング（住環境・家族）。契約後設備 equipment（カテゴリ 7）とは別概念。
+  hearing: {
+    // 家族属性（PII。MaskingService 適用済み文字列）
+    husbandAge: string | null;   // maskFamilyAge 適用後（'40代' / 数値 / '未開示'）
+    wifeAge: string | null;
+    childAge: string | null;
+    household: string | null;    // 概要に丸め済（マスク時）
+    guideAttendee: 'HUSBAND' | 'WIFE' | 'BOTH' | 'OTHER' | null;
+    faceToFace: boolean | null;
+    proposedProduct: string | null;
+    landlinePhone: string;       // maskLandlinePhone 適用後
+    mobilePhone: string;         // maskMobilePhone 適用後
+    maekakuPreferredAt: string | null;
+    acquiredAt: string | null;   // Appointment.acquiredAt（代表アポ）
+    // 既設設備（現況）。ContractEquipment（契約後）と別カテゴリ。
+    existingEquipments: ExistingEquipmentDto[];
+  };
+};
+
+export type ExistingEquipmentDto = {
+  id: string;
+  category: 'GAS_WATER_HEATER' | 'ECO_CUTE' | 'PV';
+  installed: 'YES' | 'NO' | 'UNKNOWN';
+  // ↓ 二次店ロールでは物理除外（destructure-and-rest、Object.keys に出さない／#5・§17.5）
+  installDate?: string | null;    // wholesaler/saas のみ存在
+  maker?: string | null;          // wholesaler/saas のみ存在
+  capacityKw?: number | null;     // wholesaler/saas のみ存在（PV）
+  panelCount?: number | null;     // wholesaler/saas のみ存在（PV）
+  attributes?: Record<string, unknown> | null;
+};
+
+// 二次店レスポンスで物理除外する既設設備詳細キー（Object.keys に出さない・§17.5）
+export const DEALER_OMITTED_EXISTING_EQUIPMENT_KEYS = [
+  'installDate', 'maker', 'capacityKw', 'panelCount', 'attributes',
+] as const;
+```
+
+`getProjectInfo`（§16.10）は読み取り経路に `Customer.existingEquipments[]` と代表 `Appointment.acquiredAt` を追加し、DTO 整形時に §17.5 のマスキング・二次店物理除外を適用する（適用順序は §16.10 と同一）。
+
+### 17.8 F-035 / F-038 クロスセル候補バッジ
+
+`getCustomerHearing`（§17.9）の結果から、F-035 マエカク画面・F-038 商談画面で**クロスセル候補バッジ**を表示する。判定は純関数（`@solar/contracts/services`）:
+
+```typescript
+// packages/contracts/src/services/cross-sell.ts
+export type CrossSellBadge = 'ECO_CUTE_SUGGEST' | 'BATTERY_SUGGEST' | 'PV_EXPAND_SUGGEST';
+export function deriveCrossSellBadges(eqs: ExistingEquipmentDto[]): CrossSellBadge[];
+// 判定（MVP・有無ベース。経年判定は Phase 2 / Open Question 21）:
+//   GAS_WATER_HEATER.installed === 'YES' → 'ECO_CUTE_SUGGEST'（エコキュート提案）
+//   ECO_CUTE.installed === 'YES'         → 'BATTERY_SUGGEST'（蓄電池/太陽光クロスセル）
+//   PV.installed === 'YES'               → 'BATTERY_SUGGEST' + 'PV_EXPAND_SUGGEST'（蓄電池/増設）
+```
+
+バッジは判定**材料の可視化のみ**で自動提案・自動起票はしない（人間判断、docs/01 §4.3）。バッジ文言は `apps/web/lib/i18n/labels.ts` に集約（#2）。
+
+### 17.9 ローダ / Server Action シグネチャ
+
+**読み取り `getCustomerHearing(ctx, customerId)`**: F-063 ヒアリング項目を `Customer` 起点に取得（読むだけ）。
+
+```typescript
+// apps/web/lib/customer/get-customer-hearing.ts
+export function getCustomerHearing(
+  ctx: TenantContext,
+  customerId: string,
+): Promise<CustomerHearingDto>;
+
+// CustomerHearingDto は ProjectInfoDto.hearing（§17.7）と同形（単体取得用）。
+export type CustomerHearingDto = ProjectInfoDto['hearing'];
+```
+
+読み取り経路（`withTenant(ctx, ...)` 経由・二重防御 #1）:
+1. `withTenant(ctx, tx => ...)` 内で `Customer`（`@id = customerId`）を取得。RLS は `Customer.wholesalerId`、二次店スコープは `Customer.ownerRelationshipId`。
+2. `Customer.existingEquipments[]`（相関 EXISTS／§17.4）と代表 `Appointment.acquiredAt`（`customer` 経由）を取得。
+3. `DealerScopeService`（§6.4）で `ViewerContext` 構築 → `MaskingService`（§17.5）で家族年齢・分離電話を整形。
+4. **二次店ロールでは既設設備詳細を destructure-and-rest で物理除去**（`DEALER_OMITTED_EXISTING_EQUIPMENT_KEYS`、`Object.keys` に出さない／#5）。
+5. スコープ外（RLS で 0 件）は `NotFoundError`（§9）を throw。
+
+**書き込み `saveCustomerHearing(ctx, customerId, input)`**: F-031 顧客フォームのヒアリングセクション保存。Server Action。
+
+```typescript
+// apps/web/app/(wholesaler)/customers/actions.ts への追記
+export async function saveCustomerHearing(
+  ctx: TenantContext,
+  customerId: string,
+  input: CustomerHearingInput, // Zod 検証済（§17.4 バリデーション）
+): Promise<{ ok: true } | { ok: false; error: string }>;
+// 処理: withTenant 内で Customer 拡張列を update、CustomerExistingEquipment を
+//       category 単位で upsert（@@unique([customerId, category])）、
+//       acquiredAt は対象 Appointment へ反映。電話重複チェックは landline/mobile 両系統 + 既存 phone を対象（F-031）。
+```
+
+`CustomerHearingInput` の Zod スキーマは `@solar/contracts/src/schemas/customer.ts` に追加（既設設備配列・家族年齢・案内者・提案商材・分離電話・マエカク希望・アポ取得日）。
+
+### 17.10 マイグレーション計画（17-A / 17-B）
+
+§16-B/C と同様、CREATE TYPE / ALTER TABLE / CREATE TABLE + RLS で構成。**既存本番 DB への追加列・追加テーブルのみで破壊的変更を避ける**。適用順序・冪等性の注意:
+
+```sql
+-- 20260605000000_customer_hearing_f063/migration.sql （方針）
+-- 17-A: enum + Customer/Appointment 追加列
+CREATE TYPE "GuideAttendee" AS ENUM ('HUSBAND', 'WIFE', 'BOTH', 'OTHER');
+ALTER TABLE "Customer" ADD COLUMN "landlinePhone"      TEXT;
+ALTER TABLE "Customer" ADD COLUMN "mobilePhone"        TEXT;
+ALTER TABLE "Customer" ADD COLUMN "husbandAge"         INTEGER;
+ALTER TABLE "Customer" ADD COLUMN "wifeAge"            INTEGER;
+ALTER TABLE "Customer" ADD COLUMN "childAge"           INTEGER;
+ALTER TABLE "Customer" ADD COLUMN "guideAttendee"      "GuideAttendee";
+ALTER TABLE "Customer" ADD COLUMN "faceToFace"         BOOLEAN;
+ALTER TABLE "Customer" ADD COLUMN "proposedProduct"    TEXT;
+ALTER TABLE "Customer" ADD COLUMN "proposedProductId"  TEXT;
+ALTER TABLE "Customer" ADD COLUMN "maekakuPreferredAt" TIMESTAMP(3);
+ALTER TABLE "Customer"
+  ADD CONSTRAINT "Customer_proposedProductId_fkey"
+  FOREIGN KEY ("proposedProductId") REFERENCES "Product"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Appointment" ADD COLUMN "acquiredAt" TIMESTAMP(3);
+
+-- 17-B: enum + CustomerExistingEquipment + RLS
+CREATE TYPE "ExistingEquipmentCategory" AS ENUM ('GAS_WATER_HEATER', 'ECO_CUTE', 'PV');
+CREATE TYPE "ExistingEquipmentPresence" AS ENUM ('YES', 'NO', 'UNKNOWN');
+CREATE TABLE "CustomerExistingEquipment" ( /* §17.3 の列 */ );
+CREATE UNIQUE INDEX "CustomerExistingEquipment_customerId_category_key"
+  ON "CustomerExistingEquipment"("customerId", "category");
+CREATE INDEX "CustomerExistingEquipment_customerId_idx"
+  ON "CustomerExistingEquipment"("customerId");
+ALTER TABLE "CustomerExistingEquipment"
+  ADD CONSTRAINT "CustomerExistingEquipment_customerId_fkey"
+  FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- RLS は §17.4（親 Customer.wholesalerId 経由 EXISTS / FORCE / USING+WITH CHECK）
+-- 軽量移行: pvInstalled=true の Customer に category=PV, installed=YES を upsert（冪等）。
+```
+
+注意:
+- **適用順序**: enum → ALTER/CREATE TABLE → FK → RLS。`ContractEquipment`（§16-C）への影響はゼロ（別テーブル・別 enum）。
+- **冪等性**: `DROP POLICY IF EXISTS` 後に `CREATE POLICY`（§16-C 踏襲）。`@@unique([customerId, category])` により軽量移行 upsert が再実行安全。
+- **後方互換**: `Customer.phone` は DROP しない（17-A は併存。読み取りフォールバック、§17.6）。既存行の新規列は NULL 許容で破壊なし。
+- **RLS 検証**: 17-B 適用後、二次店セッションで他社二次店顧客の既設設備が 0 件になることを統合テスト（§11.2）で確認。
+
+### 17.11 トレーサビリティ（F / S）
+
+| 拡張対象 | 関連機能 (docs/02) | 関連画面 |
+|---|---|---|
+| `Customer` 分離電話・家族属性・案内者・提案商材・マエカク希望 | **F-063** / F-031（顧客登録・編集）/ F-035（マエカク） | S-032/S-033 顧客フォーム, S-113 顧客詳細 |
+| `CustomerExistingEquipment`（既設設備の現況） | **F-063** / F-061（統合ビューの「ヒアリング」カテゴリ）/ F-038（クロスセル） | S-113 顧客詳細「ヒアリング（住環境・家族）」 |
+| `Appointment.acquiredAt`（アポ取得日） | **F-063** / F-033（アポ登録・編集） | S-034 アポ登録 |
+| クロスセル候補バッジ | **F-063** / F-035 / F-038 | S-035 マエカク, S-038 商談 |
+
+### 17.12 未確定事項（要確認 / docs/02 Open Questions 19〜21 連動）
+
+1. **既設設備ヒアリング項目の必須/任意** — ガス給湯機/エコキュート/太陽光の有無を必須化するか任意か（docs/02 Open Question 19）。MVP は任意（`installed` デフォルト `UNKNOWN`）。
+2. **家族構成の構造化粒度** — `household` 自由記述 + 代表 3 年齢で MVP 開始（Open Question 20）。世帯メンバ構造化テーブルは Phase 2。`childAge` は代表 1 名のみ。
+3. **クロスセルバッジの判定条件** — MVP は有無ベース（§17.8）。経年（設置日からの更新時期）判定は Phase 2（Open Question 21）。
+4. **電話 2 系統移行の完了タイミング** — 既存 `phone` を最終的に DROP するか、`landlinePhone`/`mobilePhone` 併存を恒久化するか（§17.6）。MVP は併存。
+
+---
+
+## 18. レーンイベント報告永続化データモデル（F-064 拡張設計）
+
+> レーンイベント (F-059 `LineEvent`) の各開催日について、運営者が Google スプレッドシート
+> 「レーンイベント」シートで運用していた **⑧開始/終了報告（報告者・開始/終了時刻・特記事項）** と
+> **⑨成果報告（抽選数・着座数・アポ数の両面/片面内訳、種別＝住宅設備/不動産）** を **実データとして永続化**する拡張設計。
+> 本章は **F-064 レーンイベント開始/終了報告・成果報告の永続化（P1）** を完全に支える。
+>
+> **本機能の主眼は「未永続 → 永続」のみ**（docs/02 F-064）。現状はデモ生成
+> （`apps/web/components/reports/result-report-data.ts` の `EventBasicReport` / `ResultReportData`）で
+> 未永続のため、**当該デモと同一の項目定義のまま永続層へ移行**する（§18.2 でデモ型と 1:1 対応）。
+> 永続後はデモ生成を廃し DB を source of truth とする。報告単位は `LineEvent` × 開催日（docs/02 §4.4）。
+> 本機能は F-028〜F-030（単発イベント報告 `EventReport`）の**レーンイベント版**であり、MVP では別テーブルで永続化する
+> （単発との共通モデル統合は Phase 2 / docs/02 Open Question 22）。
+
+### 18.0 既存モデルとの責務マトリクス
+
+| 概念 | source of truth（正） | 本拡張での扱い |
+|---|---|---|
+| レーン（場所・対象月・開催日配列・アサイン） | `LineEvent`（既存・§3.4 / schema 487 行）、開催日は `LineEvent.scheduledDates`（Json, `YYYY-MM-DD` 配列） | 既存を使用。報告は `lineEventId` + `heldDate` で紐づく |
+| 開始/終了報告（報告者・開始/終了時刻・特記事項） | **新規 `LaneEventReport`**（`LineEvent` の子。レーン × 開催日 1 行） | デモ `EventBasicReport`（start/end）を永続化 |
+| 成果報告（抽選/着座/アポ の両面/片面内訳・種別） | **新規 `LaneEventResult`**（`LineEvent` の子。レーン × 開催日 1 行） | デモ `ResultReportData` を永続化 |
+| 獲得アポ顧客 | `Customer` / `Appointment`（既存・F-031/F-063） | デモ `AcquiredCustomer` は実 `Customer`/`Appointment` へ接続（§18.2-D）。報告テーブルには持たない |
+| 月次集計（レーンイベント区分） | `MonthlyReport`（既存・§3.7） | `LaneEventResult` の数値が F-048 集計の元データ（§18.8） |
+
+> **読み取り経路**: 報告は F-059 レーン詳細の開催日別報告表示と F-048 月次集計で読まれる。
+> `getLaneEventReports(ctx, lineEventId)`（§18.9）が `withTenant(ctx, ...)` 経由で `LineEvent` →
+> `LaneEventReport[]` / `LaneEventResult[]` を取得。新規子テーブルは親 `LineEvent.wholesalerId` 経由の相関 EXISTS で分離（§18.4）。
+
+### 18.1 設計方針
+
+1. **`LineEvent` を正とし、報告は子テーブルで永続化**（新規トップレベル概念を作らない、CLAUDE.md #3）。
+2. **新設は 2 テーブル**: `LaneEventReport`（開始/終了報告）/ `LaneEventResult`（成果報告）。いずれも `LineEvent` の子で、**レーン × 開催日を一意キー**とする（`@@unique([lineEventId, heldDate])`）。
+3. **両面/片面は独立した数値**（同一指標の内訳）として保持し、合計＝両面＋片面を**表示時に算出**（DB に冗長保持しない、docs/02 F-064）。
+4. **デモ型と 1:1 対応**（§18.2）。デモ→永続の差分を最小化し、永続後デモ生成を廃止する。
+5. **テナント分離**: 親 `LineEvent.wholesalerId` 経由の相関 EXISTS（§18.4 に SQL、§16.4 と同パターン）。二次店スコープは `LineEvent.assignDealerIds`（Json）/ `LanePreference` 経由でアプリ層が制御。
+6. **仕入値・原価を一切扱わない**（CLAUDE.md #5、該当フィールドが DTO に存在しない）。本報告は数量のみ。
+
+### 18.2 項目→保存先マッピング（デモ型と 1:1 対応 / docs/02 §4.4 準拠）
+
+**A. 開始/終了報告（source = `LaneEventReport`、デモ `EventBasicReport` ×2 に対応）**
+
+| 要望項目 | デモ型フィールド | 保存先（1 対 1） | 区分 |
+|---|---|---|---|
+| 対象レーン | （seed） | `LaneEventReport.lineEventId` → `LineEvent` | 新規(18-A) |
+| 開催日 | `ResultReportData.eventDate` | `LaneEventReport.heldDate`（`@db.Date`） | 新規(18-A) |
+| 報告者 | `EventBasicReport.submitter` / 報告者組織 | `reporterId`（→`User`）/ `reporterOrgType`（`TenantType`） | 新規(18-A) |
+| 開始報告時刻 | `EventBasicReport.submittedAt`（start） | `startReportedAt`（`DateTime?`） | 新規(18-A) |
+| 終了報告時刻 | `EventBasicReport.submittedAt`（end） | `endReportedAt`（`DateTime?`） | 新規(18-A) |
+| 特記事項（開始/終了コメント） | `EventBasicReport.comment`（start/end） | `startNote` / `endNote`（`String?`） | 新規(18-A) |
+
+> 開始報告・終了報告はレーン × 開催日で 1 行に集約し、`startReportedAt`/`endReportedAt` と `startNote`/`endNote` を同一行で保持する（デモは start/end 2 オブジェクトだが、永続では同一報告キーのため 1 行に統合）。
+
+**B. 成果報告（source = `LaneEventResult`、デモ `ResultReportData` に対応）**
+
+| 要望項目 | デモ型フィールド | 保存先（1 対 1） | 区分 |
+|---|---|---|---|
+| 対象レーン / 開催日 | seed / `eventDate` | `lineEventId` / `heldDate`（`@db.Date`） | 新規(18-A) |
+| 種別（住宅設備/不動産） | `category`（`housing`/`realestate`） | `category`（enum `LaneResultCategory`: `HOUSING`/`REAL_ESTATE`） | 新規(18-A) |
+| 抽選数_両面 / 片面 | `lotteryBoth` / `lotterySingle` | `lotteryDouble` / `lotterySingle`（`Int`） | 新規(18-A) |
+| 着座数_両面 / 片面 | `seatedBoth` / `seatedSingle` | `seatedDouble` / `seatedSingle`（`Int`） | 新規(18-A) |
+| アポ数_両面 / 片面 | `apptBoth` / `apptSingle` | `apptDouble` / `apptSingle`（`Int`） | 新規(18-A) |
+| 所感/コメント | `impression` | `comment`（`String?`） | 新規(18-A) |
+
+> **合計は非保持・算出**: `lotteryTotal`/`seatedTotal`/`apptTotal`（デモ）は **両面+片面の和で表示時に算出**（DB 非保持、docs/02 F-064）。
+
+**C. 既存デモ項目の扱い（永続化対象外 / 既存モデルへ寄せる）**
+
+- `franchiseNo`（加盟店番号）= `Relationship.franchiseNo`（既存・§16.7 移行で追加済）から導出表示。報告テーブルには持たない。
+- `venuePlace` / `areaInFacility`（催事場所・施設内エリア）= `LineEvent.area` / `LineEvent.address`（既存）から導出。報告テーブルには持たない。
+- `salesChannel`（販売チャネル）= MVP では `LaneEventResult.attributes`（Json?、`{ salesChannel?: string }`）に任意保持、または非保持（業務確定まで・§18.11-3）。
+
+**D. 獲得アポ顧客（source = `Customer` / `Appointment`、デモ `AcquiredCustomer` に対応）**
+
+- デモ `AcquiredCustomer`（name/dateTime/address/memo）は **実 `Customer` / `Appointment` へ接続**（F-031 / F-063 / F-033）。報告テーブルには顧客を持たない。
+- レーン × 開催日で獲得したアポは `Appointment.eventId`（既存）が単発 `Event` を指す運用に対し、**レーン由来は `Appointment` に `lineEventId`/`laneHeldDate` を持たせず**、`Customer.sourceEventId` 相当の紐づけは MVP 範囲外（§18.11-4）。当面はアポ取得日（`Appointment.acquiredAt`、§17.2-D）と成果報告の数値整合（アポ数 = 当日登録アポ件数）を運用で担保。
+
+### 18.3 Prisma スキーマ案（新規 2 テーブル）
+
+```prisma
+// ── 新規 1: レーンイベント開始/終了報告（レーン × 開催日 1 行） ──
+model LaneEventReport {
+  id             String     @id @default(cuid())
+  lineEventId    String
+  heldDate       DateTime   @db.Date   // 開催日（LineEvent.scheduledDates の 1 つ）
+  reporterId     String                // 報告者（User.id）
+  reporterOrgType TenantType           // 報告者組織（WHOLESALER / DEALER）
+  startReportedAt DateTime?            // 開始報告時刻
+  endReportedAt   DateTime?            // 終了報告時刻
+  startNote       String?             // 開始特記事項
+  endNote         String?             // 終了特記事項
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  lineEvent      LineEvent  @relation(fields: [lineEventId], references: [id], onDelete: Cascade)
+
+  @@unique([lineEventId, heldDate])    // レーン × 開催日が報告キー
+  @@index([lineEventId])
+}
+
+// ── 新規 2: レーンイベント成果報告（レーン × 開催日 1 行。両面/片面内訳・種別） ──
+// 種別: 住宅設備 / 不動産
+enum LaneResultCategory { HOUSING REAL_ESTATE }
+
+model LaneEventResult {
+  id             String             @id @default(cuid())
+  lineEventId    String
+  heldDate       DateTime           @db.Date
+  category       LaneResultCategory @default(HOUSING)
+  lotteryDouble  Int                @default(0)  // 抽選数_両面
+  lotterySingle  Int                @default(0)  // 抽選数_片面
+  seatedDouble   Int                @default(0)  // 着座数_両面
+  seatedSingle   Int                @default(0)  // 着座数_片面
+  apptDouble     Int                @default(0)  // アポ数_両面
+  apptSingle     Int                @default(0)  // アポ数_片面
+  comment        String?                         // 所感
+  // attributes Json キー定義（任意）: salesChannel?: string（販売チャネル・§18.2-C）
+  attributes     Json?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  lineEvent      LineEvent          @relation(fields: [lineEventId], references: [id], onDelete: Cascade)
+
+  @@unique([lineEventId, heldDate])    // レーン × 開催日が報告キー
+  @@index([lineEventId])
+}
+```
+
+> `LineEvent`（§3.4）に `reports LaneEventReport[]` / `results LaneEventResult[]` の逆リレーション宣言を追加（Prisma 双方向要件）。
+>
+> **enum 方針**: `LaneResultCategory`（`HOUSING`/`REAL_ESTATE`）を新設。報告者組織は既存 `TenantType` を再利用（`EventReport.reporterOrgType` と同方針・§3.4）。
+
+### 18.4 RLS / インデックス / バリデーション
+
+- **RLS（具体 SQL）**: 両テーブルとも親 `LineEvent.wholesalerId` 経由の相関 EXISTS（§16.4 と同パターン、テーブル名を読み替え）:
+
+  ```sql
+  -- LaneEventReport / LaneEventResult 共通形
+  ALTER TABLE "LaneEventReport" ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE "LaneEventReport" FORCE  ROW LEVEL SECURITY;
+  DROP POLICY IF EXISTS "LaneEventReport_isolation" ON "LaneEventReport";
+  CREATE POLICY "LaneEventReport_isolation" ON "LaneEventReport"
+    AS PERMISSIVE FOR ALL TO PUBLIC
+    USING (EXISTS (
+      SELECT 1 FROM "LineEvent" le
+      WHERE le."id" = "LaneEventReport"."lineEventId"
+        AND (le."wholesalerId" = current_setting('app.current_wholesaler_id', true)::text
+             OR current_setting('app.is_saas_admin', true)::text = 'true')))
+    WITH CHECK (EXISTS ( /* 同上 */ ));
+  ```
+
+  二次店スコープ（自社担当 / 共同開催に参加するレーンのみ閲覧）は `LineEvent.assignDealerIds`（Json）/ `LanePreference` 経由でアプリ層 `DealerScopeService`（§6.4）が制御。
+- **インデックス**: `LaneEventReport(lineEventId)` / `LaneEventResult(lineEventId)` + 各 `@@unique([lineEventId, heldDate])`。月次集計の範囲走査用に `LaneEventResult(lineEventId, heldDate)` は unique で兼用。
+- **入力バリデーション（Zod、`@solar/contracts`）**:
+  - 抽選/着座/アポ の両面/片面は **0 以上の整数**（docs/02 受け入れ基準）。
+  - **着座 ≤ 抽選、アポ ≤ 着座**（両面・片面それぞれで判定）。違反は `422 InvalidStateTransition` 相当の検証エラー（§9.1）として `ValidationError` を返す。
+  - **終了報告時刻 < 開始報告時刻は警告**（ブロックしない。後続報告の救済を許容、F-029 運用方針と整合）。Server Action は警告フラグを返し UI でトースト表示（#2 labels.ts）。
+  - `heldDate` は `LineEvent.scheduledDates`（Json 配列）に含まれる日付であること（含まれない場合 `ValidationError`）。
+
+### 18.5 段階移行プラン
+
+| 段階 | 内容 | F/区分 | マイグレーション / リスク対応 |
+|---|---|---|---|
+| 18-A | 新規 `LaneEventReport` / `LaneEventResult` + enum `LaneResultCategory` + RLS（§18.4）+ `LineEvent` 逆リレーション | F-064 永続化の前提 | CREATE TYPE + CREATE TABLE + RLS。**追加テーブルのみ・破壊的変更なし**。デモデータの移行は不要（デモは決定論生成・実データでない） |
+| 18-B | **F-059 レーン詳細の開始/終了・成果報告 UI を永続化に切替**（`saveLaneEventReport`/`saveLaneEventResult`／§18.9）+ 開催日別報告表示を `getLaneEventReports` 読み取りへ。**デモ生成（`result-report-data.ts`）の参照を削除**し DB を source of truth に | F-064（P1） | UI + ローダ（DDL なし）。デモ→永続切替時、未報告の開催日は「未報告」表示で欠落させない。`result-report-data.ts` 削除は参照全消し後 |
+| 18-C | **F-048 月次集計にレーンイベント区分を追加**（`LaneEventResult` の声かけ→アポ系列を区分集計、§18.8） | F-048 連携 | 集計ロジック追加（DDL なし）。月次スナップショット（`MonthlyReport.aggregated`）にレーン区分を含める |
+
+> 各段階は `/iterate` 単位。**18-A は追加テーブルのみで破壊的変更を避ける**（§18.10）。デモ廃止（18-B）は `result-report-data.ts` の全参照を削除してから行う。
+
+### 18.6 マイグレーション計画（18-A）
+
+§16-C と同様、CREATE TYPE / CREATE TABLE + RLS で構成。**既存本番 DB への追加テーブルのみで破壊的変更を避ける**。
+
+```sql
+-- 20260605010000_lane_event_reports_f064/migration.sql （方針）
+CREATE TYPE "LaneResultCategory" AS ENUM ('HOUSING', 'REAL_ESTATE');
+
+CREATE TABLE "LaneEventReport" (
+    "id"              TEXT         NOT NULL,
+    "lineEventId"     TEXT         NOT NULL,
+    "heldDate"        DATE         NOT NULL,
+    "reporterId"      TEXT         NOT NULL,
+    "reporterOrgType" "TenantType" NOT NULL,
+    "startReportedAt" TIMESTAMP(3),
+    "endReportedAt"   TIMESTAMP(3),
+    "startNote"       TEXT,
+    "endNote"         TEXT,
+    "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "LaneEventReport_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "LaneEventReport_lineEventId_heldDate_key"
+  ON "LaneEventReport"("lineEventId", "heldDate");
+CREATE INDEX "LaneEventReport_lineEventId_idx" ON "LaneEventReport"("lineEventId");
+ALTER TABLE "LaneEventReport"
+  ADD CONSTRAINT "LaneEventReport_lineEventId_fkey"
+  FOREIGN KEY ("lineEventId") REFERENCES "LineEvent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE "LaneEventResult" (
+    "id"            TEXT                 NOT NULL,
+    "lineEventId"   TEXT                 NOT NULL,
+    "heldDate"      DATE                 NOT NULL,
+    "category"      "LaneResultCategory" NOT NULL DEFAULT 'HOUSING',
+    "lotteryDouble" INTEGER              NOT NULL DEFAULT 0,
+    "lotterySingle" INTEGER              NOT NULL DEFAULT 0,
+    "seatedDouble"  INTEGER              NOT NULL DEFAULT 0,
+    "seatedSingle"  INTEGER              NOT NULL DEFAULT 0,
+    "apptDouble"    INTEGER              NOT NULL DEFAULT 0,
+    "apptSingle"    INTEGER              NOT NULL DEFAULT 0,
+    "comment"       TEXT,
+    "attributes"    JSONB,
+    "createdAt"     TIMESTAMP(3)         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"     TIMESTAMP(3)         NOT NULL,
+    CONSTRAINT "LaneEventResult_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "LaneEventResult_lineEventId_heldDate_key"
+  ON "LaneEventResult"("lineEventId", "heldDate");
+CREATE INDEX "LaneEventResult_lineEventId_idx" ON "LaneEventResult"("lineEventId");
+ALTER TABLE "LaneEventResult"
+  ADD CONSTRAINT "LaneEventResult_lineEventId_fkey"
+  FOREIGN KEY ("lineEventId") REFERENCES "LineEvent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- RLS は §18.4（親 LineEvent.wholesalerId 経由 EXISTS / FORCE / USING+WITH CHECK）
+```
+
+注意:
+- **適用順序**: enum → CREATE TABLE → unique/index → FK → RLS。既存テーブルへの ALTER は無し（`LineEvent` 逆リレーションは Prisma スキーマ宣言のみで DDL 変更なし）。
+- **冪等性**: `DROP POLICY IF EXISTS` 後に `CREATE POLICY`（§16-C 踏襲）。`@@unique([lineEventId, heldDate])` により報告 upsert（§18.9）が再実行安全。
+- **後方互換**: 既存データへの影響ゼロ（純追加）。`heldDate` は `@db.Date`（時刻なし）でタイムゾーン揺れを回避。
+- **デモ非依存**: デモ生成は実データでないため移行不要。18-B でデモ参照削除後に DB を source of truth とする。
+
+### 18.7 DTO（レーン詳細 / 月次集計）
+
+```typescript
+// packages/contracts/src/dto/lane-event-report.ts
+export type LaneEventReportDto = {
+  lineEventId: string;
+  heldDate: string;               // 'YYYY-MM-DD'
+  // 開始/終了報告
+  reporterName: string | null;    // User 表示名
+  reporterOrgType: 'WHOLESALER' | 'DEALER';
+  startReportedAt: string | null;
+  endReportedAt: string | null;
+  startNote: string | null;
+  endNote: string | null;
+  // 成果報告（両面/片面内訳。合計は算出）
+  result: {
+    category: 'HOUSING' | 'REAL_ESTATE';
+    lotteryDouble: number; lotterySingle: number; lotteryTotal: number; // total = double + single（算出）
+    seatedDouble: number;  seatedSingle: number;  seatedTotal: number;
+    apptDouble: number;    apptSingle: number;    apptTotal: number;
+    comment: string | null;
+  } | null;
+};
+// 本 DTO は仕入値・原価フィールドを一切持たない（#5）。
+```
+
+合計（`*Total`）は DTO 整形時に `double + single` で算出（DB 非保持、§18.1.3）。`reporterName` はマスキング対象外（内部担当者名・PII でない）。獲得アポ顧客は本 DTO に含めず、F-061/F-063 経路で参照する（§18.2-D）。
+
+### 18.8 F-048 月次集計への連携
+
+`LaneEventResult` の数値は **F-048 月次集計のレーンイベント区分の元データ**になる（docs/02 F-064 / UC-07 手順 6）。`MonthlyReportService`（§6.8）の集計に、対象月の `LineEvent`（`targetMonth`）配下の `LaneEventResult` を **声かけ（抽選）→着座→アポ系列で区分集計**するロジックを追加する。
+
+```typescript
+// MonthlyReportService への追記（§6.8）
+// 対象月のレーンイベント成果を区分集計（両面+片面の合計で積み上げ）
+type LaneEventAggregate = {
+  lotteryTotal: number; seatedTotal: number; apptTotal: number;
+  byCategory: { HOUSING: {...}; REAL_ESTATE: {...} };
+};
+```
+
+集計結果は `MonthlyReport.aggregated`（Json snapshot）に「レーンイベント区分」として含める。`withTenant(ctx, ...)` 経由で親 `LineEvent.wholesalerId` 相関 EXISTS（§18.4）を通る。
+
+### 18.9 ローダ / Server Action シグネチャ
+
+**読み取り `getLaneEventReports(ctx, lineEventId)`**: レーンの全開催日の報告を取得（読むだけ）。
+
+```typescript
+// apps/web/lib/lane-event/get-lane-event-reports.ts
+export function getLaneEventReports(
+  ctx: TenantContext,
+  lineEventId: string,
+): Promise<LaneEventReportDto[]>; // 開催日（heldDate）昇順。未報告の開催日は result=null で含めて欠落させない
+```
+
+読み取り経路（`withTenant(ctx, ...)` 経由・二重防御 #1）:
+1. `withTenant(ctx, tx => ...)` 内で `LineEvent`（`@id = lineEventId`）を取得。RLS は `LineEvent.wholesalerId`、二次店スコープは `assignDealerIds`/`LanePreference` 経由（§18.4）。
+2. `LineEvent.scheduledDates`（開催日配列）を軸に `LaneEventReport[]` / `LaneEventResult[]` を相関 EXISTS（§18.4）で取得し `heldDate` で結合。
+3. `*Total = double + single` を算出（§18.1.3）。スコープ外（RLS 0 件）は `NotFoundError`（§9）。
+
+**書き込み（Server Action、`apps/web/app/(wholesaler)/line-events/[id]/actions.ts`）**:
+
+```typescript
+// 開始/終了報告 upsert（レーン × 開催日キー）
+export async function saveLaneEventReport(
+  ctx: TenantContext, lineEventId: string,
+  input: LaneEventReportInput, // 報告者・開始/終了時刻・特記事項（Zod 検証済）
+): Promise<{ ok: true; warning?: 'END_BEFORE_START' } | { ok: false; error: string }>;
+// 処理: withTenant 内で LaneEventReport を @@unique([lineEventId, heldDate]) で upsert。
+//       終了 < 開始は warning='END_BEFORE_START' を返す（ブロックしない・§18.4）。
+
+// 成果報告 upsert（レーン × 開催日キー）
+export async function saveLaneEventResult(
+  ctx: TenantContext, lineEventId: string,
+  input: LaneEventResultInput, // 種別・抽選/着座/アポ の両面/片面・コメント（Zod 検証済）
+): Promise<{ ok: true } | { ok: false; error: string }>;
+// 処理: withTenant 内で LaneEventResult を upsert。着座≤抽選 / アポ≤着座 / 0以上整数 /
+//       heldDate ∈ scheduledDates をバリデーション（違反は ValidationError → 422・§18.4）。
+```
+
+`LaneEventReportInput` / `LaneEventResultInput` の Zod スキーマは `@solar/contracts` に追加。種別ラベル・両面/片面ラベル・特記事項見出し・警告文言は `apps/web/lib/i18n/labels.ts` に集約（#2）。
+
+### 18.10 マイグレーション注意（再掲・冪等性/順序）
+
+- **適用順序**: §18.6（enum → table → index → FK → RLS）。`LineEvent` 既存テーブルへの ALTER なし（逆リレーションは宣言のみ）。
+- **冪等性**: ポリシーは `DROP POLICY IF EXISTS` → `CREATE POLICY`。報告 upsert は `@@unique([lineEventId, heldDate])` で安全。
+- **破壊回避**: 純追加テーブルのため既存本番 DB に非破壊。デモ廃止は DDL でなくアプリ層参照削除（18-B）で行う。
+
+### 18.11 業務シーケンス（UC-07 抜粋）
+
+```mermaid
+sequenceDiagram
+  participant FS as wholesaler_field_staff
+  participant SA as Server Action
+  participant WT as withTenant
+  participant DB as PostgreSQL(RLS)
+  participant MR as MonthlyReportService
+
+  FS->>SA: saveLaneEventReport(開始: 報告者/開始時刻/特記)
+  SA->>WT: withTenant(ctx)
+  WT->>DB: upsert LaneEventReport [lineEventId,heldDate]（RLS: LineEvent.wholesalerId 経由 EXISTS）
+  DB-->>SA: ok
+  Note over FS,SA: 終了時に saveLaneEventReport(終了) → 同一行 upsert（終了<開始は warning）
+  FS->>SA: saveLaneEventResult(種別/抽選/着座/アポ 両面片面)
+  SA->>SA: Zod: 着座≤抽選, アポ≤着座, 0以上整数, heldDate∈scheduledDates
+  alt 検証 NG
+    SA-->>FS: 422 ValidationError（InvalidStateTransition 相当）
+  else 検証 OK
+    SA->>WT: withTenant(ctx)
+    WT->>DB: upsert LaneEventResult [lineEventId,heldDate]
+    DB-->>SA: ok
+  end
+  Note over FS: 獲得アポは F-031/F-063 で Customer/Appointment 登録（既設設備ヒアリング）
+  MR->>WT: 月末: 対象月 LineEvent 配下 LaneEventResult を区分集計（§18.8）
+  WT->>DB: 相関 EXISTS で集計 → MonthlyReport.aggregated に格納
+```
+
+### 18.12 トレーサビリティ（F / S）
+
+| 拡張対象 | 関連機能 (docs/02) | 関連画面 |
+|---|---|---|
+| `LaneEventReport`（開始/終了報告） | **F-064** / F-028・F-029（イベント開始/終了報告のレーン版）/ F-059 | S-059 レーン詳細（開催日別報告） |
+| `LaneEventResult`（成果報告・両面/片面・種別） | **F-064** / F-030（成果報告のレーン版）/ F-048（月次集計） | S-059 レーン詳細 / S-048 月次集計 |
+| 獲得アポ顧客の接続 | **F-064** / F-031 / F-063 / F-033 | S-032/S-113 顧客 |
+| デモ廃止（DB を source of truth） | **F-064**（`result-report-data.ts` 参照削除） | S-059 |
+
+### 18.13 未確定事項（要確認 / docs/02 Open Questions 22〜23 連動）
+
+1. **単発イベント報告との統合** — `EventReport`（F-028〜F-030）と `LaneEventReport`/`LaneEventResult` を将来共通モデルへ統合するか（Open Question 22）。MVP は別テーブル。
+2. **両面/片面の業務定義** — 抽選/着座/アポ の「両面/片面」が何を指すか（ブースの両面/片面利用等）の正式定義（Open Question 23）。デモ項目定義を踏襲しパイロットで確認。
+3. **販売チャネル（`salesChannel`）の保持要否** — デモ `salesChannel`（cainzW/cainzV/shimachu）を `LaneEventResult.attributes` に保持するか非保持か（§18.2-C）。業務確定まで attributes 任意保持。
+4. **獲得アポの報告紐づけ** — レーン × 開催日で獲得したアポを `Appointment` に明示リンク（`lineEventId`/`laneHeldDate`）するか、運用で件数整合を担保するか（§18.2-D）。MVP は後者。
+
+---
+
+## 19. 変更履歴
 
 | 日付 | 内容 | 著者 |
 |---|---|---|
 | 2026-05-23 | 初版作成。`docs/01`〜`docs/04` + `product-proposal.md` + `CLAUDE.md`（A2P 由来部分を Solar SaaS 向けに読み替え）に基づき、アーキテクチャ・モノレポ構成・DB スキーマ・API/ジョブ仕様・ドメインサービス層・業務シーケンス・R2 規約・エラー処理・観測性・テスト戦略を確定。F-001〜F-058 / S-001〜S-085 のトレーサビリティを §13 で集約。 | program-design |
 | 2026-05-23 | T-01-03 実装中に検出: §3.2 `Session` モデルに `user User @relation(fields: [userId], references: [id], onDelete: Cascade)` を、逆リレーション `User.sessions Session[]` を明示。Prisma の relation 双方向宣言必須要件への形式的対応で、設計意図に変更なし。 | programmer |
 | 2026-06-02 | §16 追加: 詳細顧客・案件管理データモデル（約 80 項目）の拡張設計（初版）。`Customer` 連絡先構造化 + `CustomerProject`（案件）+ `ProjectEquipment`（設備明細）案を提示。 | claude |
-| 2026-06-02 | §16 改訂(iteration 2, design-reviewer 指摘反映): 並行集約 `CustomerProject`/`ProjectEquipment` 案を**廃止**し、「既存集約（`Deal`/`Contract`/`ContractItem`/`GrossProfit`/`Construction`/`Application`）を正の源として拡張＋新規子テーブル `ContractEquipment`（設備スペック）/ `ContractPayment`（ローン・入金）の 2 つのみ追加」へ転換。§16.0 責務マトリクスで契約日・契約金額・施工日・申請ステータスの二重管理を排除。§16.4 に親 `Contract.wholesalerId` 経由の相関 EXISTS の RLS SQL、§16.5 に F/S トレーサビリティ、§16.6 に競合ルール・件数照合・ロールバック付き段階移行（16-A〜16-D）、§16.7 に既存子テーブル（`CustomerActivity`/`CustomerMessage`/`CustomerFile`/`CustomerTask`）の §3.5/§3.9 正式追記要否を明記。 | claude |
+| 2026-06-02 | §16 改訂(iteration 2, design-reviewer 指摘反映): 並行集約 `CustomerProject`/`ProjectEquipment` 案を**廃止**し、「既存集約（`Deal`/`Contract`/`ContractItem`/`GrossProfit`/`Construction`/`Application`）を正の源として拡張＋新規子テーブル `ContractEquipment`（設備スペック）/ `ContractPayment`（ローン・入金）の 2 つのみ追加」へ転換。§16.0 責務マトリクスで契約日・契約金額・施工日・申請ステータスの二重管理を排除。§16.4 に親 `Contract.wholesalerId` 経由の相関 EXISTS の RLS SQL、§16.5 に F/S トレーサビリティ、§16.6 に競合ルール・件数照合・ロールバック付き段階移行（16-A〜16-D）、§16.7 に既存子テーブル（`CustomerActivity`/`CustomerMessage`/`CustomerFile`/`CustomerTask`）の §3.5/§3.9 正式追記要否を明記。約 90 項目 / 9 カテゴリ確定版。 | claude |
+| 2026-06-04 | §16 改訂(iteration 3, design-reviewer 指摘反映): (1) **§16.9 `ProjectInfoDto`** を新設（9 カテゴリのネスト構造・設備カテゴリ別配列・`age` 算出値・二次店物理除外キー集合 `DEALER_OMITTED_FINANCIAL_KEYS` を型レベルで明記、CLAUDE.md #5 / F-061 受け入れ基準）。(2) **§16.10 `getProjectInfo(ctx, customerId)`** を新設（`withTenant` 経由の `Customer` 起点読み取り経路・`MaskingService`/`DealerScopeService` の適用順序を明記）。(3) §16.2 カテゴリ 5 に **Construction 1:N の行選択ルール**（`pickRepresentativeConstruction()`：代表 1 件＋全件 `constructions[]` 保持）を追記。(4) §6.5 に `maskBirthDate(birthDate, viewer): string`（年代のみ）シグネチャを追加。 | claude |
+| 2026-06-05 | **§17 / §18 新設**（docs/02 APPROVED 済 F-063 / F-064 のプログラム設計）。**§17 アポ取り顧客 住環境・家族属性ヒアリングデータモデル（F-063）**: §16 と同粒度で責務マトリクス（§17.0）/ 項目→保存先マッピング 19 項目（§17.2）/ Prisma スキーマ（`Customer` 拡張 10 列 + `GuideAttendee` enum / `Appointment.acquiredAt` / 新規 `CustomerExistingEquipment` + `ExistingEquipmentCategory`/`ExistingEquipmentPresence` enum、§17.3）/ RLS（親 `Customer.wholesalerId` 経由 EXISTS・§17.4）/ マスキング（`maskFamilyAge`/`maskLandlinePhone`/`maskMobilePhone`/`maskExistingEquipmentForDealer`、二次店物理除外 `DEALER_OMITTED_EXISTING_EQUIPMENT_KEYS`・§17.5）/ 段階移行 17-A〜17-C（§17.6）/ F-061 統合ビュー「ヒアリング」カテゴリ追加（§17.7）/ クロスセルバッジ純関数（§17.8）/ `getCustomerHearing`・`saveCustomerHearing`（§17.9）/ マイグレーション計画（§17.10）を確定。既設設備（現況）と `ContractEquipment`（契約後設備）の別概念・別テーブルを明記。**§18 レーンイベント報告永続化データモデル（F-064）**: 責務マトリクス（§18.0）/ デモ型 1:1 マッピング（§18.2）/ 新規 `LaneEventReport`/`LaneEventResult` + `LaneResultCategory` enum（§18.3）/ RLS（親 `LineEvent.wholesalerId` 経由 EXISTS・§18.4）/ 着座≤抽選・アポ≤着座バリデーション（422、§18.4）/ 段階移行 18-A〜18-C（§18.5）/ マイグレーション計画（§18.6）/ DTO（合計は算出・§18.7）/ F-048 月次集計連携（§18.8）/ `getLaneEventReports`・`saveLaneEventReport`・`saveLaneEventResult`（§18.9）/ シーケンス図（§18.11）を確定。デモ `result-report-data.ts` 廃止方針を明記。旧「§17 変更履歴」を **§19** へ繰り下げ。 | claude |
+| 2026-06-10 | **§3.4 F-060 二次店レーン希望の構造改訂**（docs/02 改訂 APPROVED 版 / §9 申し送り反映）。トップダウン（卸が作った確定レーンを二次店が優先順位付け）→ ボトムアップ（二次店が希望場所×希望開催日を自由記述で複数提出）へ。**schema**: `LanePreference.comment`→`note`、`LanePreferenceItem` に `venueLabel`（バックフィル後 NOT NULL・一次ソース）/ `venueProviderId` / `storeId` / `desiredDates`（Json `'YYYY-MM-DD'` 配列）/ `memo` を追加、`lineEventId` を NULL 許容に降格（FK なし柔リンク）。**§3.4.1** 設計判断（comment→note、venueLabel 必須化、任意リンク非 FK 理由、Open Q26 確定＝`desiredDates` を `LineEvent.scheduledDates` と同方式の Json 配列で採用・子テーブル案との比較、希望レーン数の導出）。**§3.4.2** RLS は現行踏襲（変更なし）を明記。**§3.4.3** 非破壊 2 段階マイグレーション `20260606000000_lane_preference_bottomup`（列追加→バックフィル `note←comment`/`venueLabel←LineEvent.name`/`desiredDates←scheduledDates`→`venueLabel` NOT NULL 化）+ `20260606010000_lane_preference_drop_comment`（comment drop）の SQL 要点。**§3.4.4** contracts 新設 `packages/contracts/src/dto/lane-preference.ts`（`LanePreferenceDto`/`LanePreferenceItemDto`/`SaveLanePreferenceInput` zod・`DEALER_OMITTED_LANE_PREFERENCE_KEYS`・destructure-and-rest 方針）。**§3.4.5** `listLanePreferences` 出力を新構造へ + `saveLanePreference` upsert シグネチャ（実装スコープは Open Q24 = pm/iterate 判断）。**§7.1.1** 提出→一覧確認シーケンス追加。 | claude |

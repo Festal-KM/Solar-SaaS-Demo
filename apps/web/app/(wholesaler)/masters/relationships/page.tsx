@@ -50,6 +50,7 @@ export default async function RelationshipsMasterPage() {
             <thead className="bg-muted/40 text-left">
               <tr>
                 <th className="px-3 py-2 font-medium">{t.fields.dealerName}</th>
+                <th className="px-3 py-2 font-medium">{t.fields.franchiseNo}</th>
                 <th className="px-3 py-2 font-medium">{t.fields.status}</th>
                 <th className="px-3 py-2 font-medium">{t.fields.defaultScope}</th>
                 <th className="px-3 py-2 font-medium">{t.fields.note}</th>

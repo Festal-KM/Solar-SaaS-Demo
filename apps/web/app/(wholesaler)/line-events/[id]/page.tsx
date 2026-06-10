@@ -124,6 +124,7 @@ export default async function LineEventDetailPage({ params }: PageProps) {
         targetMonth={row.targetMonth}
         scheduledDates={row.scheduledDates}
         contractNote={row.contractNote}
+        venuePlace={row.name}
       />
 
       {/* アサイン情報 */}

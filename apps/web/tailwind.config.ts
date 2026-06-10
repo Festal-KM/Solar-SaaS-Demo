@@ -17,9 +17,19 @@ const config: Config = {
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
-        // Brand
+        // Brand — 青系（PlayStation 系）。単一アクセントのブランドブルー。
         primary: { DEFAULT: "#0070d1", foreground: "#ffffff", pressed: "#0064b7", active: "#004d8d" },
         commerce: { DEFAULT: "#d53b00", foreground: "#ffffff", pressed: "#aa2f00" },
+
+        // Named palette — コンポーネントが参照する名前付きトークン。
+        "electric-blue": "#0070d1", // アクセント = ブランドブルー
+        "carbon-dark": "#1a1a1a", // 見出し / 強調テキスト（off-black）
+        graphite: "#3f3f46", // 本文上の濃いニュートラル（バッジ/ラベル）
+        pewter: "#6b6b6b", // ミュート二次テキスト
+        "light-ash": "#f3f3f3", // 明るいニュートラル面 / チップ背景
+        "cloud-gray": "#e2e2e2", // 控えめな境界 / divider
+        "mist-light": "#f7f8fa", // ごく薄い行 / ホバー面
+        "silver-fog": "#9ca3af", // プレースホルダ
 
         // Surfaces
         "canvas-dark": "#000000",

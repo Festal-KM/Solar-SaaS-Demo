@@ -34,9 +34,24 @@ export interface EditBasicInfoInitial {
   address: string | null;
   area: string | null;
   inflowRoute: InflowRoute | null;
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null;
+  birthDate: string | null; // ISO
+  buildYear: string | null; // ISO
+  tossDept: string | null;
+  belongDept: string | null;
 }
 
 const INFLOW_UNSET = "__unset__";
+
+// ISO → <input type="date"> 用 YYYY-MM-DD。
+function toDateInput(iso: string | null): string {
+  if (!iso) return "";
+  const dt = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
 
 interface AreaChoice {
   id: string;
@@ -66,6 +81,13 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
   const [address, setAddress] = useState(initial.address ?? "");
   const [area, setArea] = useState(initial.area ?? "");
   const [inflowRoute, setInflowRoute] = useState<string>(initial.inflowRoute ?? INFLOW_UNSET);
+  const [prefecture, setPrefecture] = useState(initial.prefecture ?? "");
+  const [city, setCity] = useState(initial.city ?? "");
+  const [addressLine, setAddressLine] = useState(initial.addressLine ?? "");
+  const [birthDate, setBirthDate] = useState(toDateInput(initial.birthDate));
+  const [buildYear, setBuildYear] = useState(toDateInput(initial.buildYear));
+  const [tossDept, setTossDept] = useState(initial.tossDept ?? "");
+  const [belongDept, setBelongDept] = useState(initial.belongDept ?? "");
 
   // Reset fields to raw values whenever the dialog is (re)opened.
   function onOpenChange(next: boolean) {
@@ -78,6 +100,13 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
       setAddress(initial.address ?? "");
       setArea(initial.area ?? "");
       setInflowRoute(initial.inflowRoute ?? INFLOW_UNSET);
+      setPrefecture(initial.prefecture ?? "");
+      setCity(initial.city ?? "");
+      setAddressLine(initial.addressLine ?? "");
+      setBirthDate(toDateInput(initial.birthDate));
+      setBuildYear(toDateInput(initial.buildYear));
+      setTossDept(initial.tossDept ?? "");
+      setBelongDept(initial.belongDept ?? "");
     }
     setOpen(next);
   }
@@ -96,6 +125,13 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
           address: blank(address),
           area: area.trim().length > 0 ? area.trim() : null,
           inflowRoute: inflowRoute === INFLOW_UNSET ? null : (inflowRoute as InflowRoute),
+          prefecture: prefecture.trim() || null,
+          city: city.trim() || null,
+          addressLine: addressLine.trim() || null,
+          birthDate: birthDate || null,
+          buildYear: buildYear || null,
+          tossDept: tossDept.trim() || null,
+          belongDept: belongDept.trim() || null,
         });
         if (result.duplicatePhoneWarning) {
           toast.warning(t.feedback.duplicatePhone);
@@ -212,6 +248,72 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
               <option value="OUTBOUND_CALL">{d.inflowRouteLabels.OUTBOUND_CALL}</option>
               <option value="DIRECT_VISIT">{d.inflowRouteLabels.DIRECT_VISIT}</option>
             </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-basic-prefecture">{d.fields.prefecture}</Label>
+              <Input
+                id="edit-basic-prefecture"
+                value={prefecture}
+                onChange={(e) => setPrefecture(e.target.value)}
+                autoComplete="address-level1"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-basic-city">{d.fields.city}</Label>
+              <Input
+                id="edit-basic-city"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                autoComplete="address-level2"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-basic-address-line">{d.fields.addressLine}</Label>
+            <Input
+              id="edit-basic-address-line"
+              value={addressLine}
+              onChange={(e) => setAddressLine(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-basic-birth">{d.fields.birthDate}</Label>
+              <Input
+                id="edit-basic-birth"
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-basic-build">{d.fields.buildYear}</Label>
+              <Input
+                id="edit-basic-build"
+                type="date"
+                value={buildYear}
+                onChange={(e) => setBuildYear(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-basic-toss-dept">{d.fields.tossDept}</Label>
+              <Input
+                id="edit-basic-toss-dept"
+                value={tossDept}
+                onChange={(e) => setTossDept(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-basic-belong-dept">{d.fields.belongDept}</Label>
+              <Input
+                id="edit-basic-belong-dept"
+                value={belongDept}
+                onChange={(e) => setBelongDept(e.target.value)}
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>

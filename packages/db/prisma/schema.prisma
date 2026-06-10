@@ -205,6 +205,9 @@ model Relationship {
   dealerId     String
   status       RelationshipStatus @default(ACTIVE)
   defaultScope DealerScope        @default(FULL_CLOSING)
+  // 加盟店番号（卸業者が二次店に割り当てる識別番号、例: ERP12）。
+  // 二次店マスタで編集する。wholesaler×dealer 単位なので Relationship に持つ。
+  franchiseNo  String?
   note         String?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
@@ -515,16 +518,18 @@ model LineEvent {
   @@index([wholesalerId, status])
 }
 
-// 二次店レーン希望 — 二次店が月単位で、卸業者の作成したレーン(LineEvent)から
-// 参加希望を優先順位付きで提出する（F-060）。単発の DealerPreference が
-// EventCandidate に紐づくのに対し、こちらは既存レーンを優先順位で選ぶ。
+// 二次店レーン希望 — 二次店が月単位で「希望するレーン（＝希望場所 × 希望開催日）」を
+// 希望順位付きで複数件提出する（F-060）。旧仕様は卸業者が作成した確定レーン(LineEvent)
+// を二次店が優先順位付けするトップダウン構造だったが、新仕様は二次店が確定レーンに依存
+// せず希望場所・希望開催日を自由記述で提出するボトムアップ構造（docs/05 §3.4 / §9 申し送り）。
 model LanePreference {
   id             String   @id @default(cuid())
   wholesalerId   String
   relationshipId String
   // 'YYYY-MM' — 対象月。
   targetMonth    String
-  comment        String?
+  // 特記事項（旧 comment を改称・維持。バックフィルで comment→note コピー）。
+  note           String?
   submittedAt    DateTime @default(now())
   submittedBy    String
 
@@ -535,12 +540,27 @@ model LanePreference {
   @@index([wholesalerId, targetMonth])
 }
 
-// レーン希望の各選択（優先順位付き）。priority=1 が第一希望。
+// レーン希望の各明細（希望順位付き）。priority=1 が希望①。
+// venueLabel が一次ソース（必須）。venueProviderId / storeId / lineEventId は
+// マスタ・確定レーンへの「任意リンク」で FK を張らず id 文字列で柔リンク
+// （loader 層で findMany → Map 結合。VenueProvider 解決と同方針）。
 model LanePreferenceItem {
   id               String @id @default(cuid())
   lanePreferenceId String
-  lineEventId      String
   priority         Int
+  // 希望場所の表示用ラベル（例「カインズ 大宮店」）。一次ソース・必須。
+  // マスタ未登録の場所も二次店が自由記述で提出できる。
+  venueLabel       String
+  // マスタ任意リンク（場所提供元 / 店舗）。NULL 許容・柔リンク（FK なし）。
+  venueProviderId  String?
+  storeId          String?
+  // 確定レーン(LineEvent)への任意リンク。旧仕様で必須だった参照を NULL 許容に降格。
+  lineEventId      String?
+  // 希望開催日。週単位の複数希望日（'YYYY-MM-DD' の Json 配列）。
+  // LineEvent.scheduledDates と方式を統一（§3.4 / Open Q26）。
+  desiredDates     Json?
+  // レーン別メモ（任意）。
+  memo             String?
 
   lanePreference LanePreference @relation(fields: [lanePreferenceId], references: [id], onDelete: Cascade)
 
@@ -989,6 +1009,14 @@ model Customer {
   email                      String?
   postalCode                 String?
   address                    String?
+  // 連絡先構造化（docs/05 §16-A）。住所は当面 address と併存。
+  prefecture                 String? // 都道府県
+  city                       String? // 市区町村
+  addressLine                String? // 番地以降
+  birthDate                  DateTime? // 生年月日（年齢は表示時に算出）
+  buildYear                  DateTime? // 築年日
+  tossDept                   String? // トス部署
+  belongDept                 String? // 所属部署
   area                       String? // 顧客のエリア（エリアマスタ名を保持。未設定時は住所から導出表示）
   housingType                String?
   pvInstalled                Boolean?
@@ -1237,6 +1265,51 @@ enum ApplicationStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Enums — 詳細顧客・案件管理（docs/05 §16.3）
+// ---------------------------------------------------------------------------
+
+// 架電ステータス: 未架電 / 予定 / 完了 / 不在・折返し待ち / 不通
+enum CallStatus {
+  NONE
+  SCHEDULED
+  DONE
+  CALLBACK_WAIT
+  NG
+}
+
+// 不備解消ステータス: なし / 不備あり(未解消) / 解消済み
+enum DefectStatus {
+  NONE
+  OPEN
+  RESOLVED
+}
+
+// 完工後ステータス: 未着手 / 対応中 / 完了
+enum PostCompletionStatus {
+  NONE
+  IN_PROGRESS
+  DONE
+}
+
+// 設備カテゴリ判別子（PV/BT/EQ/IH/AC/付帯/プレゼント）
+enum EquipmentCategory {
+  PV
+  BT
+  EQ
+  IH
+  AC
+  ACCESSORY
+  GIFT
+}
+
+// 支払いステータス: 未入金 / 一部入金 / 入金済み
+enum ContractPaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+// ---------------------------------------------------------------------------
 // Models — deals / contracts / gross profit / construction / application (SP-05)
 // docs/05 §3.6
 //
@@ -1297,6 +1370,15 @@ model Contract {
   incentiveTargetTypeSnapshot IncentiveTargetType?
   isSelfHosted                Boolean              @default(false)
   status                      ContractStatus       @default(CONTRACTED)
+  // 運用ステータス・コール・設備ID（docs/05 §16-B）
+  docsUrl                     String?
+  equipmentSerialId           String?
+  loanReviewCallAt            DateTime?
+  thankYouCallAt              DateTime?
+  callStatus                  CallStatus           @default(NONE)
+  defectStatus                DefectStatus         @default(NONE)
+  defectDetail                String?
+  postCompletionStatus        PostCompletionStatus @default(NONE)
   createdBy                   String
   createdAt                   DateTime             @default(now())
   updatedAt                   DateTime             @updatedAt
@@ -1309,6 +1391,8 @@ model Contract {
   cancellation  ContractCancellation?
   constructions Construction[]
   applications  Application[]
+  equipment     ContractEquipment[]
+  payment       ContractPayment?
 
   @@index([wholesalerId, status, contractDate])
   @@index([ownerRelationshipId, status])
@@ -1328,7 +1412,8 @@ model ContractItem {
   snapshotListPrice     Decimal  @db.Decimal(14, 2)
   createdAt             DateTime @default(now())
 
-  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contract  Contract            @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  equipment ContractEquipment[]
 
   @@index([contractId])
 }
@@ -1420,6 +1505,12 @@ model Construction {
   fee           Decimal?           @db.Decimal(14, 2)
   note          String?
   fileKeys      String[]
+  // 着工・売電開始・候補日・対応事業者名（docs/05 §16-B）
+  startedDate            DateTime?
+  powerSaleStartDate     DateTime?
+  surveyCandidates       Json?
+  constructionCandidates Json?
+  vendorName             String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
@@ -1449,6 +1540,54 @@ model Application {
   contract Contract @relation(fields: [contractId], references: [id])
 
   @@index([contractId])
+}
+
+// 設備スペック明細（PV/BT/EQ/IH/AC/付帯/プレゼント）。Contract の子。
+// テナント分離は親 Contract.wholesalerId 経由の相関 EXISTS（docs/05 §16.4）。
+model ContractEquipment {
+  id               String            @id @default(cuid())
+  contractId       String
+  contractItemId   String? // 価格明細(ContractItem)への任意リンク
+  category         EquipmentCategory
+  contracted       Boolean           @default(false)
+  manufacturer     String?
+  model            String? // 型番①
+  capacity         String?
+  quantity         Int? // 枚数 / 個数
+  installLocation  String? // 設置場所（パワコン新設/交換は attributes.pcsType）
+  introducedStatus String? // 導入状況（EQ/IH）
+  warrantyStandard Boolean?
+  warrantyExtended Boolean?
+  warrantyDisaster Boolean?
+  detail           String?
+  // attributes Json キー（任意）: model2 / pcsType / pvOutputWarranty / pvOption /
+  //   acWarrantySupport / nabeModel（docs/05 §16.3）
+  attributes       Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  contract     Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractItem ContractItem? @relation(fields: [contractItemId], references: [id], onDelete: SetNull)
+
+  @@index([contractId, category])
+}
+
+// ローン・入金（Contract と 1:1）。docs/05 §16.3 / §16-C。
+model ContractPayment {
+  id                  String                @id @default(cuid())
+  contractId          String                @unique
+  paymentStatus       ContractPaymentStatus @default(UNPAID)
+  paymentCount        Int? // 支払い回数
+  loanCompany         String? // ローン会社
+  downPayment         Int? // 頭金（円）
+  creditLifeInsurance Boolean? // 団体信用生命保険-契約有無
+  loanNote            String? // ローン-備考
+  depositDate         DateTime? // 入金日
+  dealerPayoutDate    DateTime? // 代理店支払日
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 }
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,8 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import { ResultReportTrigger } from "@/components/reports/result-report-dialog";
+import { buildDemoResultReport } from "@/components/reports/result-report-data";
 import { labels } from "@/lib/i18n/labels";
 
 import { getWholesalerEventDetail } from "./data";
@@ -237,19 +239,32 @@ export default async function WholesalerEventDetailPage({ params }: PageProps) {
           <p className="text-muted-foreground text-sm">{t.noReports}</p>
         ) : (
           <ul className="space-y-2">
-            {data.reports.map((r) => (
-              <li key={r.id} className="border-border rounded-md border p-3 text-sm">
-                <span className="font-medium">
-                  {t.reportTypes[r.type as keyof typeof t.reportTypes] ?? r.type}
-                </span>
-                <Badge variant="outline" className="ml-2 text-xs">
-                  {t.reportOrgTypes[r.reporterOrgType] ?? r.reporterOrgType}
-                </Badge>
-                <span className="text-muted-foreground ml-2 text-xs">
-                  {new Date(r.createdAt).toLocaleString("ja-JP")}
-                </span>
-              </li>
-            ))}
+            {data.reports.map((r) => {
+              const typeLabel = t.reportTypes[r.type as keyof typeof t.reportTypes] ?? r.type;
+              return (
+                <li key={r.id} className="border-border rounded-md border p-3 text-sm">
+                  {r.type === "RESULT" ? (
+                    // 成果報告はクリックで日報ポップアップを開く。
+                    <ResultReportTrigger
+                      data={buildDemoResultReport(r.id, {
+                        date: data.eventCandidate.scheduledDate.slice(0, 10),
+                        venuePlace: data.venueProvider?.name ?? data.eventCandidate.storeName,
+                      })}
+                    >
+                      {typeLabel}
+                    </ResultReportTrigger>
+                  ) : (
+                    <span className="font-medium">{typeLabel}</span>
+                  )}
+                  <Badge variant="outline" className="ml-2 text-xs">
+                    {t.reportOrgTypes[r.reporterOrgType] ?? r.reporterOrgType}
+                  </Badge>
+                  <span className="text-muted-foreground ml-2 text-xs">
+                    {new Date(r.createdAt).toLocaleString("ja-JP")}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

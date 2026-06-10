@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AcquiredAppointmentsTable,
+  EventReportsView,
+} from "@/components/reports/result-report-dialog";
+import {
+  buildDemoAppointments,
+  buildDemoEventReports,
+} from "@/components/reports/result-report-data";
 import { labels } from "@/lib/i18n/labels";
 
 import { getEventCandidate, listActiveDealers, listWholesalerUsers } from "../data";
@@ -40,6 +47,16 @@ export default async function EventCandidateDetailPage({ params }: PageProps) {
 
   const venueName = row.venueProviderName ?? row.storeName;
   const hasEvent = row.eventId != null;
+
+  // 報告（開始/終了/成果）+ アポ取り顧客のデモ値を決定論的に生成（同一シード）。
+  const reportSeed = row.eventId ?? row.id;
+  const reportCtx = { date: row.scheduledDate.slice(0, 10), venuePlace: venueName };
+  const demoReports = buildDemoEventReports(reportSeed, reportCtx);
+  const demoAppointments = buildDemoAppointments(
+    reportSeed,
+    demoReports.result.apptTotal,
+    reportCtx,
+  );
 
   return (
     <div className="space-y-6">
@@ -130,66 +147,22 @@ export default async function EventCandidateDetailPage({ params }: PageProps) {
           <CardTitle className="text-base">{tl.appointmentInfo}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-hairline-light">
-                  <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">{tl.appointmentColumns.customerName}</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">{tl.appointmentColumns.dateTime}</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">{tl.appointmentColumns.address}</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">{tl.appointmentColumns.memo}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-sm text-mute-light">
-                    {tl.appointmentPlaceholder}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <AcquiredAppointmentsTable customers={demoAppointments} />
         </CardContent>
       </Card>
 
-      {/* Report */}
+      {/* Report — 開始/終了/成果 をインライン表示（レーンイベントと同一 UI） */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">{tl.reportSection}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-hairline-light">
-                  <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">{tl.reportColumns.type}</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">{tl.reportColumns.submitter}</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">{tl.reportColumns.submittedAt}</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">{tl.reportColumns.memo}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-hairline-light">
-                  <td className="px-3 py-3 text-sm text-ink">{tl.reportStart}</td>
-                  <td className="px-3 py-3 text-sm text-mute-light">—</td>
-                  <td className="px-3 py-3 text-sm text-mute-light">—</td>
-                  <td className="px-3 py-3"><Badge variant="secondary">{tl.reportNotSubmitted}</Badge></td>
-                </tr>
-                <tr className="border-b border-hairline-light">
-                  <td className="px-3 py-3 text-sm text-ink">{tl.reportEnd}</td>
-                  <td className="px-3 py-3 text-sm text-mute-light">—</td>
-                  <td className="px-3 py-3 text-sm text-mute-light">—</td>
-                  <td className="px-3 py-3"><Badge variant="secondary">{tl.reportNotSubmitted}</Badge></td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-3 text-sm text-ink">{tl.reportResult}</td>
-                  <td className="px-3 py-3 text-sm text-mute-light">—</td>
-                  <td className="px-3 py-3 text-sm text-mute-light">—</td>
-                  <td className="px-3 py-3"><Badge variant="secondary">{tl.reportNotSubmitted}</Badge></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <EventReportsView
+            reports={buildDemoEventReports(row.eventId ?? row.id, {
+              date: row.scheduledDate.slice(0, 10),
+              venuePlace: venueName,
+            })}
+          />
         </CardContent>
       </Card>
     </div>

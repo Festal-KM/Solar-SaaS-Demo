@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,6 +12,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AcquiredAppointmentsTable,
+  EventReportsView,
+} from "@/components/reports/result-report-dialog";
+import {
+  buildDemoAppointments,
+  buildDemoEventReports,
+} from "@/components/reports/result-report-data";
 import { labels } from "@/lib/i18n/labels";
 
 import { updateLineDatesAction } from "./actions";
@@ -59,6 +66,8 @@ interface LineScheduleSectionProps {
   targetMonth: string;
   scheduledDates: string[];
   contractNote: string | null;
+  // 催事場所（レーンイベント名 = 開催場所名）。成果報告ポップアップに渡す。
+  venuePlace: string;
 }
 
 export function LineScheduleSection({
@@ -66,6 +75,7 @@ export function LineScheduleSection({
   targetMonth,
   scheduledDates,
   contractNote,
+  venuePlace,
 }: LineScheduleSectionProps) {
   const router = useRouter();
   const t = labels.lineEvent;
@@ -133,6 +143,26 @@ export function LineScheduleSection({
       .replace("{day}", String(d))
       .replace("{dow}", DAY_LABELS[dow] ?? "");
   }, [popupDate, t.datePopup.titleFormat]);
+
+  // 日付ポップアップで表示する報告一式（開始/終了/成果）。デモ値を決定論的に生成。
+  const popupReports = useMemo(
+    () =>
+      popupDate
+        ? buildDemoEventReports(`${lineEventId}-${popupDate}`, { date: popupDate, venuePlace })
+        : null,
+    [popupDate, lineEventId, venuePlace],
+  );
+
+  // アポ取り顧客（成果のアポ数に揃えた件数を生成）。
+  const popupAppointments = useMemo(
+    () =>
+      popupReports && popupDate
+        ? buildDemoAppointments(`${lineEventId}-${popupDate}`, popupReports.result.apptTotal, {
+            date: popupDate,
+          })
+        : [],
+    [popupReports, lineEventId, popupDate],
+  );
 
   return (
     <>
@@ -360,82 +390,19 @@ export function LineScheduleSection({
 
       {/* 日付ポップアップ — 報告/アポはプレースホルダー（将来データ連携時に差し込む） */}
       <Dialog open={popupDate != null} onOpenChange={(next) => !next && setPopupDate(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{popupTitle}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6 mt-2">
-            {/* レポート（開始/終了/成果） */}
-            <div>
-              <p className="text-sm font-semibold text-ink mb-2">{t.datePopup.reportSection}</p>
-              <div className="overflow-x-auto rounded-md border border-hairline-light">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-hairline-light">
-                      <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">
-                        {tl.reportColumns.type}
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">
-                        {tl.reportColumns.submitter}
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">
-                        {tl.reportColumns.submittedAt}
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">
-                        {tl.reportColumns.memo}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[tl.reportStart, tl.reportEnd, tl.reportResult].map((type, i) => (
-                      <tr
-                        key={type}
-                        className={i < 2 ? "border-b border-hairline-light" : undefined}
-                      >
-                        <td className="px-3 py-3 text-sm text-ink">{type}</td>
-                        <td className="px-3 py-3 text-sm text-mute-light">—</td>
-                        <td className="px-3 py-3 text-sm text-mute-light">—</td>
-                        <td className="px-3 py-3">
-                          <Badge variant="secondary">{tl.reportNotSubmitted}</Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* 報告（開始/終了/成果）— 入れ子ダイアログにせずポップアップ内に直接表示。 */}
+            {popupReports ? <EventReportsView reports={popupReports} /> : null}
 
-            {/* アポ取り顧客一覧 */}
+            {/* アポ取り顧客一覧 — イベントで獲得したアポ顧客（デモ値、成果のアポ数に整合） */}
             <div>
-              <p className="text-sm font-semibold text-ink mb-2">{t.datePopup.appointmentSection}</p>
-              <div className="overflow-x-auto rounded-md border border-hairline-light">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-hairline-light">
-                      <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">
-                        {tl.appointmentColumns.customerName}
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">
-                        {tl.appointmentColumns.dateTime}
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">
-                        {tl.appointmentColumns.address}
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-mute-light">
-                        {tl.appointmentColumns.memo}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td colSpan={4} className="px-3 py-6 text-center text-sm text-mute-light">
-                        {tl.appointmentPlaceholder}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <p className="mb-2 text-sm font-semibold text-ink">{t.datePopup.appointmentSection}</p>
+              <AcquiredAppointmentsTable customers={popupAppointments} />
             </div>
           </div>
         </DialogContent>

@@ -40,6 +40,8 @@ export * from "./schemas/deal.js";
 export * from "./schemas/contract.js";
 export * from "./schemas/contract-item.js";
 export * from "./dto/contract-item.js";
+export * from "./dto/project-info.js";
+export * from "./dto/lane-preference.js";
 export * from "./schemas/construction.js";
 export * from "./schemas/application.js";
 export * from "./schemas/contract-cancel.js";

@@ -110,3 +110,58 @@ export function maskName(name: string, viewer: ViewerContext): string {
   const familyName = name.split(/[\s　]/)[0] ?? "";
   return familyName || "***";
 }
+
+/**
+ * Mask a birth date according to the viewer's effective mode (docs/05 §6.5 /
+ * §16.4). Used by the F-061 project-info aggregate view.
+ *
+ * FULL    : return the ISO date string (YYYY-MM-DD) as-is
+ * PARTIAL : decade band only, e.g. "40代"
+ * MASKED  : decade band only (SAAS_ADMIN / cross-tenant dealer never see full)
+ *
+ * `birthDate` is a Date or an ISO string. `null`/invalid → "未設定".
+ */
+export function maskBirthDate(
+  birthDate: Date | string | null | undefined,
+  viewer: ViewerContext,
+): string {
+  if (!birthDate) return "未設定";
+  const d = birthDate instanceof Date ? birthDate : new Date(birthDate);
+  if (Number.isNaN(d.getTime())) return "未設定";
+
+  const mode = effectiveMode(viewer);
+  if (mode === "FULL") {
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  // PARTIAL / MASKED → 年代のみ。
+  const age = computeAge(d);
+  if (age == null) return "未設定";
+  const decade = Math.floor(age / 10) * 10;
+  return `${decade}代`;
+}
+
+/**
+ * Full age in years from a birth date, or `null` when invalid / future.
+ * Exposed for the F-061 loader so `age` can be returned as a number for FULL
+ * viewers and `null` once masked (docs/05 §16.9 / §16.10).
+ */
+export function computeAge(birthDate: Date | string | null | undefined): number | null {
+  if (!birthDate) return null;
+  const b = birthDate instanceof Date ? birthDate : new Date(birthDate);
+  if (Number.isNaN(b.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+}
+
+/**
+ * True when the viewer is allowed to see un-masked PII (FULL effective mode).
+ * Used to decide whether `age` is returned as a number or null.
+ */
+export function isFullPiiViewer(viewer: ViewerContext): boolean {
+  return effectiveMode(viewer) === "FULL";
+}

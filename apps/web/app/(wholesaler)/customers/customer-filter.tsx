@@ -1,6 +1,5 @@
 "use client";
 
-import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -88,17 +87,15 @@ export function CustomerFilter({
         applyFilters();
       }}
     >
-      <div className="flex h-10 w-full max-w-sm items-center gap-2 rounded-sm border border-cloud-gray bg-white px-3 transition-colors focus-within:border-electric-blue focus-within:ring-2 focus-within:ring-electric-blue/20">
-        <Search className="size-4 shrink-0 text-mute-light" />
-        <input
-          type="search"
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          placeholder={t.searchPlaceholderFull}
-          aria-label={t.searchPlaceholderFull}
-          className="h-full w-full border-0 bg-transparent p-0 text-sm text-carbon-dark placeholder:text-silver-fog focus:outline-none focus:ring-0"
-        />
-      </div>
+      {/* 検索 — 単一ボーダー入力（アイコンなし・二重枠/ネイティブ枠を排除） */}
+      <input
+        type="search"
+        value={searchValue}
+        onChange={(e) => setSearchValue(e.target.value)}
+        placeholder={t.searchPlaceholderFull}
+        aria-label={t.searchPlaceholderFull}
+        className="h-10 w-full max-w-sm appearance-none rounded-md border border-cloud-gray bg-white px-3 text-sm text-ink placeholder:text-mute-light focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 [&::-webkit-search-cancel-button]:appearance-none"
+      />
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">

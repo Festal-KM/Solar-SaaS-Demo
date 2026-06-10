@@ -208,7 +208,7 @@ async function upsertTenantByName(
 
 async function upsertRelationship(
   tx: TxClient,
-  args: { wholesalerId: string; dealerId: string; defaultScope: DealerScope },
+  args: { wholesalerId: string; dealerId: string; defaultScope: DealerScope; franchiseNo?: string },
 ): Promise<{ id: string }> {
   return tx.relationship.upsert({
     where: {
@@ -220,12 +220,14 @@ async function upsertRelationship(
     update: {
       status: "ACTIVE",
       defaultScope: args.defaultScope,
+      ...(args.franchiseNo ? { franchiseNo: args.franchiseNo } : {}),
     },
     create: {
       wholesalerId: args.wholesalerId,
       dealerId: args.dealerId,
       status: "ACTIVE",
       defaultScope: args.defaultScope,
+      ...(args.franchiseNo ? { franchiseNo: args.franchiseNo } : {}),
     },
     select: { id: true },
   });
@@ -323,16 +325,19 @@ export async function seedAll(): Promise<SeedSummary> {
         wholesalerId: pilot.id,
         dealerId: alpha.id,
         defaultScope: DEALER_SCOPE_BY_KEY.dealerAlpha,
+        franchiseNo: "ERP01",
       }),
       upsertRelationship(tx, {
         wholesalerId: pilot.id,
         dealerId: beta.id,
         defaultScope: DEALER_SCOPE_BY_KEY.dealerBeta,
+        franchiseNo: "ERP02",
       }),
       upsertRelationship(tx, {
         wholesalerId: pilot.id,
         dealerId: gamma.id,
         defaultScope: DEALER_SCOPE_BY_KEY.dealerGamma,
+        franchiseNo: "ERP03",
       }),
     ]);
 
@@ -779,58 +784,96 @@ export async function seedAll(): Promise<SeedSummary> {
       }
     }
 
-    // Seed 二次店レーン希望 (F-060) so the 二次店希望一覧 screen renders data.
-    // Resolve the two seeded LineEvents by name → their ids, then create one
-    // LanePreference per dealer relationship (find-or-create on the
-    // (relationshipId, targetMonth) unique). rels[] is [alpha, beta, gamma].
-    const seededLineEvents = await tx.lineEvent.findMany({
-      where: { wholesalerId: pilot.id, name: { in: LINE_EVENT_SEEDS.map((le) => le.name) } },
-      select: { id: true, name: true },
-    });
-    const lineEventIdByName = new Map(seededLineEvents.map((le) => [le.name, le.id]));
-    const laneA = lineEventIdByName.get("イオンモール幕張新都心");
-    const laneB = lineEventIdByName.get("ららぽーとTOKYO-BAY");
-    if (laneA && laneB) {
-      const LANE_PREFERENCE_SEEDS = [
-        {
-          relationshipId: rels[0]!.id, // alpha
-          comment: "毎週水曜希望。要員2名で対応可能です。",
-          items: [
-            { lineEventId: laneA, priority: 1 },
-            { lineEventId: laneB, priority: 2 },
-          ],
-        },
-        {
-          relationshipId: rels[1]!.id, // beta
-          comment: "土日中心で参加したいです。",
-          items: [
-            { lineEventId: laneB, priority: 1 },
-            { lineEventId: laneA, priority: 2 },
-          ],
-        },
-      ];
-      for (const pref of LANE_PREFERENCE_SEEDS) {
-        const existingPref = await tx.lanePreference.findUnique({
-          where: {
-            relationshipId_targetMonth: {
-              relationshipId: pref.relationshipId,
-              targetMonth: lineMonth,
-            },
+    // Seed 二次店レーン希望 (F-060 / ボトムアップ構造) so the 二次店希望一覧 screen
+    // renders data. 二次店は希望場所(venueLabel)・希望開催日(desiredDates)を自由記述で
+    // 提出する（確定レーン LineEvent に依存しない）。任意リンク venueProviderId は
+    // 突合用に付与（loader が name 解決）。idempotent: (relationshipId, targetMonth) 一意。
+    // rels[] is [alpha, beta, gamma]. 日付は決定論的に lineMonth から週単位で組む。
+    const wd = (day: number) => `${lineMonth}-${String(day).padStart(2, "0")}`;
+    const LANE_PREFERENCE_SEEDS = [
+      {
+        relationshipId: rels[0]!.id, // alpha
+        note: "土日を中心に2会場で展開希望。要員2名で対応可能です。",
+        items: [
+          {
+            priority: 1,
+            venueLabel: "カインズ 大宮店",
+            venueProviderId: venueProvider.id,
+            desiredDates: [wd(7), wd(8), wd(14), wd(15)],
+            memo: "駐車場側スペースを希望",
           },
-          select: { id: true },
+          {
+            priority: 2,
+            venueLabel: "コメリ 大宮店",
+            desiredDates: [wd(21), wd(22)],
+            memo: null,
+          },
+        ],
+      },
+      {
+        relationshipId: rels[1]!.id, // beta
+        note: "平日も対応可能です。",
+        items: [
+          {
+            priority: 1,
+            venueLabel: "ビバホーム さいたま新都心店",
+            desiredDates: [wd(7), wd(8), wd(9)],
+            memo: "初週に集中したい",
+          },
+          {
+            priority: 2,
+            venueLabel: "カインズ 大宮店",
+            venueProviderId: venueProvider.id,
+            desiredDates: [wd(28), wd(29)],
+            memo: null,
+          },
+        ],
+      },
+    ];
+    // upsert（items 入れ替え含む）: 構造変更（ボトムアップ化）前の旧構造 LanePreference
+    // 行が残る環境でも新構造デモへ収束させる。既存があれば note を更新し子 items を
+    // 全削除→新構造で再作成。無ければ create。tx 内なので delete→create は原子的。
+    // 複数回流しても同一結果（決定論的・冪等）。
+    for (const pref of LANE_PREFERENCE_SEEDS) {
+      const itemsCreate = pref.items.map((it) => ({
+        priority: it.priority,
+        venueLabel: it.venueLabel,
+        venueProviderId: it.venueProviderId ?? null,
+        desiredDates: it.desiredDates,
+        memo: it.memo ?? null,
+      }));
+      const existingPref = await tx.lanePreference.findUnique({
+        where: {
+          relationshipId_targetMonth: {
+            relationshipId: pref.relationshipId,
+            targetMonth: lineMonth,
+          },
+        },
+        select: { id: true },
+      });
+      if (existingPref) {
+        await tx.lanePreferenceItem.deleteMany({
+          where: { lanePreferenceId: existingPref.id },
         });
-        if (!existingPref) {
-          await tx.lanePreference.create({
-            data: {
-              wholesalerId: pilot.id,
-              relationshipId: pref.relationshipId,
-              targetMonth: lineMonth,
-              comment: pref.comment,
-              submittedBy: pilotAdminId,
-              items: { create: pref.items },
-            },
-          });
-        }
+        await tx.lanePreference.update({
+          where: { id: existingPref.id },
+          data: {
+            note: pref.note,
+            submittedBy: pilotAdminId,
+            items: { create: itemsCreate },
+          },
+        });
+      } else {
+        await tx.lanePreference.create({
+          data: {
+            wholesalerId: pilot.id,
+            relationshipId: pref.relationshipId,
+            targetMonth: lineMonth,
+            note: pref.note,
+            submittedBy: pilotAdminId,
+            items: { create: itemsCreate },
+          },
+        });
       }
     }
 
@@ -839,6 +882,11 @@ export async function seedAll(): Promise<SeedSummary> {
     // Idempotent: skipped entirely if any sample customer (by name prefix) is
     // already present, mirroring the find-or-create style used above.
     await seedCustomers(tx, { wholesalerId: pilot.id, userId: pilotAdminId, now });
+
+    // F-061 案件情報の実データ化（docs/05 §16-C）。サンプル / イベントデモ顧客の
+    // 契約に ContractPayment / ContractEquipment + Contract/Construction 拡張列の
+    // デモ値を冪等に投入する。
+    await seedContractProjectData(tx, { wholesalerId: pilot.id, now });
 
     // Seed DealerCommissionRate (F-049 / S-049) — 手数料設定. 3 つのパイロット
     // 関係に対し率と履歴 1〜2 行を作る。idempotent：relationshipId に対する
@@ -1172,6 +1220,121 @@ async function seedCustomers(
   }
 
   await seedCustomerActivities(tx, { wholesalerId, userId, now });
+}
+
+// F-061 案件情報タブの実データ化（docs/05 §16-C）。当該卸業者の各契約に対し、
+// ContractPayment（1:1）/ ContractEquipment（PV+BT の最低 2 行）と Contract /
+// Construction の拡張列のデモ値を投入する。冪等: ContractPayment が既に存在する
+// 契約はスキップし、ContractEquipment も 0 件のときのみ作成する。
+async function seedContractProjectData(
+  tx: TxClient,
+  args: { wholesalerId: string; now: Date },
+): Promise<void> {
+  const { wholesalerId, now } = args;
+  const day = (offset: number): Date => new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
+
+  const contracts = await tx.contract.findMany({
+    where: { wholesalerId },
+    select: {
+      id: true,
+      contractDate: true,
+      payment: { select: { id: true } },
+      equipment: { select: { id: true } },
+      constructions: { select: { id: true, status: true } },
+    },
+  });
+
+  let i = 0;
+  for (const c of contracts) {
+    const seq = i++;
+    const completed = c.constructions.some((con) => con.status === "DONE");
+    const constructing = c.constructions.some(
+      (con) => con.status === "CONSTRUCTING" || con.status === "SURVEYED",
+    );
+
+    // Contract 拡張列（運用ステータス・コール・設備ID）— updateMany で常に冪等更新。
+    await tx.contract.update({
+      where: { id: c.id },
+      data: {
+        docsUrl: `https://docs.example.com/contracts/${c.id.slice(-8)}.pdf`,
+        equipmentSerialId: `EQ-${100000 + seq * 137}`,
+        loanReviewCallAt: day(-3),
+        thankYouCallAt: completed ? day(-1) : null,
+        callStatus: completed ? "DONE" : constructing ? "SCHEDULED" : "NONE",
+        defectStatus: seq % 3 === 0 ? "OPEN" : "NONE",
+        defectDetail: seq % 3 === 0 ? "申請書類の押印漏れ。再取得を依頼。" : null,
+        postCompletionStatus: completed ? "DONE" : constructing ? "IN_PROGRESS" : "NONE",
+      },
+    });
+
+    // Construction 拡張列。代表行 1 件の着工・売電・候補日・対応事業者名を補完。
+    const rep = c.constructions[0];
+    if (rep) {
+      await tx.construction.update({
+        where: { id: rep.id },
+        data: {
+          surveyDate: day(-7),
+          startedDate: constructing || completed ? day(-5) : null,
+          completedDate: completed ? day(-1) : null,
+          powerSaleStartDate: completed ? day(10) : null,
+          surveyCandidates: [day(-9).toISOString(), day(-8).toISOString()],
+          constructionCandidates: [day(-6).toISOString(), day(-5).toISOString()],
+          vendorName: "サンプル施工 株式会社",
+        },
+      });
+    }
+
+    // ContractPayment（1:1）— 未作成のときのみ。
+    if (!c.payment) {
+      await tx.contractPayment.create({
+        data: {
+          contractId: c.id,
+          paymentStatus: completed ? "PAID" : seq % 2 === 0 ? "PARTIAL" : "UNPAID",
+          paymentCount: [1, 60, 120, 180][seq % 4],
+          loanCompany: ["ジャックス", "アプラス", "オリコ", "現金一括"][seq % 4],
+          downPayment: (seq % 5) * 100000,
+          creditLifeInsurance: seq % 2 === 0,
+          loanNote: seq % 2 === 0 ? "事前審査承認済み。本審査は契約後に申請。" : null,
+          depositDate: completed ? day(-2) : null,
+          dealerPayoutDate: completed ? day(5) : null,
+        },
+      });
+    }
+
+    // ContractEquipment（PV + BT の最低 2 行）— 0 件のときのみ。
+    if (c.equipment.length === 0) {
+      await tx.contractEquipment.create({
+        data: {
+          contractId: c.id,
+          category: "PV",
+          contracted: true,
+          manufacturer: ["長州産業", "カナディアンソーラー", "Qセルズ"][seq % 3],
+          model: `CS-${400 + (seq % 60)}MB`,
+          capacity: `${(3.5 + (seq % 4)).toFixed(1)} kW`,
+          quantity: 8 + (seq % 16),
+          installLocation: ["屋外（北側）", "屋内（玄関収納）", "屋外（車庫横）"][seq % 3],
+          warrantyStandard: true,
+          warrantyExtended: seq % 2 === 0,
+          attributes: { pvOutputWarranty: true, pvOption: seq % 2 === 0 ? "HEMS" : "なし" },
+        },
+      });
+      if (seq % 2 === 0) {
+        await tx.contractEquipment.create({
+          data: {
+            contractId: c.id,
+            category: "BT",
+            contracted: true,
+            manufacturer: ["長州産業", "ニチコン", "オムロン"][seq % 3],
+            model: `ET-${40 + (seq % 60)}B3`,
+            capacity: `${(6.5 + (seq % 10)).toFixed(1)} kWh`,
+            installLocation: ["屋外", "屋内（階段下）", "車庫"][seq % 3],
+            warrantyDisaster: true,
+            warrantyExtended: true,
+          },
+        });
+      }
+    }
+  }
 }
 
 // 商談履歴 / 発生タスクのデモシード。各サンプル顧客につき、まだ activity が 1 件も

@@ -131,6 +131,19 @@ export const updateCustomerAction = withServerActionContext<
         ...(parsed.area !== undefined
           ? { area: parsed.area && parsed.area.length > 0 ? parsed.area : null }
           : {}),
+        ...(parsed.prefecture !== undefined ? { prefecture: parsed.prefecture?.trim() || null } : {}),
+        ...(parsed.city !== undefined ? { city: parsed.city?.trim() || null } : {}),
+        ...(parsed.addressLine !== undefined
+          ? { addressLine: parsed.addressLine?.trim() || null }
+          : {}),
+        ...(parsed.birthDate !== undefined
+          ? { birthDate: parsed.birthDate ? new Date(parsed.birthDate) : null }
+          : {}),
+        ...(parsed.buildYear !== undefined
+          ? { buildYear: parsed.buildYear ? new Date(parsed.buildYear) : null }
+          : {}),
+        ...(parsed.tossDept !== undefined ? { tossDept: parsed.tossDept?.trim() || null } : {}),
+        ...(parsed.belongDept !== undefined ? { belongDept: parsed.belongDept?.trim() || null } : {}),
         ...(parsed.registeredByUserId !== undefined
           ? { registeredByUserId: parsed.registeredByUserId }
           : {}),

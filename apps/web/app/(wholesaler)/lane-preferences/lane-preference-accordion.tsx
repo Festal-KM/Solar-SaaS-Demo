@@ -5,59 +5,9 @@ import { useState } from "react";
 
 import { labels } from "@/lib/i18n/labels";
 
-import type { LanePreferenceItemRow, LanePreferenceRow } from "./data";
+import { bandColor, groupConsecutiveDates } from "./desired-dates";
 
-const DOW = ["日", "月", "火", "水", "木", "金", "土"];
-
-// Timezone-safe — parse YYYY-MM-DD into a local Date (never toISOString()).
-function parseLocalDate(s: string): Date {
-  const parts = s.split("-").map(Number);
-  return new Date(parts[0]!, parts[1]! - 1, parts[2]!);
-}
-
-function formatChip(dateStr: string): string {
-  const d = parseLocalDate(dateStr);
-  return `${d.getMonth() + 1}/${String(d.getDate()).padStart(2, "0")}(${DOW[d.getDay()]})`;
-}
-
-function chipColor(dateStr: string): string {
-  const dow = parseLocalDate(dateStr).getDay();
-  if (dow === 0) return "bg-red-50 text-red-700 border-red-200";
-  if (dow === 6) return "bg-blue-50 text-blue-700 border-blue-200";
-  return "bg-surface-soft text-ink border-hairline-light";
-}
-
-// 月曜始まりで、その日付が属する週の月曜を返す（local-time 計算、toISOString 不使用）。
-function getMonday(d: Date): Date {
-  const day = d.getDay(); // 0=日..6=土
-  const diff = day === 0 ? -6 : 1 - day;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
-}
-
-// 対象月の第何週か（月内の最初の月曜始まり週を第1週とする）。
-function weekOfMonth(targetMonth: string, d: Date): number {
-  const [y, m] = targetMonth.split("-").map(Number);
-  const firstMonday = getMonday(new Date(y!, m! - 1, 1));
-  const dMonday = getMonday(d);
-  return Math.round((dMonday.getTime() - firstMonday.getTime()) / (7 * 86_400_000)) + 1;
-}
-
-interface WeekGroup {
-  week: number;
-  dates: string[];
-}
-
-// 開催日を月曜始まりの週ごとにまとめ、週番号順にソートして返す。
-function groupByWeek(targetMonth: string, dates: string[]): WeekGroup[] {
-  const byWeek = new Map<number, string[]>();
-  for (const ds of [...dates].sort()) {
-    const w = weekOfMonth(targetMonth, parseLocalDate(ds));
-    (byWeek.get(w) ?? byWeek.set(w, []).get(w)!).push(ds);
-  }
-  return Array.from(byWeek.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([week, ds]) => ({ week, dates: ds }));
-}
+import type { LanePreferenceDto, LanePreferenceItemDto } from "./data";
 
 // 提出日時は YYYY/MM/DD HH:mm（ja-JP, JST 表示）。
 function formatSubmittedAt(iso: string): string {
@@ -78,74 +28,65 @@ function priorityLabel(priority: number): string {
   return PRIORITY_LABELS.fallback.replace("{n}", String(priority));
 }
 
-function PreferenceCard({
-  item,
-  targetMonth,
-}: {
-  item: LanePreferenceItemRow;
-  targetMonth: string;
-}) {
+function PreferenceCard({ item }: { item: LanePreferenceItemDto }) {
   const c = labels.lanePreference.card;
-  const weekGroups = groupByWeek(targetMonth, item.scheduledDates);
+  // 連続日を帯チップにグルーピング（例 7/7,7/8 → "7/7~8"）。
+  const bands = groupConsecutiveDates(item.desiredDates);
+  // マスタ突合名は副次情報として表示（一次ソースは venueLabel）。
+  const linkedName = item.venueProviderName ?? item.storeName ?? null;
+
   return (
-    <div className="min-w-[220px] flex-1 rounded-md border border-hairline-light bg-surface-soft/40 p-3">
+    <div className="min-w-[240px] flex-1 rounded-md border border-hairline-light bg-surface-soft/40 p-3">
       <div className="text-xs font-medium text-link-light mb-2">
         {priorityLabel(item.priority)}
       </div>
-      <dl className="space-y-1.5 text-sm">
+      <dl className="space-y-2 text-sm">
         <div>
-          <dt className="text-xs text-mute-light">{c.lineName}</dt>
-          <dd className="text-ink font-medium">{item.lineName ?? "—"}</dd>
+          <dt className="text-xs text-mute-light">{c.venueLabel}</dt>
+          <dd className="text-ink font-medium">{item.venueLabel}</dd>
+          {linkedName ? (
+            <dd className="text-xs text-mute-light mt-0.5">
+              {item.venueProviderName ? c.venueProvider : c.store}: {linkedName}
+            </dd>
+          ) : null}
         </div>
         <div>
-          <dt className="text-xs text-mute-light">{c.venueProvider}</dt>
-          <dd className="text-body-light">{item.venueProviderName ?? "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-mute-light mb-1">{c.scheduledDates}</dt>
+          <dt className="text-xs text-mute-light mb-1">{c.desiredDates}</dt>
           <dd>
-            {weekGroups.length === 0 ? (
+            {bands.length === 0 ? (
               <span className="text-mute-light">—</span>
             ) : (
-              <div className="space-y-2">
-                {weekGroups.map((g) => (
-                  <div
-                    key={g.week}
-                    className="rounded-md border border-hairline-light bg-white/60 p-2"
+              <div className="flex flex-wrap items-center gap-1.5">
+                {bands.map((b) => (
+                  <span
+                    key={b.dates[0]}
+                    className={[
+                      "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums",
+                      bandColor(b.startDow),
+                    ].join(" ")}
                   >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-medium text-body-light">
-                        {c.weekLabel.replace("{n}", String(g.week))}
-                      </span>
-                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tabular-nums">
-                        {c.dayCount.replace("{n}", String(g.dates.length))}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {g.dates.map((d) => (
-                        <span
-                          key={d}
-                          className={[
-                            "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums",
-                            chipColor(d),
-                          ].join(" ")}
-                        >
-                          {formatChip(d)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                    <span>{b.label}</span>
+                    <span className="text-[10px] font-semibold opacity-70">
+                      {c.dayCount.replace("{n}", String(b.dates.length))}
+                    </span>
+                  </span>
                 ))}
               </div>
             )}
           </dd>
         </div>
+        {item.memo ? (
+          <div>
+            <dt className="text-xs text-mute-light">{c.memo}</dt>
+            <dd className="text-body-light">{item.memo}</dd>
+          </div>
+        ) : null}
       </dl>
     </div>
   );
 }
 
-function AccordionRow({ row }: { row: LanePreferenceRow }) {
+function AccordionRow({ row }: { row: LanePreferenceDto }) {
   const [open, setOpen] = useState(false);
   const t = labels.lanePreference;
 
@@ -166,6 +107,9 @@ function AccordionRow({ row }: { row: LanePreferenceRow }) {
             ].join(" ")}
           />
           <span className="text-ink font-medium">{row.dealerName}</span>
+          <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tabular-nums">
+            {t.laneCountBadge.replace("{n}", String(row.laneCount))}
+          </span>
         </div>
         <span className="text-xs text-mute-light tabular-nums">
           {t.submittedAtLabel} {formatSubmittedAt(row.submittedAt)}
@@ -185,17 +129,13 @@ function AccordionRow({ row }: { row: LanePreferenceRow }) {
                 <span className="text-sm text-mute-light">—</span>
               ) : (
                 row.items.map((item) => (
-                  <PreferenceCard
-                    key={`${row.id}-${item.priority}-${item.lineEventId}`}
-                    item={item}
-                    targetMonth={row.targetMonth}
-                  />
+                  <PreferenceCard key={`${row.id}-${item.priority}`} item={item} />
                 ))
               )}
             </div>
             <div className="text-sm">
-              <span className="text-xs text-mute-light">{t.commentLabel}: </span>
-              <span className="text-body-light">{row.comment ?? t.noComment}</span>
+              <span className="text-xs text-mute-light">{t.noteLabel}: </span>
+              <span className="text-body-light">{row.note ?? t.noNote}</span>
             </div>
           </div>
         </div>
@@ -205,7 +145,7 @@ function AccordionRow({ row }: { row: LanePreferenceRow }) {
 }
 
 interface LanePreferenceAccordionProps {
-  rows: LanePreferenceRow[];
+  rows: LanePreferenceDto[];
 }
 
 export function LanePreferenceAccordion({ rows }: LanePreferenceAccordionProps) {

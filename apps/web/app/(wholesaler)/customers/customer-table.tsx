@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, ChevronsUpDown } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -70,20 +70,20 @@ interface CustomerTableProps {
 }
 
 export function CustomerTable({ customers }: CustomerTableProps) {
-  const router = useRouter();
   const t = labels.customer;
+  const router = useRouter();
+
+  // 行クリック / Enter・Space で顧客詳細へ遷移。
+  function goToDetail(id: string) {
+    router.push(`/customers/${id}`);
+  }
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-hairline-light bg-surface-soft/50">
-            <th className={TH}>
-              <span className="inline-flex items-center gap-1">
-                {t.columns.name}
-                <ChevronsUpDown className="size-3.5 text-mute-light" />
-              </span>
-            </th>
+            <th className={TH}>{t.columns.name}</th>
             <th className={TH}>{t.columns.area}</th>
             <th className={TH}>{t.columns.assignee}</th>
             <th className={TH}>{t.columns.nextAppointmentAt}</th>
@@ -98,8 +98,17 @@ export function CustomerTable({ customers }: CustomerTableProps) {
           {customers.map((row) => (
             <tr
               key={row.id}
-              className="cursor-pointer transition-colors hover:bg-surface-soft/30"
-              onClick={() => router.push(`/customers/${row.id}`)}
+              tabIndex={0}
+              role="button"
+              aria-label={`${row.name}${t.honorific}`}
+              className="cursor-pointer transition-colors hover:bg-mist-light active:bg-surface-soft focus:outline-none focus-visible:bg-mist-light focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
+              onClick={() => goToDetail(row.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  goToDetail(row.id);
+                }
+              }}
             >
               <td className="whitespace-nowrap px-6 py-3 font-medium text-ink">
                 {row.name}

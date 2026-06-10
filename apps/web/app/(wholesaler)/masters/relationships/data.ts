@@ -19,6 +19,7 @@ export interface RelationshipListItem {
   id: string;
   dealerId: string;
   dealerName: string;
+  franchiseNo: string | null;
   status: RelationshipStatusValue;
   defaultScope: DealerScopeValue;
   note: string | null;
@@ -59,6 +60,7 @@ export async function listRelationships(): Promise<RelationshipListItem[]> {
       select: {
         id: true,
         dealerId: true,
+        franchiseNo: true,
         status: true,
         defaultScope: true,
         note: true,
@@ -71,6 +73,7 @@ export async function listRelationships(): Promise<RelationshipListItem[]> {
       id: r.id,
       dealerId: r.dealerId,
       dealerName: r.dealer.name,
+      franchiseNo: r.franchiseNo,
       status: r.status,
       defaultScope: r.defaultScope,
       note: r.note,

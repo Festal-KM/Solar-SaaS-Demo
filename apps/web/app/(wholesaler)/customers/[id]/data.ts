@@ -106,6 +106,13 @@ export interface CustomerDetail {
   email: string | null;
   postalCode: string | null;
   address: string | null; // masked
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null; // masked
+  birthDate: string | null; // ISO（年齢は表示時に算出）
+  buildYear: string | null; // ISO
+  tossDept: string | null;
+  belongDept: string | null;
   area: string | null;
   channel: AcquisitionChannel;
   inflowRoute: InflowRoute | null; // 流入経路（顧客情報で手動選択、未設定は null）
@@ -208,6 +215,13 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
         email: true,
         postalCode: true,
         address: true,
+        prefecture: true,
+        city: true,
+        addressLine: true,
+        birthDate: true,
+        buildYear: true,
+        tossDept: true,
+        belongDept: true,
         area: true,
         channel: true,
         inflowRoute: true,
@@ -385,6 +399,13 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       email: customer.email,
       postalCode: customer.postalCode,
       address: customer.address ? maskAddress(customer.address, viewer) : null,
+      prefecture: customer.prefecture,
+      city: customer.city,
+      addressLine: customer.addressLine ? maskAddress(customer.addressLine, viewer) : null,
+      birthDate: isoOrNull(customer.birthDate),
+      buildYear: isoOrNull(customer.buildYear),
+      tossDept: customer.tossDept,
+      belongDept: customer.belongDept,
       area: customer.area ?? deriveArea(customer.address),
       channel: customer.channel,
       inflowRoute: (customer.inflowRoute as InflowRoute | null) ?? null,

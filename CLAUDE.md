@@ -211,3 +211,4 @@ tests/
 7. **インセンティブ確定は契約成立時。** キャンセル期限（デフォルト 8 日、卸業者上書き可、特商法準拠）。期限内取消し / 期限後負調整。共同開催は案件ごと手動調整。
 8. **Never commit secrets.** `.env.local` / `.env.production` は gitignored。`.env.example` のみコミット可。本番は Railway env vars。
 9. **AI ランタイムは使わない。** Claude / OpenAI / 画像生成 API は導入しない。`token_usage` テーブルも不要。LLM 呼び出しを伴うコードは原則受け入れない。
+10. **UI を新規作成・修正するときは必ず `ui-ux-pro-max` スキルを使う。** 画面・コンポーネント・モーダル・レイアウト・配色・タイポグラフィ・余白・インタラクションなど「見た目／操作感」に関わる変更では、着手前に `ui-ux-pro-max`（必要に応じて `scripts/search.py --design-system` / `--domain ux` 等）を参照し、情報階層・データ密度・アクセシビリティ（コントラスト 4.5:1 / フォーカス / キーボード）・モーション指針に沿って実装する。`apps/web/lib/i18n/labels.ts` への文言集約（ルール 2）と併せて遵守する。

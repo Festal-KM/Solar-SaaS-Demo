@@ -19,6 +19,7 @@ const ScopeSchema = z.enum(["APPOINTMENT_ONLY", "FIRST_VISIT", "FULL_CLOSING"]);
 
 const UpdateRelationshipInputSchema = z.object({
   id: z.string().min(1),
+  franchiseNo: z.string().max(50).optional().nullable(),
   status: StatusSchema.optional(),
   defaultScope: ScopeSchema.optional(),
   note: z.string().max(2000).optional().nullable(),
@@ -52,6 +53,9 @@ export const updateRelationshipAction = withServerActionContext<
     const updated = await tx.relationship.update({
       where: { id: parsed.id },
       data: {
+        ...("franchiseNo" in parsed
+          ? { franchiseNo: parsed.franchiseNo?.trim() ? parsed.franchiseNo.trim() : null }
+          : {}),
         ...(parsed.status !== undefined ? { status: parsed.status } : {}),
         ...(parsed.defaultScope !== undefined ? { defaultScope: parsed.defaultScope } : {}),
         ...("note" in parsed ? { note: parsed.note } : {}),

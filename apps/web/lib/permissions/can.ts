@@ -142,6 +142,12 @@ const POLICY: Record<PermissionAction, ActionPolicy> = {
   "lane_preference.read": {
     roles: ["WHOLESALER_ADMIN", "WHOLESALER_EVENT_TEAM"],
   },
+  // 二次店によるレーン希望の提出（F-060 ボトムアップ / docs/05 §3.4.5 saveLanePreference）。
+  // dealer_admin / dealer_staff のみ。relationshipId は ctx 由来で送信値を信用しない。
+  // RLS の WITH CHECK が current_relationship_ids で二重防御。
+  "lane_preference.write": {
+    roles: ["DEALER_ADMIN", "DEALER_STAFF"],
+  },
 
   // --- Dealer preferences (F-025〜F-026) ---
   "dealer_preference.read": {

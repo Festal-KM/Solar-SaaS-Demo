@@ -3,12 +3,12 @@
 // 3 カード（右上・横並び）/ メモ（右下・横幅いっぱい）/ 商談履歴（最下部・全幅・
 // スレッド形式）。PII は data ローダーでマスク済み。
 
-import { Building2, User2 } from "lucide-react";
+import { Building2, CalendarClock, User2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { auth } from "@/auth";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,7 +27,9 @@ import type { InflowRoute } from "@solar/contracts";
 import { CustomerChat } from "./customer-chat";
 import { CustomerFiles } from "./customer-files";
 import { CustomerHistory } from "./customer-history";
+import { CustomerProjectInfo } from "./customer-project-info";
 import { CustomerTasks } from "./customer-tasks";
+import { getCustomerProjectInfo } from "@/lib/customer/get-project-info";
 import { getCustomerDetail } from "./data";
 import type { AssigneeDisplay } from "./data";
 import { EditAssigneeDialog } from "./edit-assignee-dialog";
@@ -55,6 +57,61 @@ function formatDay(iso: string | null): string {
     month: "2-digit",
     day: "2-digit",
   });
+}
+
+// 生年月日(ISO)から満年齢を算出して "NN 歳" を返す（未設定は null）。
+function ageText(iso: string | null): string | null {
+  if (!iso) return null;
+  const b = new Date(iso);
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age -= 1;
+  return age >= 0 && age < 130 ? `${age} 歳` : null;
+}
+
+// 次回アポ日程の簡易表示（MM/DD（曜）HH:mm）。
+function formatAppointmentShort(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" });
+  const time = d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${date}（${labels.customer.weekdays[d.getDay()]}）${time}`;
+}
+
+// at-a-glance 帯のステータス → バッジバリアント（一覧テーブルと同じ意味づけ）。
+const CONTRACT_VARIANT: Record<string, BadgeVariant> = {
+  contracted: "success",
+  negotiating: "default",
+  lost: "secondary",
+  cancelled: "destructive",
+};
+const CONSTRUCTION_VARIANT: Record<string, BadgeVariant> = {
+  done: "success",
+  in_progress: "warning",
+  not_started: "secondary",
+};
+const SUBSIDY_VARIANT: Record<string, BadgeVariant> = {
+  granted: "success",
+  applying: "default",
+  none: "secondary",
+};
+
+// 「ラベル＋バッジ」の小さなステータスチップ（ヘッダー直下の at-a-glance 帯で使用）。
+function StatusChip({
+  label,
+  value,
+  variant,
+}: {
+  label: string;
+  value: string;
+  variant: BadgeVariant;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="text-xs text-mute-light">{label}</span>
+      <Badge variant={variant}>{value}</Badge>
+    </span>
+  );
 }
 
 function InfoRow({ label, value }: { label: string; value: string | null }) {
@@ -153,6 +210,13 @@ async function getCustomerEditableValues(
         email: true,
         postalCode: true,
         address: true,
+        prefecture: true,
+        city: true,
+        addressLine: true,
+        birthDate: true,
+        buildYear: true,
+        tossDept: true,
+        belongDept: true,
         area: true,
         inflowRoute: true,
         registeredByUserId: true,
@@ -165,8 +229,13 @@ async function getCustomerEditableValues(
     }),
   );
   if (!row) return null;
-  // Prisma は inflowRoute を string|null で返すので、UI 用の InflowRoute 型へ寄せる。
-  return { ...row, inflowRoute: (row.inflowRoute as InflowRoute | null) ?? null };
+  // Prisma は inflowRoute を string|null、birthDate/buildYear を Date|null で返すので UI 型へ寄せる。
+  return {
+    ...row,
+    inflowRoute: (row.inflowRoute as InflowRoute | null) ?? null,
+    birthDate: row.birthDate ? row.birthDate.toISOString() : null,
+    buildYear: row.buildYear ? row.buildYear.toISOString() : null,
+  };
 }
 
 export default async function CustomerDetailPage({ params }: PageProps) {
@@ -177,10 +246,11 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   const editable = await getCustomerEditableValues(id);
   if (!editable) notFound();
 
-  const [users, areas, dealers] = await Promise.all([
+  const [users, areas, dealers, projectInfo] = await Promise.all([
     listWholesalerUsers(),
     listActiveAreas(),
     listActiveDealers(),
+    getCustomerProjectInfo(id),
   ]);
 
   const t = labels.customer;
@@ -199,16 +269,43 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         items={[{ label: bc.customers, href: "/customers" }, { label: bc.customerDetail }]}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-ink">
-          {detail.name}
-          <span className="ml-1 text-xl font-medium text-body-light">{t.honorific}</span>
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/customers">{d.backToList}</Link>
-          </Button>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="space-y-2.5">
+          <h1 className="text-2xl font-bold text-ink">
+            {detail.name}
+            <span className="ml-1 text-xl font-medium text-body-light">{t.honorific}</span>
+          </h1>
+          {/* at-a-glance — タブを開かずに主要な状態を一望できるステータス帯。 */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {detail.nextAppointmentAt ? (
+              <span className="inline-flex items-center gap-1.5 text-sm">
+                <CalendarClock className="size-4 text-mute-light" />
+                <span className="text-xs text-mute-light">{d.glance.nextAppointment}</span>
+                <span className="font-medium tabular-nums text-ink">
+                  {formatAppointmentShort(detail.nextAppointmentAt)}
+                </span>
+              </span>
+            ) : null}
+            <StatusChip
+              label={d.glance.contract}
+              value={t.contractStatusLabels[detail.contract.status]}
+              variant={CONTRACT_VARIANT[detail.contract.status] ?? "secondary"}
+            />
+            <StatusChip
+              label={d.glance.construction}
+              value={t.constructionStatusLabels[detail.construction.status]}
+              variant={CONSTRUCTION_VARIANT[detail.construction.status] ?? "secondary"}
+            />
+            <StatusChip
+              label={d.glance.subsidy}
+              value={t.subsidyStatusLabels[detail.subsidy.status]}
+              variant={SUBSIDY_VARIANT[detail.subsidy.status] ?? "secondary"}
+            />
+          </div>
         </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/customers">{d.backToList}</Link>
+        </Button>
       </div>
 
       {/* 詳細はタブで分割 — 基本情報 / 商談履歴 / 契約 / 施工 / 補助金 / ファイル / ToDo / チャット */}
@@ -227,7 +324,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         {/* 基本情報タブ — 担当者 + 基本情報 + メモ */}
         <TabsContent value="basic" className="space-y-4">
           {/* 担当者 — トスアップ / クロージングを自社社員 or 二次店から登録。 */}
-          <Card className="p-4">
+          <Card className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-ink">{d.assigneeLabel}</h2>
               <EditAssigneeDialog
@@ -261,6 +358,13 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                     address: editable.address,
                     area: editable.area,
                     inflowRoute: editable.inflowRoute,
+                    prefecture: editable.prefecture,
+                    city: editable.city,
+                    addressLine: editable.addressLine,
+                    birthDate: editable.birthDate,
+                    buildYear: editable.buildYear,
+                    tossDept: editable.tossDept,
+                    belongDept: editable.belongDept,
                   }}
                   areas={areas}
                 />
@@ -271,11 +375,19 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                   label={d.fields.inflowRoute}
                   value={detail.inflowRoute ? d.inflowRouteLabels[detail.inflowRoute] : null}
                 />
+                <InfoRow label={d.fields.birthDate} value={formatDay(detail.birthDate)} />
+                <InfoRow label={d.fields.age} value={ageText(detail.birthDate)} />
                 <InfoRow label={d.fields.postalCode} value={postalDisplay} />
+                <InfoRow label={d.fields.prefecture} value={detail.prefecture} />
+                <InfoRow label={d.fields.city} value={detail.city} />
+                <InfoRow label={d.fields.addressLine} value={detail.addressLine} />
                 <InfoRow label={d.fields.area} value={detail.area} />
                 <InfoRow label={d.fields.address} value={detail.address} />
                 <InfoRow label={d.fields.phone} value={detail.phone} />
                 <InfoRow label={d.fields.email} value={detail.email} />
+                <InfoRow label={d.fields.buildYear} value={formatDay(detail.buildYear)} />
+                <InfoRow label={d.fields.tossDept} value={detail.tossDept} />
+                <InfoRow label={d.fields.belongDept} value={detail.belongDept} />
               </dl>
             </Card>
 
@@ -289,6 +401,17 @@ export default async function CustomerDetailPage({ params }: PageProps) {
               </p>
             </Card>
           </div>
+
+          {/* 案件情報 — F-061 統合ビュー。基本情報タブ内に統合表示（重複する
+              基本情報・体制・備考は embedded で抑制し、案件固有のみ表示）。
+              編集カード群とのセクション境界を見出し付き区切り線で明示する。 */}
+          <div className="flex items-center gap-3 pt-2">
+            <h2 className="text-sm font-semibold text-ink">{d.tabs.projectInfo}</h2>
+            <div className="h-px flex-1 bg-hairline-light" aria-hidden />
+          </div>
+          <Card className="p-5">
+            <CustomerProjectInfo data={projectInfo} embedded />
+          </Card>
         </TabsContent>
 
         {/* 商談履歴 — 現在の商談状況の入力 + 履歴スレッド */}

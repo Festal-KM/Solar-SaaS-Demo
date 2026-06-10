@@ -28,12 +28,18 @@ export function RelationshipRow({ row }: RelationshipRowProps) {
   const t = labels.dealerRelationships;
   const c = labels.common;
 
+  const [franchiseNo, setFranchiseNo] = useState<string>(row.franchiseNo ?? "");
   const [status, setStatus] = useState<RelationshipStatusValue>(row.status);
   const [scope, setScope] = useState<DealerScopeValue>(row.defaultScope);
   const [note, setNote] = useState<string>(row.note ?? "");
   const [, startTransition] = useTransition();
 
-  function save(patch: { status?: RelationshipStatusValue; defaultScope?: DealerScopeValue; note?: string | null }) {
+  function save(patch: {
+    franchiseNo?: string | null;
+    status?: RelationshipStatusValue;
+    defaultScope?: DealerScopeValue;
+    note?: string | null;
+  }) {
     startTransition(async () => {
       try {
         await updateRelationshipAction({ id: row.id, ...patch });
@@ -49,6 +55,20 @@ export function RelationshipRow({ row }: RelationshipRowProps) {
   return (
     <tr className="border-border border-t">
       <td className="px-3 py-2 font-medium">{row.dealerName}</td>
+      <td className="px-3 py-2">
+        <Input
+          aria-label={t.fields.franchiseNo}
+          value={franchiseNo}
+          onChange={(e) => setFranchiseNo(e.target.value)}
+          onBlur={() => {
+            if ((row.franchiseNo ?? "") !== franchiseNo) {
+              save({ franchiseNo: franchiseNo.trim().length === 0 ? null : franchiseNo.trim() });
+            }
+          }}
+          className="h-9 max-w-[8rem] text-sm tabular-nums"
+          placeholder={t.franchiseNoPlaceholder}
+        />
+      </td>
       <td className="px-3 py-2">
         <select
           aria-label={t.fields.status}
