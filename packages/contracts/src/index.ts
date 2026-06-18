@@ -26,6 +26,7 @@ export * from "./services/incentive-rate-effective.js";
 export * from "./services/dealer-preference-summary.js";
 export * from "./services/dealer-scope.js";
 export * from "./services/masking.js";
+export * from "./services/cross-sell.js";
 export * from "./services/contract-snapshot.js";
 export * from "./services/gross-profit.js";
 export * from "./dto/product.js";

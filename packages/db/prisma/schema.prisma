@@ -592,6 +592,8 @@ model Product {
   createdBy     String
 
   priceHistory ProductPriceHistory[]
+  // F-063: 顧客のご提案商材（任意の商品マスタ参照）の逆リレーション（docs/05 §17.3）。
+  customersProposed Customer[] @relation("CustomerProposedProduct")
 
   @@index([wholesalerId, category, isActive])
   @@index([wholesalerId, effectiveFrom, effectiveTo])
@@ -1059,6 +1061,25 @@ model Customer {
   maekakuStatus              String?
   nextAction                 String?
   nextAppointmentAt          DateTime?
+  // F-063 住環境・家族属性ヒアリング（docs/05 §17）。連絡先 2 系統分離・家族属性・
+  // 案内者・提案商材・マエカク希望日時。phone は当面併存（後方互換 §17.6）。
+  landlinePhone              String?            // 固定電話
+  mobilePhone                String?            // 携帯電話
+  husbandAge                 Int?               // ご主人年齢（ヒアリング値。本人年齢算出とは別概念）
+  wifeAge                    Int?               // 奥様年齢
+  childAge                   Int?               // お子様年齢（代表 1 名・MVP）
+  guideAttendee              GuideAttendee?     // 案内者（faceToFace と別概念・別列）
+  faceToFace                 Boolean?           // 主権者同席フラグ（guideAttendee と別列）
+  proposedProduct            String?            // ご提案商材（自由記述・トスアップ時）
+  proposedProductId          String?            // ご提案商材（商品マスタ参照、任意）
+  maekakuPreferredAt         DateTime?          // マエカク電話希望日時（maekakuStatus と併存）
+  // 電気契約・設備（基本情報タブで手動編集する識別子・ステータス。全て自由記述・nullable）。
+  // 注: equipmentId は Customer 列であり、契約の equipmentSerialId（projectInfo.fields.equipmentId）
+  // とは別概念・別ラベル namespace（customer.detail.fields.equipmentId）。
+  electricContractStatus     String?            // 電気契約状況（自由記述）
+  electricAccountNo          String?            // お客様番号（電力会社）
+  supplyPointNo              String?            // 供給地点特定番号
+  equipmentId                String?            // 設備ID（自由記述）
   createdAt                  DateTime           @default(now())
   updatedAt                  DateTime           @updatedAt
 
@@ -1070,10 +1091,61 @@ model Customer {
   tasks        CustomerTask[]
   files        CustomerFile[]
   messages     CustomerMessage[]
+  existingEquipments CustomerExistingEquipment[]
+  proposedProductRef Product? @relation("CustomerProposedProduct", fields: [proposedProductId], references: [id], onDelete: SetNull)
 
   @@index([wholesalerId, phone])
   @@index([wholesalerId, status, createdAt])
   @@index([ownerRelationshipId])
+}
+
+// F-063 住環境・家族属性ヒアリング（docs/05 §17）。
+// 案内者: ご主人のみ / 奥様のみ / ご夫婦お揃い / その他。
+enum GuideAttendee {
+  HUSBAND
+  WIFE
+  BOTH
+  OTHER
+}
+
+// 既設設備カテゴリ（ガス給湯機 / エコキュート / 太陽光）。ContractEquipment の
+// EquipmentCategory（§16.3）とは別 enum（値域・意味が異なるため共有しない）。
+enum ExistingEquipmentCategory {
+  GAS_WATER_HEATER
+  ECO_CUTE
+  PV
+}
+
+// 設置有無 3 値: あり / なし / 不明。
+enum ExistingEquipmentPresence {
+  YES
+  NO
+  UNKNOWN
+}
+
+// 既設設備の現況（ヒアリング時点。ContractEquipment とは別概念・別テーブル）。
+// !! ContractEquipment（§16-C, 契約後の販売・施工設備のスペック明細）と混同しない。
+//    本テーブルは提案前のクロスセル判定材料であり、契約・価格・粗利に一切連動しない。
+// テナント分離は親 Customer.wholesalerId 経由の相関 EXISTS（RLS はマイグレーション参照／§17.4）。
+model CustomerExistingEquipment {
+  id          String                    @id @default(cuid())
+  customerId  String
+  category    ExistingEquipmentCategory
+  installed   ExistingEquipmentPresence @default(UNKNOWN) // 設置有無
+  installDate DateTime?                 // 設置日（ECO_CUTE/PV。未来日不可・§17.4）
+  maker       String?                   // メーカー（ECO_CUTE/PV）
+  capacityKw  Decimal?                  @db.Decimal(8, 2) // 容量[kW]（PV のみ・0 以上）
+  panelCount  Int?                      // 枚数（PV のみ・0 以上）
+  // attributes Json キー（任意）: model（機種・型番）, note（補足）
+  attributes  Json?
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // 1 顧客 × 1 カテゴリ 1 行（ガス給湯機/エコキュート/太陽光は各 1 行）。
+  @@unique([customerId, category])
+  @@index([customerId])
 }
 
 // 商談履歴（手入力のアクティビティログ）。顧客詳細の「新規記録」で作成。
@@ -1117,22 +1189,30 @@ model CustomerTask {
   @@index([activityId])
 }
 
+// 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント。
+enum CustomerFileCategory {
+  GENERAL
+  APPLICATION
+}
+
 // 関連ファイル（R2 にアップロードした添付）。fileKey は R2 オブジェクトキー。
 model CustomerFile {
-  id               String   @id @default(cuid())
+  id               String               @id @default(cuid())
   customerId       String
   activityId       String?
   fileKey          String
   fileName         String
   contentType      String?
   size             Int?
+  category         CustomerFileCategory @default(GENERAL)
   uploadedByUserId String
-  createdAt        DateTime @default(now())
+  createdAt        DateTime             @default(now())
 
   customer Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
   activity CustomerActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
 
   @@index([customerId, createdAt])
+  @@index([customerId, category, createdAt])
   @@index([activityId])
 }
 
@@ -1162,6 +1242,8 @@ model Appointment {
   appointmentType        String?
   status                 AppointmentStatus @default(UNCONFIRMED)
   note                   String?
+  // F-063: アポイント取得日（現 createdAt 近似運用を明示項目化／docs/05 §17.1.7）。
+  acquiredAt             DateTime?
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
 

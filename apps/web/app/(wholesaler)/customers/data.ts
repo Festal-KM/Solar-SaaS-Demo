@@ -7,7 +7,7 @@
 //
 // The list surfaces four INDEPENDENT status dimensions:
 //   - マエカク (maekaku): an appointment carrying a PreCall (derived).
-//   - 契約状況 / 施工状況 / 補助金申請状況: stored as MANUAL columns on Customer
+//   - 契約状況 / 施工状況 / 設置申請状況: stored as MANUAL columns on Customer
 //     and read straight through (edited by hand on the detail page).
 //
 // Filtering on the three manual statuses is direct column equality; マエカク stays
@@ -61,7 +61,7 @@ export {
 function buildStatusWhere(filter: CustomerListFilter): Prisma.CustomerWhereInput[] {
   const clauses: Prisma.CustomerWhereInput[] = [];
 
-  // 契約 / 施工 / 補助金 are manual columns → direct equality.
+  // 契約 / 施工 / 設置申請 are manual columns → direct equality.
   if (filter.contractStatus) clauses.push({ contractStatus: filter.contractStatus });
   if (filter.constructionStatus) clauses.push({ constructionStatus: filter.constructionStatus });
   if (filter.subsidyStatus) clauses.push({ subsidyStatus: filter.subsidyStatus });

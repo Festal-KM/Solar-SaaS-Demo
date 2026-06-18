@@ -19,8 +19,18 @@
 
 import { revalidatePath } from "next/cache";
 
-import { CustomerCreateSchema, CustomerUpdateSchema } from "@solar/contracts";
-import type { CustomerCreateInput, CustomerUpdateInput } from "@solar/contracts";
+import {
+  CustomerCreateSchema,
+  CustomerHearingSchema,
+  CustomerUpdateSchema,
+} from "@solar/contracts";
+import type {
+  CustomerCreateInput,
+  CustomerHearingInput,
+  CustomerUpdateInput,
+} from "@solar/contracts";
+
+import { Prisma } from "@solar/db";
 
 import { NotFoundError } from "@/lib/errors";
 import { withServerActionContext } from "@/lib/tenancy/server-action";
@@ -96,7 +106,7 @@ export const updateCustomerAction = withServerActionContext<
   {
     action: "customer.update",
   },
-  async ({ tx, ctx, input }) => {
+  async ({ tx, input }) => {
     const parsed = CustomerUpdateSchema.parse(input);
 
     const existing = await tx.customer.findUnique({
@@ -144,6 +154,18 @@ export const updateCustomerAction = withServerActionContext<
           : {}),
         ...(parsed.tossDept !== undefined ? { tossDept: parsed.tossDept?.trim() || null } : {}),
         ...(parsed.belongDept !== undefined ? { belongDept: parsed.belongDept?.trim() || null } : {}),
+        ...(parsed.electricContractStatus !== undefined
+          ? { electricContractStatus: parsed.electricContractStatus?.trim() || null }
+          : {}),
+        ...(parsed.electricAccountNo !== undefined
+          ? { electricAccountNo: parsed.electricAccountNo?.trim() || null }
+          : {}),
+        ...(parsed.supplyPointNo !== undefined
+          ? { supplyPointNo: parsed.supplyPointNo?.trim() || null }
+          : {}),
+        ...(parsed.equipmentId !== undefined
+          ? { equipmentId: parsed.equipmentId?.trim() || null }
+          : {}),
         ...(parsed.registeredByUserId !== undefined
           ? { registeredByUserId: parsed.registeredByUserId }
           : {}),
@@ -209,5 +231,116 @@ export const updateCustomerAction = withServerActionContext<
     revalidatePath(LIST_PATH);
     revalidatePath(`${LIST_PATH}/${parsed.id}`);
     return { id: updated.id, duplicatePhoneWarning };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// F-063 住環境・家族属性ヒアリング保存（docs/05 §17.9）.
+//
+// 顧客フォーム「住環境・家族ヒアリング」セクションの保存。Customer 拡張列を update、
+// CustomerExistingEquipment を category 単位で upsert（@@unique([customerId, category])）、
+// acquiredAt は代表アポへ反映。全クエリ withTenant + RLS の二重防御を通す。
+// ---------------------------------------------------------------------------
+
+export interface SaveCustomerHearingResult {
+  id: string;
+}
+
+export const saveCustomerHearingAction = withServerActionContext<
+  CustomerHearingInput,
+  SaveCustomerHearingResult
+>(
+  {
+    action: "customer.update",
+  },
+  async ({ tx, input }) => {
+    const parsed = CustomerHearingSchema.parse(input);
+
+    const existing = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundError("顧客が見つかりません");
+    }
+
+    await tx.customer.update({
+      where: { id: parsed.customerId },
+      data: {
+        ...(parsed.landlinePhone !== undefined
+          ? { landlinePhone: parsed.landlinePhone?.trim() || null }
+          : {}),
+        ...(parsed.mobilePhone !== undefined
+          ? { mobilePhone: parsed.mobilePhone?.trim() || null }
+          : {}),
+        ...(parsed.husbandAge !== undefined ? { husbandAge: parsed.husbandAge } : {}),
+        ...(parsed.wifeAge !== undefined ? { wifeAge: parsed.wifeAge } : {}),
+        ...(parsed.childAge !== undefined ? { childAge: parsed.childAge } : {}),
+        ...(parsed.household !== undefined ? { household: parsed.household?.trim() || null } : {}),
+        ...(parsed.guideAttendee !== undefined ? { guideAttendee: parsed.guideAttendee } : {}),
+        ...(parsed.faceToFace !== undefined ? { faceToFace: parsed.faceToFace } : {}),
+        ...(parsed.proposedProduct !== undefined
+          ? { proposedProduct: parsed.proposedProduct?.trim() || null }
+          : {}),
+        ...(parsed.proposedProductId !== undefined
+          ? { proposedProductId: parsed.proposedProductId }
+          : {}),
+        ...(parsed.maekakuPreferredAt !== undefined
+          ? {
+              maekakuPreferredAt: parsed.maekakuPreferredAt
+                ? new Date(parsed.maekakuPreferredAt)
+                : null,
+            }
+          : {}),
+      },
+      select: { id: true },
+    });
+
+    for (const eq of parsed.existingEquipments) {
+      // Prisma Json 入力は InputJsonValue のみ受ける（プレーン null は型不一致）。
+      // null は JsonNull に丸めて DB 上 NULL にする。
+      const attributes: Prisma.InputJsonValue | typeof Prisma.JsonNull =
+        eq.attributes != null
+          ? (eq.attributes as Prisma.InputJsonValue)
+          : Prisma.JsonNull;
+      const common = {
+        installed: eq.installed,
+        installDate: eq.installDate ? new Date(eq.installDate) : null,
+        maker: eq.maker?.trim() || null,
+        capacityKw: eq.capacityKw != null ? eq.capacityKw.toString() : null,
+        panelCount: eq.panelCount ?? null,
+        attributes,
+      };
+      await tx.customerExistingEquipment.upsert({
+        where: {
+          customerId_category: { customerId: parsed.customerId, category: eq.category },
+        },
+        create: {
+          customerId: parsed.customerId,
+          category: eq.category,
+          ...common,
+        },
+        update: common,
+      });
+    }
+
+    // アポ取得日は代表アポ（最新 scheduledAt）へ反映。
+    if (parsed.acquiredAt !== undefined) {
+      const rep = await tx.appointment.findFirst({
+        where: { customerId: parsed.customerId },
+        orderBy: { scheduledAt: "desc" },
+        select: { id: true },
+      });
+      if (rep) {
+        await tx.appointment.update({
+          where: { id: rep.id },
+          data: { acquiredAt: parsed.acquiredAt ? new Date(parsed.acquiredAt) : null },
+        });
+      }
+    }
+
+    revalidatePath(LIST_PATH);
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { id: parsed.customerId };
   },
 );

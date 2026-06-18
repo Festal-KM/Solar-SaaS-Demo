@@ -1,5 +1,5 @@
 // 卸業者側 顧客詳細ページ (F-031 / docs/04 §1.3 / wireframes/CustomerDetail.png).
-// 行クリックの遷移先。基本情報（左・縦長）/ 契約状況・施工状況・補助金申請状況の
+// 行クリックの遷移先。基本情報（左・縦長）/ 契約状況・施工状況・設置申請状況の
 // 3 カード（右上・横並び）/ メモ（右下・横幅いっぱい）/ 商談履歴（最下部・全幅・
 // スレッド形式）。PII は data ローダーでマスク済み。
 
@@ -217,6 +217,10 @@ async function getCustomerEditableValues(
         buildYear: true,
         tossDept: true,
         belongDept: true,
+        electricContractStatus: true,
+        electricAccountNo: true,
+        supplyPointNo: true,
+        equipmentId: true,
         area: true,
         inflowRoute: true,
         registeredByUserId: true,
@@ -308,7 +312,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         </Button>
       </div>
 
-      {/* 詳細はタブで分割 — 基本情報 / 商談履歴 / 契約 / 施工 / 補助金 / ファイル / ToDo / チャット */}
+      {/* 詳細はタブで分割 — 基本情報 / 商談履歴 / 契約 / 施工 / 設置申請 / ファイル / ToDo / チャット */}
       <Tabs defaultValue="basic" className="space-y-4">
         <TabsList variant="underline">
           <TabsTrigger value="basic">{d.tabs.basic}</TabsTrigger>
@@ -365,6 +369,10 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                     buildYear: editable.buildYear,
                     tossDept: editable.tossDept,
                     belongDept: editable.belongDept,
+                    electricContractStatus: editable.electricContractStatus,
+                    electricAccountNo: editable.electricAccountNo,
+                    supplyPointNo: editable.supplyPointNo,
+                    equipmentId: editable.equipmentId,
                   }}
                   areas={areas}
                 />
@@ -388,6 +396,13 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 <InfoRow label={d.fields.buildYear} value={formatDay(detail.buildYear)} />
                 <InfoRow label={d.fields.tossDept} value={detail.tossDept} />
                 <InfoRow label={d.fields.belongDept} value={detail.belongDept} />
+                <InfoRow
+                  label={d.fields.electricContractStatus}
+                  value={detail.electricContractStatus}
+                />
+                <InfoRow label={d.fields.electricAccountNo} value={detail.electricAccountNo} />
+                <InfoRow label={d.fields.supplyPointNo} value={detail.supplyPointNo} />
+                <InfoRow label={d.fields.equipmentId} value={detail.equipmentId} />
               </dl>
             </Card>
 
@@ -417,7 +432,16 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         {/* 商談履歴 — 現在の商談状況の入力 + 履歴スレッド */}
         <TabsContent value="history" className="space-y-4">
           <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold text-ink">{d.negotiation.title}</h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <h2 className="text-sm font-semibold text-ink">{d.negotiation.title}</h2>
+              {/* コール業務向けに顧客電話番号を近傍表示（detail.phone はローダでマスク済み）。 */}
+              <span className="inline-flex items-center gap-1.5 text-sm">
+                <span className="text-xs text-mute-light">{d.fields.phone}</span>
+                <span className="font-medium tabular-nums text-ink">
+                  {detail.phone && detail.phone.length > 0 ? detail.phone : "—"}
+                </span>
+              </span>
+            </div>
             <NegotiationStatusPanel
               customerId={detail.id}
               initialMaekaku={detail.maekakuStatus}
@@ -508,8 +532,8 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </Card>
         </TabsContent>
 
-        {/* 補助金申請状況 — ステータス（プルダウン）/ 申請種別 / 申請日 / 交付決定日 */}
-        <TabsContent value="subsidy">
+        {/* 設置申請状況 — ステータス（プルダウン）/ 申請種別 / 申請日 / 承認日 + 申請関連ドキュメント */}
+        <TabsContent value="subsidy" className="space-y-4">
           <Card className="p-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.subsidy}</h2>
             <SubsidyStatusPanel
@@ -520,6 +544,14 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 submittedDate: detail.subsidy.submittedDate,
                 grantedDate: detail.subsidy.grantedDate,
               }}
+            />
+          </Card>
+          <Card className="p-5">
+            <h2 className="mb-3 text-sm font-semibold text-ink">{d.applicationFiles.title}</h2>
+            <CustomerFiles
+              customerId={detail.id}
+              category="APPLICATION"
+              files={detail.applicationFiles}
             />
           </Card>
         </TabsContent>

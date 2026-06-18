@@ -57,7 +57,8 @@ export const presignCustomerFileUpload = withServerActionContext<
       throw new NotFoundError("顧客が見つかりません");
     }
 
-    const key = `customers/${parsed.customerId}/${randomUUID()}-${sanitizeFileName(parsed.fileName)}`;
+    const prefix = parsed.category === "APPLICATION" ? "applications" : "files";
+    const key = `customers/${parsed.customerId}/${prefix}/${randomUUID()}-${sanitizeFileName(parsed.fileName)}`;
     const { putUrl, headers } = await presignUpload({
       key,
       contentType: parsed.contentType,
@@ -152,6 +153,7 @@ export const createCustomerFile = withServerActionContext<CustomerFileRecordInpu
         fileName: parsed.fileName,
         contentType: parsed.contentType ?? null,
         size: parsed.size ?? null,
+        category: parsed.category,
         uploadedByUserId: ctx.actorUserId,
       },
       select: { id: true },

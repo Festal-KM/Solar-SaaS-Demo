@@ -113,6 +113,11 @@ export interface CustomerDetail {
   buildYear: string | null; // ISO
   tossDept: string | null;
   belongDept: string | null;
+  // 電気契約・設備（識別子・ステータス。マスキング不要・生値表示）。
+  electricContractStatus: string | null;
+  electricAccountNo: string | null;
+  supplyPointNo: string | null;
+  equipmentId: string | null;
   area: string | null;
   channel: AcquisitionChannel;
   inflowRoute: InflowRoute | null; // 流入経路（顧客情報で手動選択、未設定は null）
@@ -129,7 +134,8 @@ export interface CustomerDetail {
   construction: ConstructionStatusCard;
   subsidy: SubsidyStatusCard;
   history: HistoryEntry[];
-  files: RelatedFile[];
+  files: RelatedFile[]; // 関連ファイルタブ（GENERAL）
+  applicationFiles: RelatedFile[]; // 設置申請タブの申請関連ドキュメント（APPLICATION）
   tasks: CustomerTask[];
   messages: ChatMessage[];
   currentUserId: string; // 自分のメッセージ判定用（チャット右寄せ）
@@ -222,6 +228,10 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
         buildYear: true,
         tossDept: true,
         belongDept: true,
+        electricContractStatus: true,
+        electricAccountNo: true,
+        supplyPointNo: true,
+        equipmentId: true,
         area: true,
         channel: true,
         inflowRoute: true,
@@ -299,7 +309,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       tx.customerFile.findMany({
         where: { customerId: id },
         orderBy: { createdAt: "desc" },
-        select: { id: true, fileName: true, contentType: true, createdAt: true },
+        select: { id: true, fileName: true, contentType: true, category: true, createdAt: true },
       }),
       tx.customerMessage.findMany({
         where: { customerId: id },
@@ -376,12 +386,19 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       done: t.done,
     }));
 
-    const files: RelatedFile[] = fileRows.map((f) => ({
+    const toRelatedFile = (f: (typeof fileRows)[number]): RelatedFile => ({
       id: f.id,
       name: f.fileName,
       type: fileType(f.fileName, f.contentType),
       date: formatDateTime(f.createdAt),
-    }));
+    });
+    // 関連ファイルタブは GENERAL のみ、設置申請タブは APPLICATION のみを表示。
+    const files: RelatedFile[] = fileRows
+      .filter((f) => f.category === "GENERAL")
+      .map(toRelatedFile);
+    const applicationFiles: RelatedFile[] = fileRows
+      .filter((f) => f.category === "APPLICATION")
+      .map(toRelatedFile);
 
     const messages: ChatMessage[] = messageRows.map((m) => ({
       id: m.id,
@@ -406,6 +423,10 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       buildYear: isoOrNull(customer.buildYear),
       tossDept: customer.tossDept,
       belongDept: customer.belongDept,
+      electricContractStatus: customer.electricContractStatus,
+      electricAccountNo: customer.electricAccountNo,
+      supplyPointNo: customer.supplyPointNo,
+      equipmentId: customer.equipmentId,
       area: customer.area ?? deriveArea(customer.address),
       channel: customer.channel,
       inflowRoute: (customer.inflowRoute as InflowRoute | null) ?? null,
@@ -438,6 +459,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       },
       history,
       files,
+      applicationFiles,
       tasks,
       messages,
       currentUserId: ctx.actorUserId,

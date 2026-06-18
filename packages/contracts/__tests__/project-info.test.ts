@@ -123,6 +123,20 @@ function baseDto(): ProjectInfoDto {
       otherCost: 50000,
       constructionFeeBreakdown: { labor: 100000 },
     },
+    hearing: {
+      husbandAge: "40代",
+      wifeAge: "30代",
+      childAge: "未設定",
+      household: null,
+      guideAttendee: null,
+      faceToFace: null,
+      proposedProduct: null,
+      landlinePhone: "未設定",
+      mobilePhone: "未設定",
+      maekakuPreferredAt: null,
+      acquiredAt: null,
+      existingEquipments: [],
+    },
   };
 }
 

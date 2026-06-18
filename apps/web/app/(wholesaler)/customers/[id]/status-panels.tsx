@@ -1,6 +1,6 @@
 "use client";
 
-// 顧客詳細の 契約状況 / 施工状況 / 補助金申請状況 タブのインライン編集パネル。
+// 顧客詳細の 契約状況 / 施工状況 / 設置申請状況 タブのインライン編集パネル。
 // それぞれ updateCustomerAction で保存する。ステータスはプルダウン切替。
 
 import { useRouter } from "next/navigation";
@@ -200,7 +200,7 @@ export function ConstructionStatusPanel({
   );
 }
 
-/* ── 補助金申請状況: ステータス（プルダウン）/ 申請種別 / 申請日 / 交付決定日 ── */
+/* ── 設置申請状況: ステータス（プルダウン）/ 申請種別 / 申請日 / 承認日 ── */
 
 export function SubsidyStatusPanel({
   customerId,

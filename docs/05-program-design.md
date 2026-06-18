@@ -3296,8 +3296,10 @@ export async function saveCustomerHearing(
 
 §16-B/C と同様、CREATE TYPE / ALTER TABLE / CREATE TABLE + RLS で構成。**既存本番 DB への追加列・追加テーブルのみで破壊的変更を避ける**。適用順序・冪等性の注意:
 
+> **実適用の採番**: 20260606000000/010000（lane preference）が local/prod に適用済みのため、本マイグレーションは順序維持のため **`20260607000000_customer_hearing_f063`** で採番・適用済み（下記スニペットの 20260605000000 は方針上の例示）。
+
 ```sql
--- 20260605000000_customer_hearing_f063/migration.sql （方針）
+-- 20260605000000_customer_hearing_f063/migration.sql （方針／実適用は 20260607000000）
 -- 17-A: enum + Customer/Appointment 追加列
 CREATE TYPE "GuideAttendee" AS ENUM ('HUSBAND', 'WIFE', 'BOTH', 'OTHER');
 ALTER TABLE "Customer" ADD COLUMN "landlinePhone"      TEXT;

@@ -134,3 +134,153 @@ test.describe("F-061 顧客詳細『案件情報』統合ビュー", () => {
     await expect(page.getByRole("tab", { name: "商談履歴" })).toBeVisible();
   });
 });
+
+// F-063 アポ取り顧客の住環境・家族属性ヒアリング管理 (docs/02 F-063 / docs/05 §17).
+//
+// 「基本情報」タブ内に統合された案件情報 (CustomerProjectInfo embedded) のうち、
+// F-063 が追加した HearingSection を検証する。HearingSection は次の小見出しで構成:
+//   - ヒアリング（住環境・家族）= h.title（セクションの親見出し）
+//   - 既設設備（現況）= h.existingTitle（契約設備とは別カテゴリ）
+//       カテゴリ: ガス給湯器 / エコキュート（EQ）/ 太陽光（既設） + 有無バッジ あり/なし/不明
+//   - 家族属性 = h.familyTitle（ご主人年齢/奥様年齢/お子様年齢 = 年代マスキング表示）
+//   - 連絡先 = h.contactTitle（固定電話/携帯電話 下4桁マスキング）。
+//     マエカク希望日時は基本情報ページからは非表示（要件改修）。
+//   - クロスセル候補 = p.crossSellTitle（既設に有 → 蓄電池提案 等のバッジ）
+//
+// マスキング: demo 卸業者は WholesalerSettings 既定(MASKED)→ WHOLESALER テナントで
+// PARTIAL に緩和されるため、家族年齢は「N0代」(decade) / 電話は「***-****-XXXX」で表示。
+// FULL 設定（"45歳" / 生番号）にも耐えるよう、年齢は /\d+代|\d+歳|未設定/、
+// 電話は「下4桁が原番号と一致 or マスク記号を含む」緩いパターンで検証する。
+//
+// seed の seedCustomerHearing が全顧客に既設設備3カテゴリ + 家族年齢 + 分離電話 +
+// マエカク希望日時を冪等投入するため、契約済み / 未契約いずれの顧客でも Hearing
+// セクションが描画される。エッジは「未契約(契約データ無し)顧客でも Hearing が
+// クラッシュせず描画される」で担保する。
+
+const h = {
+  title: "ヒアリング（住環境・家族）",
+  existingTitle: "既設設備（現況）",
+  familyTitle: "家族属性",
+  contactTitle: "連絡先・希望日時",
+  husbandAge: "ご主人年齢",
+  wifeAge: "奥様年齢",
+  childAge: "お子様年齢",
+  landlinePhone: "固定電話",
+  mobilePhone: "携帯電話",
+  maekakuPreferredAt: "マエカク希望日時",
+  // 既設設備カテゴリ見出し（categoryLabels）。
+  catGas: "ガス給湯器",
+  catEq: "エコキュート（EQ）",
+  catPv: "太陽光（既設）",
+  crossSellTitle: "クロスセル候補",
+} as const;
+
+// 年代マスキング(PARTIAL)/FULL/未設定 のいずれかに一致。
+const AGE_PATTERN = /(\d+代|\d+歳|未設定)/;
+// 連絡先: マスク記号入り(***-****-XXXX) または 下4桁を含む生番号 or 未設定。
+const PHONE_PATTERN = /(\*{3}-\*{4}-\d{2,4}|\d{2,4}-\d{2,4}-\d{4}|未設定)/;
+
+// 1 つの「ラベル → 値」(MetaItem) について、ラベルに隣接する dd 値テキストを取得。
+// MetaItem は <dt>label</dt><dd>value</dd> 構造（同じ親 div 内）。
+async function metaValue(panelLocator: ReturnType<Page["getByRole"]>, label: string): Promise<string> {
+  const dt = panelLocator.locator("dt", { hasText: label }).first();
+  await expect(dt, `MetaItem ラベル「${label}」が存在する`).toBeVisible();
+  const dd = dt.locator("xpath=following-sibling::dd[1]");
+  return ((await dd.textContent()) ?? "").trim();
+}
+
+test.describe("F-063 住環境・家族属性ヒアリング管理（基本情報タブ統合ビュー）", () => {
+  test.describe.configure({ timeout: 120_000 });
+
+  test("契約済み顧客: 既設設備（現況）+ 家族属性（年代表示）+ 連絡先（マスク）+ マエカク希望日時 + クロスセルバッジが描画される", async ({
+    page,
+  }) => {
+    await signInAsDemo(page);
+
+    await page.goto("/customers?contractStatus=contracted");
+    const firstRow = page.getByRole("button", { name: /様$/ }).first();
+    await expect(firstRow).toBeVisible();
+    await firstRow.click();
+    await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
+
+    const panel = page.getByRole("tabpanel");
+    await expect(panel).toBeVisible();
+
+    // ヒアリング親見出し + 既設設備（現況）見出し（契約設備=設備明細 とは別見出し）。
+    await expect(panel.getByRole("heading", { name: h.title })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: h.existingTitle })).toBeVisible();
+    // 既設設備（現況）は「設備明細」(契約後設備) とは別カテゴリで併存している。
+    await expect(panel.getByRole("heading", { name: "設備明細" })).toBeVisible();
+
+    // 既設設備の3カテゴリ見出し（ガス給湯器 / エコキュート（EQ）/ 太陽光（既設））。
+    await expect(panel.getByText(h.catGas, { exact: true })).toBeVisible();
+    await expect(panel.getByText(h.catEq, { exact: true })).toBeVisible();
+    await expect(panel.getByText(h.catPv, { exact: true })).toBeVisible();
+    // 有無バッジ（あり/なし/不明 のいずれか）が既設カードに描画される。
+    await expect(
+      panel.getByText(/^(あり|なし|不明)$/).first(),
+      "既設設備の有無バッジが描画される",
+    ).toBeVisible();
+
+    // 家族属性: ご主人年齢/奥様年齢/お子様年齢 が「年代マスキング」表示で描画される。
+    await expect(panel.getByRole("heading", { name: h.familyTitle })).toBeVisible();
+    const husband = await metaValue(panel, h.husbandAge);
+    const wife = await metaValue(panel, h.wifeAge);
+    const child = await metaValue(panel, h.childAge);
+    expect(husband, `ご主人年齢「${husband}」が年代/年齢/未設定`).toMatch(AGE_PATTERN);
+    expect(wife, `奥様年齢「${wife}」が年代/年齢/未設定`).toMatch(AGE_PATTERN);
+    expect(child, `お子様年齢「${child}」が年代/年齢/未設定`).toMatch(AGE_PATTERN);
+
+    // 連絡先: 固定/携帯電話（下4桁マスキング）。マエカク希望日時は基本情報ページでは非表示。
+    await expect(panel.getByRole("heading", { name: h.contactTitle })).toBeVisible();
+    const landline = await metaValue(panel, h.landlinePhone);
+    const mobile = await metaValue(panel, h.mobilePhone);
+    expect(landline, `固定電話「${landline}」がマスク/番号/未設定`).toMatch(PHONE_PATTERN);
+    expect(mobile, `携帯電話「${mobile}」がマスク/番号/未設定`).toMatch(PHONE_PATTERN);
+    // マエカク希望日時は基本情報ページに表示されない（連絡先ブロックから撤去済み）。
+    await expect(panel.locator("dt", { hasText: h.maekakuPreferredAt })).toHaveCount(0);
+
+    // クロスセル候補: 既設に「有」があれば判定材料バッジ（蓄電池提案 等）が表示される。
+    // seed は全顧客に YES を含む既設設備を投入するため、本ラベルは描画されるはず。
+    await expect(
+      panel.getByText(h.crossSellTitle, { exact: false }).first(),
+      "クロスセル候補ラベル",
+    ).toBeVisible();
+    await expect(
+      panel.getByText(/(蓄電池提案|エコキュート提案|太陽光増設提案)/).first(),
+      "クロスセル候補バッジ",
+    ).toBeVisible();
+  });
+
+  test("未契約顧客: 契約データが無くてもヒアリング（既設設備・家族属性・連絡先）がクラッシュせず描画される", async ({
+    page,
+  }) => {
+    await signInAsDemo(page);
+
+    await page.goto("/customers?contractStatus=negotiating");
+    const firstRow = page.getByRole("button", { name: /様$/ }).first();
+    await expect(firstRow).toBeVisible();
+    await firstRow.click();
+    await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
+
+    const panel = page.getByRole("tabpanel");
+    await expect(panel).toBeVisible();
+
+    // 契約が無いプレースホルダが出ていても Hearing セクションは独立して描画される。
+    await expect(panel.getByText("契約情報がありません")).toBeVisible();
+
+    // ヒアリング親見出し + F-063 サブ見出し群がクラッシュせず描画される。
+    await expect(panel.getByRole("heading", { name: h.title })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: h.existingTitle })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: h.familyTitle })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: h.contactTitle })).toBeVisible();
+
+    // 家族年齢・連絡先の各 MetaItem が（未設定含め）描画される。
+    const husband = await metaValue(panel, h.husbandAge);
+    const landline = await metaValue(panel, h.landlinePhone);
+    expect(husband, `ご主人年齢「${husband}」`).toMatch(AGE_PATTERN);
+    expect(landline, `固定電話「${landline}」`).toMatch(PHONE_PATTERN);
+    // マエカク希望日時は基本情報ページに表示されない。
+    await expect(panel.locator("dt", { hasText: h.maekakuPreferredAt })).toHaveCount(0);
+  });
+});

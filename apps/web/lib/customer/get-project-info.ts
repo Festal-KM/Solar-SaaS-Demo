@@ -24,6 +24,9 @@ import {
   isFullPiiViewer,
   maskAddress,
   maskBirthDate,
+  maskFamilyAge,
+  maskLandlinePhone,
+  maskMobilePhone,
   maskName,
   maskPhone,
 } from "@solar/contracts/services/masking";
@@ -122,6 +125,35 @@ async function loadProjectInfo(
       tossUpRelationshipId: true,
       closingUserId: true,
       closingRelationshipId: true,
+      // F-063 ヒアリング（住環境・家族）。マスキング/二次店物理除外は DTO 整形時に適用。
+      landlinePhone: true,
+      mobilePhone: true,
+      husbandAge: true,
+      wifeAge: true,
+      childAge: true,
+      guideAttendee: true,
+      faceToFace: true,
+      proposedProduct: true,
+      maekakuPreferredAt: true,
+      existingEquipments: {
+        orderBy: { category: "asc" },
+        select: {
+          id: true,
+          category: true,
+          installed: true,
+          installDate: true,
+          maker: true,
+          capacityKw: true,
+          panelCount: true,
+          attributes: true,
+        },
+      },
+      appointments: {
+        where: { acquiredAt: { not: null } },
+        orderBy: { acquiredAt: "desc" },
+        take: 1,
+        select: { acquiredAt: true },
+      },
     },
   });
   if (!customer) {
@@ -430,6 +462,31 @@ async function loadProjectInfo(
       dealerTotal,
       constructionFee,
       otherCost,
+    },
+    // F-063 ヒアリング（住環境・家族）。家族年齢/分離電話は MaskingService 適用済。
+    // 既設設備の詳細キーは二次店ロールで toProjectInfoDealerDto が物理除外する（§17.5）。
+    hearing: {
+      husbandAge: maskFamilyAge(customer.husbandAge, viewer),
+      wifeAge: maskFamilyAge(customer.wifeAge, viewer),
+      childAge: maskFamilyAge(customer.childAge, viewer),
+      household: customer.household,
+      guideAttendee: customer.guideAttendee,
+      faceToFace: customer.faceToFace,
+      proposedProduct: customer.proposedProduct,
+      landlinePhone: maskLandlinePhone(customer.landlinePhone, viewer),
+      mobilePhone: maskMobilePhone(customer.mobilePhone, viewer),
+      maekakuPreferredAt: isoOrNull(customer.maekakuPreferredAt),
+      acquiredAt: isoOrNull(customer.appointments[0]?.acquiredAt ?? null),
+      existingEquipments: customer.existingEquipments.map((eq) => ({
+        id: eq.id,
+        category: eq.category,
+        installed: eq.installed,
+        installDate: isoOrNull(eq.installDate),
+        maker: eq.maker,
+        capacityKw: decimalToNumber(eq.capacityKw),
+        panelCount: eq.panelCount,
+        attributes: asRecord(eq.attributes),
+      })),
     },
   };
 

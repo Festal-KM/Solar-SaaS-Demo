@@ -41,6 +41,10 @@ export interface EditBasicInfoInitial {
   buildYear: string | null; // ISO
   tossDept: string | null;
   belongDept: string | null;
+  electricContractStatus: string | null;
+  electricAccountNo: string | null;
+  supplyPointNo: string | null;
+  equipmentId: string | null;
 }
 
 const INFLOW_UNSET = "__unset__";
@@ -88,6 +92,12 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
   const [buildYear, setBuildYear] = useState(toDateInput(initial.buildYear));
   const [tossDept, setTossDept] = useState(initial.tossDept ?? "");
   const [belongDept, setBelongDept] = useState(initial.belongDept ?? "");
+  const [electricContractStatus, setElectricContractStatus] = useState(
+    initial.electricContractStatus ?? "",
+  );
+  const [electricAccountNo, setElectricAccountNo] = useState(initial.electricAccountNo ?? "");
+  const [supplyPointNo, setSupplyPointNo] = useState(initial.supplyPointNo ?? "");
+  const [equipmentId, setEquipmentId] = useState(initial.equipmentId ?? "");
 
   // Reset fields to raw values whenever the dialog is (re)opened.
   function onOpenChange(next: boolean) {
@@ -107,6 +117,10 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
       setBuildYear(toDateInput(initial.buildYear));
       setTossDept(initial.tossDept ?? "");
       setBelongDept(initial.belongDept ?? "");
+      setElectricContractStatus(initial.electricContractStatus ?? "");
+      setElectricAccountNo(initial.electricAccountNo ?? "");
+      setSupplyPointNo(initial.supplyPointNo ?? "");
+      setEquipmentId(initial.equipmentId ?? "");
     }
     setOpen(next);
   }
@@ -132,6 +146,10 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
           buildYear: buildYear || null,
           tossDept: tossDept.trim() || null,
           belongDept: belongDept.trim() || null,
+          electricContractStatus: electricContractStatus.trim() || null,
+          electricAccountNo: electricAccountNo.trim() || null,
+          supplyPointNo: supplyPointNo.trim() || null,
+          equipmentId: equipmentId.trim() || null,
         });
         if (result.duplicatePhoneWarning) {
           toast.warning(t.feedback.duplicatePhone);
@@ -314,6 +332,45 @@ export function EditBasicInfoDialog({ customerId, initial, areas }: EditBasicInf
                 onChange={(e) => setBelongDept(e.target.value)}
               />
             </div>
+          </div>
+          {/* 電気契約・設備（識別子・ステータス。生値・編集可）。 */}
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-basic-electric-status">{d.fields.electricContractStatus}</Label>
+            <Input
+              id="edit-basic-electric-status"
+              value={electricContractStatus}
+              onChange={(e) => setElectricContractStatus(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-basic-account-no">{d.fields.electricAccountNo}</Label>
+              <Input
+                id="edit-basic-account-no"
+                value={electricAccountNo}
+                onChange={(e) => setElectricAccountNo(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-basic-supply-point">{d.fields.supplyPointNo}</Label>
+              <Input
+                id="edit-basic-supply-point"
+                value={supplyPointNo}
+                onChange={(e) => setSupplyPointNo(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-basic-equipment-id">{d.fields.equipmentId}</Label>
+            <Input
+              id="edit-basic-equipment-id"
+              value={equipmentId}
+              onChange={(e) => setEquipmentId(e.target.value)}
+              autoComplete="off"
+            />
           </div>
         </div>
         <DialogFooter>

@@ -165,3 +165,66 @@ export function computeAge(birthDate: Date | string | null | undefined): number 
 export function isFullPiiViewer(viewer: ViewerContext): boolean {
   return effectiveMode(viewer) === "FULL";
 }
+
+// ---------------------------------------------------------------------------
+// F-063 住環境・家族属性ヒアリング マスキング（docs/05 §17.5 / CLAUDE.md #6）.
+// 家族年齢は年代のみ / 分離電話は下 4 桁 / 既設設備詳細は二次店ロールで縮約。
+// ---------------------------------------------------------------------------
+
+/**
+ * Mask a family member's age (husband / wife / child) — a hearing-snapshot
+ * value, not derived from a birth date (docs/05 §17.1.3).
+ *
+ * FULL            : the raw number, e.g. "45歳"
+ * PARTIAL / MASKED: decade band only, e.g. "40代"
+ * `null`          : "未設定" (not heard yet)
+ */
+export function maskFamilyAge(age: number | null | undefined, viewer: ViewerContext): string {
+  if (age == null || !Number.isFinite(age) || age < 0 || age >= 130) return "未設定";
+  const mode = effectiveMode(viewer);
+  if (mode === "FULL") return `${age}歳`;
+  const decade = Math.floor(age / 10) * 10;
+  return `${decade}代`;
+}
+
+/**
+ * Mask a landline number to the viewer's effective mode. Returns "未設定" for
+ * `null`/empty so callers can render uniformly. Reuses `maskPhone` for the
+ * non-empty case (last-4-digits convention).
+ */
+export function maskLandlinePhone(
+  phone: string | null | undefined,
+  viewer: ViewerContext,
+): string {
+  if (!phone) return "未設定";
+  return maskPhone(phone, viewer);
+}
+
+/** Mask a mobile number — same convention as {@link maskLandlinePhone}. */
+export function maskMobilePhone(
+  phone: string | null | undefined,
+  viewer: ViewerContext,
+): string {
+  if (!phone) return "未設定";
+  return maskPhone(phone, viewer);
+}
+
+// Minimal shape for the dealer-scope reduction — keeps this module free of the
+// dto/project-info import (avoids a cycle; the dto re-declares the full type).
+interface ExistingEquipmentForMask {
+  category: "GAS_WATER_HEATER" | "ECO_CUTE" | "PV";
+  installed: "YES" | "NO" | "UNKNOWN";
+}
+
+/**
+ * Reduce an existing-equipment row to the dealer-visible projection
+ * (category + presence only). The detail fields (installDate / maker /
+ * capacityKw / panelCount / attributes) are wholesaler-only (docs/05 §17.5 /
+ * docs/02 Assumption 22). The DTO layer additionally destructure-and-rest
+ * removes those keys so they never appear in `Object.keys` (#5).
+ */
+export function maskExistingEquipmentForDealer<T extends ExistingEquipmentForMask>(
+  eq: T,
+): Pick<ExistingEquipmentForMask, "category" | "installed"> {
+  return { category: eq.category, installed: eq.installed };
+}

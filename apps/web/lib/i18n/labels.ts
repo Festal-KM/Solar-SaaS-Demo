@@ -1884,7 +1884,7 @@ export const labels = {
       assignee: "担当者",
       contractStatus: "契約状況",
       constructionStatus: "施工状況",
-      subsidyStatus: "補助金申請状況",
+      subsidyStatus: "設置申請状況",
       maekaku: "マエカク有無",
       all: "すべて",
       search: "検索",
@@ -1899,7 +1899,7 @@ export const labels = {
       maekaku: "マエカク",
       contractStatus: "契約状況",
       constructionStatus: "施工状況",
-      subsidyStatus: "補助金申請状況",
+      subsidyStatus: "設置申請状況",
     },
     maekakuLabels: {
       present: "済",
@@ -1919,7 +1919,7 @@ export const labels = {
     subsidyStatusLabels: {
       none: "未申請",
       applying: "申請中",
-      granted: "交付決定",
+      granted: "承認済",
     },
     detail: {
       basicInfo: "基本情報",
@@ -1942,7 +1942,7 @@ export const labels = {
         nextAppointment: "次回アポ",
         contract: "契約",
         construction: "施工",
-        subsidy: "補助金",
+        subsidy: "設置申請",
       },
       // 案件情報（F-061 統合ビュー）。約90項目をカテゴリ別に表示。
       projectInfo: {
@@ -2097,6 +2097,54 @@ export const labels = {
           detail: "契約詳細",
           mitsubishiPotModel: "三菱鍋-型番",
         },
+        // F-063 ヒアリング（住環境・家族）カテゴリ（docs/05 §17.7）。
+        hearing: {
+          title: "ヒアリング（住環境・家族）",
+          existingTitle: "既設設備（現況）",
+          existingHint: "ヒアリング時点のお宅の現況（契約設備とは別）",
+          familyTitle: "家族属性",
+          contactTitle: "連絡先・希望日時",
+          husbandAge: "ご主人年齢",
+          wifeAge: "奥様年齢",
+          childAge: "お子様年齢",
+          household: "家族構成",
+          guideAttendee: "案内者",
+          faceToFace: "主権者同席",
+          proposedProduct: "ご提案商材",
+          landlinePhone: "固定電話",
+          mobilePhone: "携帯電話",
+          maekakuPreferredAt: "マエカク希望日時",
+          acquiredAt: "アポ取得日",
+          installed: "設置有無",
+          installDate: "設置日",
+          maker: "メーカー",
+          capacity: "容量",
+          panelCount: "枚数",
+          noExisting: "既設設備のヒアリング記録はありません",
+          guideAttendeeLabels: {
+            HUSBAND: "ご主人のみ",
+            WIFE: "奥様のみ",
+            BOTH: "ご夫婦お揃い",
+            OTHER: "その他",
+          } as Record<string, string>,
+          categoryLabels: {
+            GAS_WATER_HEATER: "ガス給湯器",
+            ECO_CUTE: "エコキュート（EQ）",
+            PV: "太陽光（既設）",
+          } as Record<string, string>,
+          presenceLabels: {
+            YES: "あり",
+            NO: "なし",
+            UNKNOWN: "不明",
+          } as Record<string, string>,
+        },
+        // クロスセル候補バッジ（docs/05 §17.8）。判定材料の可視化のみ。
+        crossSellTitle: "クロスセル候補",
+        crossSellLabels: {
+          ECO_CUTE_SUGGEST: "エコキュート提案",
+          BATTERY_SUGGEST: "蓄電池提案",
+          PV_EXPAND_SUGGEST: "太陽光増設提案",
+        } as Record<string, string>,
       },
       tabs: {
         basic: "基本情報",
@@ -2104,7 +2152,7 @@ export const labels = {
         history: "商談履歴",
         contract: "契約状況",
         construction: "施工状況",
-        subsidy: "補助金申請状況",
+        subsidy: "設置申請状況",
         files: "関連ファイル",
         todo: "ToDo",
         chat: "チャット",
@@ -2116,7 +2164,7 @@ export const labels = {
       },
       editContract: "契約状況を編集",
       editConstruction: "施工状況を編集",
-      editSubsidy: "補助金申請状況を編集",
+      editSubsidy: "設置申請状況を編集",
       save: "保存",
       cancel: "キャンセル",
       backToList: "一覧へ戻る",
@@ -2141,6 +2189,10 @@ export const labels = {
         buildYear: "築年日",
         tossDept: "トス部署",
         belongDept: "所属部署",
+        electricContractStatus: "電気契約状況",
+        electricAccountNo: "お客様番号",
+        supplyPointNo: "供給地点番号",
+        equipmentId: "設備ID",
         createdAt: "登録日時",
       },
       inflowRouteLabels: {
@@ -2170,7 +2222,7 @@ export const labels = {
       cards: {
         contract: "契約状況",
         construction: "施工状況",
-        subsidy: "補助金申請状況",
+        subsidy: "設置申請状況",
       },
       statusLabel: "ステータス",
       contractFields: {
@@ -2187,7 +2239,7 @@ export const labels = {
       subsidyFields: {
         type: "申請種別",
         submittedDate: "申請日",
-        grantedDate: "交付決定日",
+        grantedDate: "承認日",
       },
       history: {
         title: "商談履歴（新しい順）",
@@ -2231,6 +2283,10 @@ export const labels = {
         title: "関連ファイル",
         showAll: "すべてのファイルを見る",
         empty: "関連ファイルはありません",
+      },
+      applicationFiles: {
+        title: "申請関連ドキュメント",
+        empty: "申請関連ドキュメントはありません",
       },
       tasks: {
         title: "タスク / ToDo",

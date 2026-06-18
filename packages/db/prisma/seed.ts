@@ -883,10 +883,18 @@ export async function seedAll(): Promise<SeedSummary> {
     // already present, mirroring the find-or-create style used above.
     await seedCustomers(tx, { wholesalerId: pilot.id, userId: pilotAdminId, now });
 
+    // 顧客ファイルのカテゴリ分離（GENERAL / APPLICATION）のデモシード。先頭サンプル顧客に
+    // 各カテゴリ 1 件ずつメタデータのみ投入（冪等）。activity 投入有無に依存しない独立ステップ。
+    await seedCustomerFiles(tx, { wholesalerId: pilot.id, userId: pilotAdminId });
+
     // F-061 案件情報の実データ化（docs/05 §16-C）。サンプル / イベントデモ顧客の
     // 契約に ContractPayment / ContractEquipment + Contract/Construction 拡張列の
     // デモ値を冪等に投入する。
     await seedContractProjectData(tx, { wholesalerId: pilot.id, now });
+
+    // F-063 住環境・家族属性ヒアリングのデモ化（docs/05 §17）。既設設備（現況）・家族
+    // 年齢・分離電話・マエカク希望日時・アポ取得日を冪等に投入（既存顧客に紐づけ）。
+    await seedCustomerHearing(tx, { wholesalerId: pilot.id, now });
 
     // Seed DealerCommissionRate (F-049 / S-049) — 手数料設定. 3 つのパイロット
     // 関係に対し率と履歴 1〜2 行を作る。idempotent：relationshipId に対する
@@ -1337,9 +1345,116 @@ async function seedContractProjectData(
   }
 }
 
+// F-063 住環境・家族属性ヒアリングのデモシード（docs/05 §17）。当該卸業者の顧客に対し、
+// 家族年齢・分離電話・案内者・マエカク希望日時・既設設備（現況）・アポ取得日を投入する。
+// 冪等・決定論的: Customer 拡張列は常に同値で update、CustomerExistingEquipment は
+// category 単位 upsert（@@unique([customerId, category])）、acquiredAt は代表アポへ反映。
+async function seedCustomerHearing(
+  tx: TxClient,
+  args: { wholesalerId: string; now: Date },
+): Promise<void> {
+  const { wholesalerId, now } = args;
+  const day = (offset: number): Date => new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
+
+  const customers = await tx.customer.findMany({
+    where: { wholesalerId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+
+  const GUIDE = ["HUSBAND", "WIFE", "BOTH", "OTHER"] as const;
+  const PRESENCE = ["YES", "NO", "UNKNOWN"] as const;
+  const MAKERS = ["パナソニック", "三菱電機", "ダイキン", "コロナ"];
+  const PV_MAKERS = ["長州産業", "カナディアンソーラー", "Qセルズ"];
+
+  let seq = 0;
+  for (const c of customers) {
+    const s = seq++;
+
+    await tx.customer.update({
+      where: { id: c.id },
+      data: {
+        landlinePhone: `03-5${String(1000 + s).padStart(4, "0")}-${String(2000 + s).padStart(4, "0")}`,
+        mobilePhone: `090-1${String(1000 + s).padStart(4, "0")}-${String(3000 + s).padStart(4, "0")}`,
+        husbandAge: 38 + (s % 25),
+        wifeAge: 35 + (s % 23),
+        childAge: s % 3 === 0 ? null : 4 + (s % 14),
+        guideAttendee: GUIDE[s % GUIDE.length],
+        faceToFace: s % 2 === 0,
+        proposedProduct: s % 3 === 0 ? "蓄電池 + V2H" : "太陽光 + 蓄電池",
+        maekakuPreferredAt: day(2 + (s % 5)),
+      },
+    });
+
+    // ガス給湯器（有無のみ）。
+    await tx.customerExistingEquipment.upsert({
+      where: { customerId_category: { customerId: c.id, category: "GAS_WATER_HEATER" } },
+      create: {
+        customerId: c.id,
+        category: "GAS_WATER_HEATER",
+        installed: PRESENCE[s % PRESENCE.length],
+      },
+      update: { installed: PRESENCE[s % PRESENCE.length] },
+    });
+
+    // エコキュート（有無 + 設置日 + メーカー）。
+    const eqPresence = PRESENCE[(s + 1) % PRESENCE.length];
+    await tx.customerExistingEquipment.upsert({
+      where: { customerId_category: { customerId: c.id, category: "ECO_CUTE" } },
+      create: {
+        customerId: c.id,
+        category: "ECO_CUTE",
+        installed: eqPresence,
+        installDate: eqPresence === "YES" ? day(-365 * (1 + (s % 6))) : null,
+        maker: eqPresence === "YES" ? MAKERS[s % MAKERS.length] : null,
+      },
+      update: {
+        installed: eqPresence,
+        installDate: eqPresence === "YES" ? day(-365 * (1 + (s % 6))) : null,
+        maker: eqPresence === "YES" ? MAKERS[s % MAKERS.length] : null,
+      },
+    });
+
+    // 太陽光（既設）— 有無 + 設置日 + メーカー + 容量 + 枚数。
+    const pvPresence = PRESENCE[(s + 2) % PRESENCE.length];
+    await tx.customerExistingEquipment.upsert({
+      where: { customerId_category: { customerId: c.id, category: "PV" } },
+      create: {
+        customerId: c.id,
+        category: "PV",
+        installed: pvPresence,
+        installDate: pvPresence === "YES" ? day(-365 * (2 + (s % 8))) : null,
+        maker: pvPresence === "YES" ? PV_MAKERS[s % PV_MAKERS.length] : null,
+        capacityKw: pvPresence === "YES" ? (3.5 + (s % 4)).toFixed(2) : null,
+        panelCount: pvPresence === "YES" ? 8 + (s % 16) : null,
+      },
+      update: {
+        installed: pvPresence,
+        installDate: pvPresence === "YES" ? day(-365 * (2 + (s % 8))) : null,
+        maker: pvPresence === "YES" ? PV_MAKERS[s % PV_MAKERS.length] : null,
+        capacityKw: pvPresence === "YES" ? (3.5 + (s % 4)).toFixed(2) : null,
+        panelCount: pvPresence === "YES" ? 8 + (s % 16) : null,
+      },
+    });
+
+    // アポ取得日 — 代表アポ（最新 scheduledAt）へ反映。
+    const rep = await tx.appointment.findFirst({
+      where: { customerId: c.id },
+      orderBy: { scheduledAt: "desc" },
+      select: { id: true },
+    });
+    if (rep) {
+      await tx.appointment.update({
+        where: { id: rep.id },
+        data: { acquiredAt: day(-(3 + (s % 10))) },
+      });
+    }
+  }
+}
+
 // 商談履歴 / 発生タスクのデモシード。各サンプル顧客につき、まだ activity が 1 件も
-// 無い場合のみ作成する（冪等）。CustomerFile は実 R2 オブジェクトの裏付けが無いため
-// シードしない（ユーザーが UI からアップロードするまで「関連ファイル」は空のまま）。
+// 無い場合のみ作成する（冪等）。CustomerFile はカテゴリ分離デモのため別ステップ
+// seedCustomerFiles で先頭サンプル顧客に各カテゴリ 1 件ずつ投入する（メタデータのみ）。
 async function seedCustomerActivities(
   tx: TxClient,
   args: { wholesalerId: string; userId: string; now: Date },
@@ -1444,6 +1559,51 @@ async function seedCustomerActivities(
         });
       }
     }
+  }
+}
+
+// 顧客ファイルのカテゴリ分離（GENERAL=関連ファイルタブ / APPLICATION=設置申請タブの
+// 申請関連ドキュメント）のデモシード。先頭サンプル顧客に各カテゴリ 1 件ずつメタデータのみ
+// 投入する。fileKey は実 R2 オブジェクトの裏付けが無いダミー（一覧描画は R2 を叩かず DB 行
+// だけで成立し、ダウンロードクリック時のみ R2 を叩く）。
+//
+// activity 投入有無に依存しない独立ステップ（seedCustomerActivities は activity が既存だと
+// 早期 continue するため、そこに混ぜると既存 seed 環境でファイルが投入されない）。
+// 冪等: customerId + fileName が無い場合のみ作成する。
+async function seedCustomerFiles(
+  tx: TxClient,
+  args: { wholesalerId: string; userId: string },
+): Promise<void> {
+  const { wholesalerId, userId } = args;
+  const spec = SAMPLE_CUSTOMERS[0];
+  if (!spec) return;
+  const customer = await tx.customer.findFirst({
+    where: { wholesalerId, name: `${SAMPLE_CUSTOMER_PREFIX}${spec.family} ${spec.given}` },
+    select: { id: true },
+  });
+  if (!customer) return;
+
+  const seedFiles: { fileName: string; category: "GENERAL" | "APPLICATION" }[] = [
+    { fileName: "見積書サンプル.pdf", category: "GENERAL" },
+    { fileName: "設置申請書サンプル.pdf", category: "APPLICATION" },
+  ];
+  for (const sf of seedFiles) {
+    const exists = await tx.customerFile.findFirst({
+      where: { customerId: customer.id, fileName: sf.fileName },
+      select: { id: true },
+    });
+    if (exists) continue;
+    const prefix = sf.category === "APPLICATION" ? "applications" : "files";
+    await tx.customerFile.create({
+      data: {
+        customerId: customer.id,
+        fileKey: `customers/${customer.id}/${prefix}/seed-${sf.fileName}`,
+        fileName: sf.fileName,
+        contentType: "application/pdf",
+        category: sf.category,
+        uploadedByUserId: userId,
+      },
+    });
   }
 }
 

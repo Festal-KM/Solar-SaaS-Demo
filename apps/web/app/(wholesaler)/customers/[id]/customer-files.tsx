@@ -22,9 +22,11 @@ import type { RelatedFile } from "./data";
 interface CustomerFilesProps {
   customerId: string;
   files: RelatedFile[];
+  // GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント。
+  category?: "GENERAL" | "APPLICATION";
 }
 
-export function CustomerFiles({ customerId, files }: CustomerFilesProps) {
+export function CustomerFiles({ customerId, files, category = "GENERAL" }: CustomerFilesProps) {
   const d = labels.customer.detail;
   const c = labels.common;
   const router = useRouter();
@@ -53,6 +55,7 @@ export function CustomerFiles({ customerId, files }: CustomerFilesProps) {
           customerId,
           fileName: file.name,
           contentType: file.type || "application/octet-stream",
+          category,
         });
         const res = await fetch(putUrl, { method: "PUT", headers, body: file });
         if (!res.ok) throw new Error(`アップロードに失敗しました（${res.status}）`);
@@ -62,6 +65,7 @@ export function CustomerFiles({ customerId, files }: CustomerFilesProps) {
           fileName: file.name,
           contentType: file.type || null,
           size: file.size,
+          category,
         });
         recorded = true;
       } catch (err) {
@@ -81,7 +85,7 @@ export function CustomerFiles({ customerId, files }: CustomerFilesProps) {
       {/* ファイルピッカー */}
       <div className="space-y-2">
         <input
-          id="customer-file-input"
+          id={`customer-file-input-${category.toLowerCase()}`}
           type="file"
           multiple
           onChange={(e) => {
@@ -100,7 +104,9 @@ export function CustomerFiles({ customerId, files }: CustomerFilesProps) {
 
       {/* 一覧 */}
       {files.length === 0 ? (
-        <p className="text-sm text-mute-light">{d.files.empty}</p>
+        <p className="text-sm text-mute-light">
+          {category === "APPLICATION" ? d.applicationFiles.empty : d.files.empty}
+        </p>
       ) : (
         <ul className="divide-y divide-hairline-light">
           {files.map((f) => (

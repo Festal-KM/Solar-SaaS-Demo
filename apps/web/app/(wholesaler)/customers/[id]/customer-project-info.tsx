@@ -6,12 +6,15 @@ import { ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { labels } from "@/lib/i18n/labels";
+import { deriveCrossSellBadges } from "@solar/contracts";
 
 import type {
   EquipmentCategoryKey,
   EquipmentItemDto,
   ProjectConstructionDto,
   ProjectContractDto,
+  ProjectHearingDto,
+  ProjectHearingForDealerDto,
   ProjectInfoDto,
   ProjectInfoForDealerDto,
 } from "@solar/contracts/dto/project-info";
@@ -225,6 +228,124 @@ function EquipmentGrid({ equipment }: { equipment: AnyEquipment }) {
   );
 }
 
+// F-063 既設設備（現況）1 行（ContractEquipment とは別概念のカード）。
+type AnyExistingEquipment =
+  ProjectHearingDto["existingEquipments"][number] &
+    Partial<ProjectHearingForDealerDto["existingEquipments"][number]>;
+
+const h = p.hearing;
+
+function ExistingEquipmentCard({ eq }: { eq: AnyExistingEquipment }) {
+  const presence = eq.installed;
+  const variant = presence === "YES" ? "success" : presence === "NO" ? "secondary" : "outline";
+  // 設置日/メーカー/容量/枚数は wholesaler/saas のみ存在（二次店では物理除外済）。
+  const hasDetail =
+    "installDate" in eq || "maker" in eq || "capacityKw" in eq || "panelCount" in eq;
+  return (
+    <div className="rounded-md border border-hairline-light p-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-ink">{h.categoryLabels[eq.category] ?? eq.category}</p>
+        <Badge variant={variant}>{h.presenceLabels[presence] ?? presence}</Badge>
+      </div>
+      {presence === "YES" && hasDetail ? (
+        <dl className="grid grid-cols-2 gap-x-5 gap-y-2.5 sm:grid-cols-3">
+          {"installDate" in eq ? (
+            <MetaItem label={h.installDate} value={fmtDate(eq.installDate ?? null)} />
+          ) : null}
+          {"maker" in eq ? <MetaItem label={h.maker} value={eq.maker ?? EMPTY} /> : null}
+          {"capacityKw" in eq ? (
+            <MetaItem
+              label={h.capacity}
+              value={eq.capacityKw != null ? `${eq.capacityKw} kW` : EMPTY}
+            />
+          ) : null}
+          {"panelCount" in eq ? (
+            <MetaItem
+              label={h.panelCount}
+              value={eq.panelCount != null ? `${eq.panelCount} 枚` : EMPTY}
+            />
+          ) : null}
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
+function HearingSection({
+  hearing,
+}: {
+  hearing: ProjectHearingDto | ProjectHearingForDealerDto;
+}) {
+  const badges = deriveCrossSellBadges(hearing.existingEquipments);
+  const guide = hearing.guideAttendee ? h.guideAttendeeLabels[hearing.guideAttendee] ?? null : null;
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">{h.title}</h3>
+        {/* クロスセル候補バッジ（判定材料の可視化のみ・自動提案はしない） */}
+        {badges.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-mute-light">{p.crossSellTitle}:</span>
+            {badges.map((b) => (
+              <Badge key={b} variant="warning">
+                {p.crossSellLabels[b] ?? b}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* 既設設備（現況）— 契約設備とは別カテゴリ */}
+      <div>
+        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+          {h.existingTitle}
+          <span className="ml-2 font-normal normal-case text-mute-light">{h.existingHint}</span>
+        </h4>
+        {hearing.existingEquipments.length === 0 ? (
+          <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+            {h.noExisting}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            {hearing.existingEquipments.map((eq) => (
+              <ExistingEquipmentCard key={eq.id} eq={eq as AnyExistingEquipment} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 家族属性（年齢は年代マスキング表示済み） */}
+      <div>
+        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+          {h.familyTitle}
+        </h4>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3">
+          <MetaItem label={h.husbandAge} value={hearing.husbandAge} />
+          <MetaItem label={h.wifeAge} value={hearing.wifeAge} />
+          <MetaItem label={h.childAge} value={hearing.childAge} />
+          <MetaItem label={h.household} value={hearing.household} />
+          <MetaItem label={h.guideAttendee} value={guide} />
+          <MetaItem label={h.faceToFace} value={fmtBool(hearing.faceToFace)} />
+        </dl>
+      </div>
+
+      {/* 連絡先（下4桁マスキング）。マエカク希望日時は基本情報ページでは非表示。 */}
+      <div>
+        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+          {h.contactTitle}
+        </h4>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3">
+          <MetaItem label={h.landlinePhone} value={hearing.landlinePhone} />
+          <MetaItem label={h.mobilePhone} value={hearing.mobilePhone} />
+          <MetaItem label={h.proposedProduct} value={hearing.proposedProduct} />
+          <MetaItem label={h.acquiredAt} value={fmtDate(hearing.acquiredAt)} />
+        </dl>
+      </div>
+    </section>
+  );
+}
+
 export function CustomerProjectInfo({
   data,
   embedded = false,
@@ -416,6 +537,9 @@ export function CustomerProjectInfo({
           </div>
         )}
       </section>
+
+      {/* ヒアリング（住環境・家族）— F-063。既設設備（現況）/ 家族属性 / 連絡先 / クロスセル候補 */}
+      <HearingSection hearing={data.hearing} />
 
       {/* 概況 */}
       <Section title={p.sections.overview}>

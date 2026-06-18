@@ -100,6 +100,11 @@ export const CustomerUpdateSchema = z.object({
   tossDept: z.string().max(100).nullable().optional(),
   belongDept: z.string().max(100).nullable().optional(),
   area: z.string().max(255).nullable().optional(),
+  // 電気契約・設備（基本情報タブ。全て自由記述・null でクリア可）。
+  electricContractStatus: z.string().max(255).nullable().optional(),
+  electricAccountNo: z.string().max(100).nullable().optional(),
+  supplyPointNo: z.string().max(100).nullable().optional(),
+  equipmentId: z.string().max(100).nullable().optional(),
   housingType: z.string().max(100).optional(),
   pvInstalled: z.boolean().optional(),
   batteryInstalled: z.boolean().optional(),
@@ -202,6 +207,11 @@ export const CustomerMessageCreateSchema = z.object({
 
 export type CustomerMessageCreateInput = z.infer<typeof CustomerMessageCreateSchema>;
 
+// 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント。
+export const CustomerFileCategoryEnum = z.enum(["GENERAL", "APPLICATION"]);
+
+export type CustomerFileCategory = z.infer<typeof CustomerFileCategoryEnum>;
+
 // 単体ファイル記録（関連ファイルタブの直接アップロード。activity に紐づかない）。
 export const CustomerFileRecordSchema = z.object({
   customerId: z.string().min(1),
@@ -209,6 +219,7 @@ export const CustomerFileRecordSchema = z.object({
   fileName: z.string().min(1).max(255),
   contentType: z.string().nullable().optional(),
   size: z.number().int().nonnegative().nullable().optional(),
+  category: CustomerFileCategoryEnum.default("GENERAL"),
 });
 
 export type CustomerFileRecordInput = z.infer<typeof CustomerFileRecordSchema>;
@@ -223,10 +234,84 @@ export const CustomerTaskCreateSchema = z.object({
 
 export type CustomerTaskCreateInput = z.infer<typeof CustomerTaskCreateSchema>;
 
+// ---------------------------------------------------------------------------
+// F-063 住環境・家族属性ヒアリング（docs/05 §17.4 / §17.9）.
+//
+// 顧客フォームの「住環境・家族ヒアリング」セクション保存ペイロード。Customer 拡張列・
+// 既設設備配列（category 単位 upsert）・代表アポの acquiredAt を 1 つの面で受ける。
+// installDate は未来日不可、capacityKw/panelCount は 0 以上、年齢は 0..120。
+// ---------------------------------------------------------------------------
+
+export const GuideAttendeeEnum = z.enum(["HUSBAND", "WIFE", "BOTH", "OTHER"]);
+export type GuideAttendee = z.infer<typeof GuideAttendeeEnum>;
+
+export const ExistingEquipmentCategoryEnum = z.enum(["GAS_WATER_HEATER", "ECO_CUTE", "PV"]);
+export type ExistingEquipmentCategory = z.infer<typeof ExistingEquipmentCategoryEnum>;
+
+export const ExistingEquipmentPresenceEnum = z.enum(["YES", "NO", "UNKNOWN"]);
+export type ExistingEquipmentPresence = z.infer<typeof ExistingEquipmentPresenceEnum>;
+
+// 設置日は当日 or 過去日（未来日拒否、docs/02 受け入れ基準）。日付未指定は許容。
+const pastOrTodayDate = z
+  .string()
+  .nullable()
+  .optional()
+  .refine(
+    (v) => {
+      if (!v) return true;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return false;
+      // 当日終端まで許容（タイムゾーン差で今日を弾かないため）。
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      return d.getTime() <= endOfToday.getTime();
+    },
+    { message: "設置日は当日または過去日を指定してください" },
+  );
+
+export const ExistingEquipmentInputSchema = z.object({
+  category: ExistingEquipmentCategoryEnum,
+  installed: ExistingEquipmentPresenceEnum.default("UNKNOWN"),
+  installDate: pastOrTodayDate,
+  maker: z.string().max(255).nullable().optional(),
+  capacityKw: z.number().nonnegative().nullable().optional(),
+  panelCount: z.number().int().nonnegative().nullable().optional(),
+  attributes: z.record(z.unknown()).nullable().optional(),
+});
+
+export type ExistingEquipmentInput = z.infer<typeof ExistingEquipmentInputSchema>;
+
+const ageField = z.number().int().min(0).max(120).nullable().optional();
+
+export const CustomerHearingSchema = z.object({
+  customerId: z.string().min(1),
+  // 連絡先 2 系統分離（phone は別途・併存）。
+  landlinePhone: z.string().max(50).nullable().optional(),
+  mobilePhone: z.string().max(50).nullable().optional(),
+  // 家族属性（ヒアリング値）。
+  husbandAge: ageField,
+  wifeAge: ageField,
+  childAge: ageField,
+  household: z.string().max(100).nullable().optional(),
+  guideAttendee: GuideAttendeeEnum.nullable().optional(),
+  faceToFace: z.boolean().nullable().optional(),
+  // 提案商材（自由記述 + 任意の商品マスタ参照）。
+  proposedProduct: z.string().max(255).nullable().optional(),
+  proposedProductId: z.string().min(1).nullable().optional(),
+  // マエカク電話希望日時 / アポ取得日（代表アポへ反映）。
+  maekakuPreferredAt: z.string().nullable().optional(),
+  acquiredAt: z.string().nullable().optional(),
+  // 既設設備の現況（category 単位 upsert。1 顧客 × 1 カテゴリ 1 行）。
+  existingEquipments: z.array(ExistingEquipmentInputSchema).default([]),
+});
+
+export type CustomerHearingInput = z.infer<typeof CustomerHearingSchema>;
+
 export const PresignCustomerFileSchema = z.object({
   customerId: z.string().min(1),
   fileName: z.string().min(1).max(255),
   contentType: z.string().min(1).max(255),
+  category: CustomerFileCategoryEnum.default("GENERAL"),
 });
 
 export type PresignCustomerFileInput = z.infer<typeof PresignCustomerFileSchema>;

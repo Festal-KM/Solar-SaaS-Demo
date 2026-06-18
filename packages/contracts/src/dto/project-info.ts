@@ -15,6 +15,16 @@ export const DEALER_OMITTED_FINANCIAL_KEYS = [
   "otherCost",
 ] as const;
 
+// F-063 既設設備（現況）で二次店レスポンスから物理除外する詳細キー（docs/05 §17.5 /
+// §17.7）。二次店には「有無＋大分類」（category + installed）まで。Object.keys に出さない。
+export const DEALER_OMITTED_EXISTING_EQUIPMENT_KEYS = [
+  "installDate",
+  "maker",
+  "capacityKw",
+  "panelCount",
+  "attributes",
+] as const;
+
 export type EquipmentCategoryKey = "PV" | "BT" | "EQ" | "IH" | "AC" | "ACCESSORY" | "GIFT";
 
 export interface EquipmentItemDto {
@@ -107,6 +117,48 @@ export interface ProjectFinancialsDto {
   otherCost?: number;
 }
 
+// F-063 既設設備（現況）DTO（docs/05 §17.7）。ContractEquipment（契約後設備）とは
+// 別概念・別カテゴリ。詳細キー（installDate/maker/capacityKw/panelCount/attributes）は
+// 二次店ロールでは物理除外（destructure-and-rest、Object.keys に出さない／#5・§17.5）。
+export interface ExistingEquipmentDto {
+  id: string;
+  category: "GAS_WATER_HEATER" | "ECO_CUTE" | "PV";
+  installed: "YES" | "NO" | "UNKNOWN";
+  // ↓ wholesaler/saas のみ存在（二次店では Object.keys に出ない）。
+  installDate?: string | null;
+  maker?: string | null;
+  capacityKw?: number | null;
+  panelCount?: number | null;
+  attributes?: Record<string, unknown> | null;
+}
+
+// 既設設備の詳細キーを除いた二次店向け射影（有無＋大分類のみ）。
+export type ExistingEquipmentForDealerDto = Omit<
+  ExistingEquipmentDto,
+  "installDate" | "maker" | "capacityKw" | "panelCount" | "attributes"
+>;
+
+// F-063 ヒアリング（住環境・家族）カテゴリ（docs/05 §17.7）。家族属性・分離電話は
+// MaskingService 適用済みの文字列。既設設備は契約後設備とは別カテゴリで保持。
+export interface ProjectHearingDto {
+  husbandAge: string | null; // maskFamilyAge 適用後（'40代' / '45歳' / '未設定'）
+  wifeAge: string | null;
+  childAge: string | null;
+  household: string | null;
+  guideAttendee: "HUSBAND" | "WIFE" | "BOTH" | "OTHER" | null;
+  faceToFace: boolean | null;
+  proposedProduct: string | null;
+  landlinePhone: string; // maskLandlinePhone 適用後
+  mobilePhone: string; // maskMobilePhone 適用後
+  maekakuPreferredAt: string | null;
+  acquiredAt: string | null; // Appointment.acquiredAt（代表アポ）
+  existingEquipments: ExistingEquipmentDto[];
+}
+
+// 単体取得用（getCustomerHearing）。ProjectInfoDto.hearing と同形（docs/05 §17.9）。
+export type CustomerHearingDto = ProjectHearingDto;
+export type CustomerHearingForDealerDto = ProjectHearingForDealerDto;
+
 export interface ProjectInfoDto {
   basic: {
     customerId: string;
@@ -139,6 +191,8 @@ export interface ProjectInfoDto {
     maekakuStatus: string | null;
   };
   financials: ProjectFinancialsDto;
+  // F-063 追加カテゴリ: ヒアリング（住環境・家族）。契約後設備 equipment（カテゴリ 7）とは別概念。
+  hearing: ProjectHearingDto;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,11 +271,35 @@ export interface ProjectContractForDealerDto
   equipment: Record<EquipmentCategoryKey, EquipmentItemForDealerDto[]>;
 }
 
+export type ProjectHearingForDealerDto = Omit<ProjectHearingDto, "existingEquipments"> & {
+  existingEquipments: ExistingEquipmentForDealerDto[];
+};
+
 export interface ProjectInfoForDealerDto
-  extends Omit<ProjectInfoDto, "contracts" | "constructions" | "financials"> {
+  extends Omit<ProjectInfoDto, "contracts" | "constructions" | "financials" | "hearing"> {
   contracts: ProjectContractForDealerDto[];
   constructions: ProjectConstructionForDealerDto[];
   financials: ProjectFinancialsForDealerDto;
+  hearing: ProjectHearingForDealerDto;
+}
+
+/**
+ * Dealer projection for one existing-equipment row — physically removes every
+ * detail key (`DEALER_OMITTED_EXISTING_EQUIPMENT_KEYS`). The removed keys do not
+ * appear in `Object.keys` of the returned object (#5 / docs/05 §17.5).
+ */
+export function stripExistingEquipmentForDealer(
+  eq: ExistingEquipmentDto,
+): ExistingEquipmentForDealerDto {
+  const {
+    installDate: _id,
+    maker: _mk,
+    capacityKw: _ck,
+    panelCount: _pc,
+    attributes: _at,
+    ...rest
+  } = eq;
+  return rest;
 }
 
 const EQUIPMENT_CATEGORY_KEYS: EquipmentCategoryKey[] = [
@@ -276,7 +354,12 @@ export function toProjectInfoDealerDto(dto: ProjectInfoDto): ProjectInfoForDeale
     return { ...c, equipment };
   });
 
-  return { ...dto, contracts, constructions, financials };
+  const hearing: ProjectHearingForDealerDto = {
+    ...dto.hearing,
+    existingEquipments: dto.hearing.existingEquipments.map(stripExistingEquipmentForDealer),
+  };
+
+  return { ...dto, contracts, constructions, financials, hearing };
 }
 
 /** Empty `EquipmentByCategory` builder for loaders. */
