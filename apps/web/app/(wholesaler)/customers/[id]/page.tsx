@@ -26,7 +26,11 @@ import { listWholesalerUsers } from "../data";
 import { CustomerChat } from "./customer-chat";
 import { CustomerFiles } from "./customer-files";
 import { CustomerHistory } from "./customer-history";
-import { CustomerProjectInfo } from "./customer-project-info";
+import {
+  CustomerProjectInfo,
+  ProjectCallStatusSection,
+  ProjectLoanInfoList,
+} from "./customer-project-info";
 import { CustomerTasks } from "./customer-tasks";
 import { getCustomerDetail } from "./data";
 import { EditAssigneeDialog } from "./edit-assignee-dialog";
@@ -331,8 +335,10 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           <TabsTrigger value="basic">{d.tabs.basic}</TabsTrigger>
           <TabsTrigger value="history">{d.tabs.history}</TabsTrigger>
           <TabsTrigger value="contract">{d.tabs.contract}</TabsTrigger>
+          <TabsTrigger value="loan">{d.tabs.loan}</TabsTrigger>
           <TabsTrigger value="construction">{d.tabs.construction}</TabsTrigger>
           <TabsTrigger value="subsidy">{d.tabs.subsidy}</TabsTrigger>
+          <TabsTrigger value="calls">{d.tabs.calls}</TabsTrigger>
           <TabsTrigger value="files">{d.tabs.files}</TabsTrigger>
           <TabsTrigger value="todo">{d.tabs.todo}</TabsTrigger>
           <TabsTrigger value="chat">{d.tabs.chat}</TabsTrigger>
@@ -530,6 +536,14 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </Card>
         </TabsContent>
 
+        {/* ローン情報 — 顧客に紐づく全契約のローン・団信（loanReviewStatus 編集含む） */}
+        <TabsContent value="loan">
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-semibold text-ink">{d.tabs.loan}</h2>
+            <ProjectLoanInfoList data={projectInfo} editable={projectInfoEditable} />
+          </Card>
+        </TabsContent>
+
         {/* 施工状況 — ステータス（プルダウン）/ 工事予定日 / 対応事業者 + PV設置図面 */}
         <TabsContent value="construction" className="space-y-4">
           <Card className="p-5">
@@ -574,6 +588,14 @@ export default async function CustomerDetailPage({ params }: PageProps) {
               category="APPLICATION"
               files={detail.applicationFiles}
             />
+          </Card>
+        </TabsContent>
+
+        {/* コール状況 — 完工/ローン完了コール状況・希望日時・汎用希望時間帯・マエカク希望電話 */}
+        <TabsContent value="calls">
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-semibold text-ink">{d.tabs.calls}</h2>
+            <ProjectCallStatusSection data={projectInfo} editable={projectInfoEditable} />
           </Card>
         </TabsContent>
 

@@ -2235,11 +2235,17 @@ export const labels = {
         projectInfo: "案件情報",
         history: "商談履歴",
         contract: "契約状況",
+        loan: "ローン情報",
         construction: "施工状況",
         subsidy: "設置申請状況",
+        calls: "コール状況",
         files: "関連ファイル",
         todo: "ToDo",
         chat: "チャット",
+      },
+      loanTab: {
+        empty: "ローン情報を表示できる契約がありません。",
+        contractHeading: "契約",
       },
       chat: {
         empty: "まだメッセージはありません。最初のメッセージを送りましょう。",

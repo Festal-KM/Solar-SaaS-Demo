@@ -309,7 +309,7 @@ const cl = {
   editTrigger: "コール状況を編集",
 } as const;
 
-test.describe("バッチ B コール状況（案件情報セクション）", () => {
+test.describe("バッチ B コール状況（専用コール状況タブ）", () => {
   test.describe.configure({ timeout: 120_000 });
 
   test("コール状況セクションが表示され、編集ダイアログで保存→反映される", async ({ page }) => {
@@ -321,11 +321,14 @@ test.describe("バッチ B コール状況（案件情報セクション）", ()
     await firstRow.click();
     await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
 
+    // コール状況は基本情報タブの案件情報埋め込みビューから専用「コール状況」タブへ
+    // 集約済み。当該タブへ切り替えてから検証する。
+    await page.getByRole("tab", { name: "コール状況" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 
     // 親見出し + 主要ラベルが描画される。
-    await expect(panel.getByRole("heading", { name: cl.title })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: cl.title }).first()).toBeVisible();
     await expect(panel.locator("dt", { hasText: cl.maekakuStatus }).first()).toBeVisible();
     await expect(panel.locator("dt", { hasText: cl.postStatus }).first()).toBeVisible();
     await expect(panel.locator("dt", { hasText: cl.loanStatus }).first()).toBeVisible();

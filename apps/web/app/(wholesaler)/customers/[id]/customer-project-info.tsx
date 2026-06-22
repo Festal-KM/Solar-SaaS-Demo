@@ -385,6 +385,153 @@ function HearingSection({
   );
 }
 
+// コール状況 1 セクション（顧客単位・単一）。専用「コール状況」タブと、
+// 非 embedded の案件情報ビューの両方から再利用する（embedded では抑制）。
+export function ProjectCallStatusSection({
+  data,
+  editable = null,
+}: {
+  data: CustomerProjectInfoData;
+  editable?: ProjectInfoEditable | null;
+}) {
+  const f = p.fields;
+  const customerId = editable?.customerId ?? null;
+  return (
+    <Section
+      title={p.sections.calls}
+      editSlot={
+        customerId && editable ? (
+          <EditCallStatusDialog customerId={customerId} initial={editable.calls} />
+        ) : null
+      }
+    >
+      <MetaItem
+        label={f.callMaekakuStatus}
+        value={
+          data.calls.maekakuStatus
+            ? p.maekakuStatusDisplayLabels[data.calls.maekakuStatus] ?? data.calls.maekakuStatus
+            : null
+        }
+      />
+      <MetaItem label={f.maekakuPreferredPhone} value={data.calls.maekakuPreferredPhone} />
+      <MetaItem
+        label={f.postCompletionCallStatus}
+        value={
+          data.calls.postCompletionCallStatus
+            ? p.callPhaseStatusLabels[data.calls.postCompletionCallStatus] ??
+              data.calls.postCompletionCallStatus
+            : null
+        }
+      />
+      <MetaItem
+        label={f.postCompletionCallPreferredAt}
+        value={fmtDateTime(data.calls.postCompletionCallPreferredAt)}
+      />
+      <MetaItem
+        label={f.loanCompletionCallStatus}
+        value={
+          data.calls.loanCompletionCallStatus
+            ? p.callPhaseStatusLabels[data.calls.loanCompletionCallStatus] ??
+              data.calls.loanCompletionCallStatus
+            : null
+        }
+      />
+      <MetaItem
+        label={f.loanCompletionCallPreferredAt}
+        value={fmtDateTime(data.calls.loanCompletionCallPreferredAt)}
+      />
+      <MetaItem label={f.generalCallPreferredTime} value={data.calls.generalCallPreferredTime} />
+    </Section>
+  );
+}
+
+// ローン・団信 1 件分（契約単位）の表示。契約ブロック内と専用「ローン情報」タブの
+// 両方から再利用する。editContract が渡れば見出し右に編集トリガーを描画する。
+function LoanBlock({
+  contract,
+  customerId,
+  editContract,
+}: {
+  contract: AnyContract;
+  customerId: string | null;
+  editContract?: ProjectContractEditable;
+}) {
+  const f = p.fields;
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2">
+        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+          {p.sections.loan}
+        </h4>
+        {customerId && editContract ? (
+          <EditContractDialog customerId={customerId} initial={editContract} />
+        ) : null}
+      </div>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+        <MetaItem label={f.loanReviewCallAt} value={fmtDateTime(contract.loanReviewCallAt)} />
+        <MetaItem label={f.loanCompany} value={contract.loanCompany} />
+        <MetaItem label={f.downPayment} value={fmtYen(contract.downPayment)} />
+        <MetaItem label={f.creditLife} value={fmtBool(contract.creditLifeInsurance)} />
+        <MetaItem
+          label={f.callStatus}
+          value={p.callStatusLabels[contract.callStatus] ?? contract.callStatus}
+        />
+        <MetaItem
+          label={f.loanReviewStatus}
+          value={
+            contract.loanReviewStatus
+              ? (p.loanReviewStatusLabels[contract.loanReviewStatus] ?? contract.loanReviewStatus)
+              : null
+          }
+        />
+        <MetaItem label={f.loanNote} value={contract.loanNote} />
+      </dl>
+    </div>
+  );
+}
+
+// 専用「ローン情報」タブ — 顧客に紐づく全契約のローン・団信を契約ごとに一覧表示。
+// 契約が無ければ空状態。loanReviewStatus 含む編集は LoanBlock 内の EditContractDialog。
+export function ProjectLoanInfoList({
+  data,
+  editable = null,
+}: {
+  data: CustomerProjectInfoData;
+  editable?: ProjectInfoEditable | null;
+}) {
+  const lt = labels.customer.detail.loanTab;
+  const contracts = data.contracts as AnyContract[];
+  const customerId = editable?.customerId ?? null;
+  const editContractById = new Map<string, ProjectContractEditable>(
+    (editable?.contracts ?? []).map((ec) => [ec.contractId, ec]),
+  );
+
+  if (contracts.length === 0) {
+    return (
+      <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+        {lt.empty}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {contracts.map((c, idx) => (
+        <div key={c.contractId} className="space-y-3 rounded-md border border-hairline-light p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+            {`${lt.contractHeading} #${idx + 1}`}
+          </h3>
+          <LoanBlock
+            contract={c}
+            customerId={customerId}
+            editContract={editContractById.get(c.contractId)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function CustomerProjectInfo({
   data,
   embedded = false,
@@ -504,31 +651,10 @@ export function CustomerProjectInfo({
               </div>
             </dl>
 
-            {/* ローン・団信 */}
-            <div>
-              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-                {p.sections.loan}
-              </h4>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                <MetaItem label={f.loanReviewCallAt} value={fmtDateTime(c.loanReviewCallAt)} />
-                <MetaItem label={f.loanCompany} value={c.loanCompany} />
-                <MetaItem label={f.downPayment} value={fmtYen(c.downPayment)} />
-                <MetaItem label={f.creditLife} value={fmtBool(c.creditLifeInsurance)} />
-                <MetaItem
-                  label={f.callStatus}
-                  value={p.callStatusLabels[c.callStatus] ?? c.callStatus}
-                />
-                <MetaItem
-                  label={f.loanReviewStatus}
-                  value={
-                    c.loanReviewStatus
-                      ? (p.loanReviewStatusLabels[c.loanReviewStatus] ?? c.loanReviewStatus)
-                      : null
-                  }
-                />
-                <MetaItem label={f.loanNote} value={c.loanNote} />
-              </dl>
-            </div>
+            {/* ローン・団信（embedded 時は専用「ローン情報」タブに集約するため抑制） */}
+            {!embedded ? (
+              <LoanBlock contract={c} customerId={customerId} editContract={ec} />
+            ) : null}
 
             {/* 設備明細 */}
             <div>
@@ -676,52 +802,8 @@ export function CustomerProjectInfo({
         <MetaItem label={f.maekakuStatus} value={data.overview.maekakuStatus} />
       </Section>
 
-      {/* コール状況（バッチ B）。完工/ローン完了コール・汎用希望時間帯・マエカク希望電話 */}
-      <Section
-        title={p.sections.calls}
-        editSlot={
-          customerId && editable ? (
-            <EditCallStatusDialog customerId={customerId} initial={editable.calls} />
-          ) : null
-        }
-      >
-        <MetaItem
-          label={f.callMaekakuStatus}
-          value={
-            data.calls.maekakuStatus
-              ? p.maekakuStatusDisplayLabels[data.calls.maekakuStatus] ?? data.calls.maekakuStatus
-              : null
-          }
-        />
-        <MetaItem label={f.maekakuPreferredPhone} value={data.calls.maekakuPreferredPhone} />
-        <MetaItem
-          label={f.postCompletionCallStatus}
-          value={
-            data.calls.postCompletionCallStatus
-              ? p.callPhaseStatusLabels[data.calls.postCompletionCallStatus] ??
-                data.calls.postCompletionCallStatus
-              : null
-          }
-        />
-        <MetaItem
-          label={f.postCompletionCallPreferredAt}
-          value={fmtDateTime(data.calls.postCompletionCallPreferredAt)}
-        />
-        <MetaItem
-          label={f.loanCompletionCallStatus}
-          value={
-            data.calls.loanCompletionCallStatus
-              ? p.callPhaseStatusLabels[data.calls.loanCompletionCallStatus] ??
-                data.calls.loanCompletionCallStatus
-              : null
-          }
-        />
-        <MetaItem
-          label={f.loanCompletionCallPreferredAt}
-          value={fmtDateTime(data.calls.loanCompletionCallPreferredAt)}
-        />
-        <MetaItem label={f.generalCallPreferredTime} value={data.calls.generalCallPreferredTime} />
-      </Section>
+      {/* コール状況（embedded 時は専用「コール状況」タブに集約するため抑制） */}
+      {!embedded ? <ProjectCallStatusSection data={data} editable={editable} /> : null}
 
       {/* 備考（埋め込み時は上段のメモカードと重複するため非表示） */}
       {!embedded && (
