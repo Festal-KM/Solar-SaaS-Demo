@@ -56,5 +56,5 @@ export function middleware(req: NextRequest) {
 // Skip static assets / internal Next paths. `api/auth/*` is Auth.js — we
 // still want a request id there for login-failure debugging.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|webmanifest)$).*)"],
 };
