@@ -1052,7 +1052,7 @@ model Customer {
   constructionPlannedDate    DateTime?
   constructionCompletedDate  DateTime?
   constructionVendor         String? // 施工の対応事業者名
-  subsidyStatus              String             @default("none")
+  subsidyStatus              String             @default("not_applied")
   subsidyType                String?
   subsidySubmittedDate       DateTime?
   subsidyGrantedDate         DateTime?
@@ -1073,6 +1073,15 @@ model Customer {
   proposedProduct            String?            // ご提案商材（自由記述・トスアップ時）
   proposedProductId          String?            // ご提案商材（商品マスタ参照、任意）
   maekakuPreferredAt         DateTime?          // マエカク電話希望日時（maekakuStatus と併存）
+  // コール状況（バッチ B）。完工コール / ローン完了コールのステータス（CALL_STATUS_VALUES:
+  // not_done/done/unnecessary）+ 希望日時。汎用コール希望時間帯は自由記述。マエカク希望時の
+  // 連絡先電話は既存 maekakuPreferredAt（日時）とは別概念の「電話番号」。PII（電話番号）。
+  postCompletionCallStatus      String?         // 完工コールステータス（not_done/done/unnecessary）
+  postCompletionCallPreferredAt DateTime?       // 完工コール希望日時
+  loanCompletionCallStatus      String?         // ローン完了コールステータス（not_done/done/unnecessary）
+  loanCompletionCallPreferredAt DateTime?       // ローン完了コール希望日時
+  generalCallPreferredTime      String?         // 汎用コール希望時間帯（自由記述、例「平日19:00以降」）
+  maekakuPreferredPhone         String?         // マエカク希望時の電話番号（日時 maekakuPreferredAt とは別）
   // 電気契約・設備（基本情報タブで手動編集する識別子・ステータス。全て自由記述・nullable）。
   // 注: equipmentId は Customer 列であり、契約の equipmentSerialId（projectInfo.fields.equipmentId）
   // とは別概念・別ラベル namespace（customer.detail.fields.equipmentId）。
@@ -1189,10 +1198,12 @@ model CustomerTask {
   @@index([activityId])
 }
 
-// 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント。
+// 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
+// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット。
 enum CustomerFileCategory {
   GENERAL
   APPLICATION
+  PV_DRAWING
 }
 
 // 関連ファイル（R2 にアップロードした添付）。fileKey は R2 オブジェクトキー。
@@ -1584,6 +1595,8 @@ model Construction {
   plannedDate   DateTime?
   completedDate DateTime?
   status        ConstructionStatus @default(REQUEST_PENDING)
+  // 現地調査ステータス（施工ステータスとは別管理）: "not_surveyed" | "scheduled" | "surveyed"。
+  surveyStatus  String?
   fee           Decimal?           @db.Decimal(14, 2)
   note          String?
   fileKeys      String[]
@@ -1664,6 +1677,7 @@ model ContractPayment {
   downPayment         Int? // 頭金（円）
   creditLifeInsurance Boolean? // 団体信用生命保険-契約有無
   loanNote            String? // ローン-備考
+  loanReviewStatus    String? // ローン審査ステータス（not_reviewed/reviewing/completed/defect）
   depositDate         DateTime? // 入金日
   dealerPayoutDate    DateTime? // 代理店支払日
   createdAt           DateTime              @default(now())

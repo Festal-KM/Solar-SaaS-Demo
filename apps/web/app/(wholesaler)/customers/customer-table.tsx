@@ -4,7 +4,6 @@ import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
-import type { BadgeVariant } from "@/components/ui/badge";
 import { labels } from "@/lib/i18n/labels";
 
 import type {
@@ -14,6 +13,7 @@ import type {
   MaekakuValue,
   SubsidyStatusValue,
 } from "./constants";
+import type { BadgeVariant } from "@/components/ui/badge";
 
 function formatAppointment(iso: string | null): string {
   if (!iso) return labels.customer.none;
@@ -23,16 +23,19 @@ function formatAppointment(iso: string | null): string {
   return `${date} (${labels.customer.weekdays[d.getDay()]}) ${time}`;
 }
 
-function maekakuVariant(v: MaekakuValue): BadgeVariant {
+export function maekakuVariant(v: MaekakuValue): BadgeVariant {
   return v === "present" ? "success" : "secondary";
 }
 
-function contractVariant(v: ContractStatusValue): BadgeVariant {
+export function contractVariant(v: ContractStatusValue): BadgeVariant {
   switch (v) {
     case "contracted":
       return "success";
+    case "contract_pending":
+    case "quote_presented":
     case "negotiating":
       return "default";
+    case "pre_visit":
     case "lost":
       return "secondary";
     case "cancelled":
@@ -40,7 +43,7 @@ function contractVariant(v: ContractStatusValue): BadgeVariant {
   }
 }
 
-function constructionVariant(v: ConstructionStatusValue): BadgeVariant {
+export function constructionVariant(v: ConstructionStatusValue): BadgeVariant {
   switch (v) {
     case "done":
       return "success";
@@ -51,13 +54,17 @@ function constructionVariant(v: ConstructionStatusValue): BadgeVariant {
   }
 }
 
-function subsidyVariant(v: SubsidyStatusValue): BadgeVariant {
+export function subsidyVariant(v: SubsidyStatusValue): BadgeVariant {
   switch (v) {
-    case "granted":
+    case "completed":
       return "success";
-    case "applying":
+    case "applied":
       return "default";
-    case "none":
+    case "revising":
+      return "warning";
+    case "preparing":
+      return "default";
+    case "not_applied":
       return "secondary";
   }
 }

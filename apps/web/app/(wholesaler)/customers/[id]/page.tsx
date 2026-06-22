@@ -3,6 +3,7 @@
 // 3 カード（右上・横並び）/ メモ（右下・横幅いっぱい）/ 商談履歴（最下部・全幅・
 // スレッド形式）。PII は data ローダーでマスク済み。
 
+import { withTenant } from "@solar/db";
 import { Building2, CalendarClock, User2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,36 +14,40 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getCustomerProjectInfo } from "@/lib/customer/get-project-info";
+import { getCustomerProjectInfoEditable } from "@/lib/customer/get-project-info-editable";
 import { UnauthorizedError } from "@/lib/errors";
 import { labels } from "@/lib/i18n/labels";
 import { assertCan } from "@/lib/permissions/can";
 import { getTenantContext } from "@/lib/tenancy/context";
-import { withTenant } from "@solar/db";
 
-import { listWholesalerUsers } from "../data";
 import { listActiveAreas, listActiveDealers } from "../../event-detail/data";
-
-import type { InflowRoute } from "@solar/contracts";
-
+import { listWholesalerUsers } from "../data";
 import { CustomerChat } from "./customer-chat";
 import { CustomerFiles } from "./customer-files";
 import { CustomerHistory } from "./customer-history";
 import { CustomerProjectInfo } from "./customer-project-info";
 import { CustomerTasks } from "./customer-tasks";
-import { getCustomerProjectInfo } from "@/lib/customer/get-project-info";
 import { getCustomerDetail } from "./data";
-import type { AssigneeDisplay } from "./data";
 import { EditAssigneeDialog } from "./edit-assignee-dialog";
+import { EditBasicInfoDialog } from "./edit-basic-info-dialog";
+import { EditMemoDialog } from "./edit-memo-dialog";
 import { NegotiationStatusPanel } from "./negotiation-status-panel";
 import { NewActivityDialog } from "./new-activity-dialog";
-import { EditBasicInfoDialog } from "./edit-basic-info-dialog";
-import type { EditBasicInfoInitial } from "./edit-basic-info-dialog";
-import { EditMemoDialog } from "./edit-memo-dialog";
 import {
   ContractStatusPanel,
   ConstructionStatusPanel,
   SubsidyStatusPanel,
 } from "./status-panels";
+
+import type {
+  ContractStatusValue,
+  ConstructionStatusValue,
+  SubsidyStatusValue,
+} from "../constants";
+import type { AssigneeDisplay } from "./data";
+import type { EditBasicInfoInitial } from "./edit-basic-info-dialog";
+import type { InflowRoute } from "@solar/contracts";
 
 export const dynamic = "force-dynamic";
 
@@ -78,22 +83,29 @@ function formatAppointmentShort(iso: string): string {
   return `${date}（${labels.customer.weekdays[d.getDay()]}）${time}`;
 }
 
-// at-a-glance 帯のステータス → バッジバリアント（一覧テーブルと同じ意味づけ）。
-const CONTRACT_VARIANT: Record<string, BadgeVariant> = {
+// at-a-glance 帯のステータス → バッジバリアント（一覧テーブル customer-table.tsx の
+// contractVariant / constructionVariant / subsidyVariant と同じ意味づけ）。値域を
+// 型で縛り、ステータス追加時にコンパイルエラーで漏れを検知する。
+const CONTRACT_VARIANT: Record<ContractStatusValue, BadgeVariant> = {
   contracted: "success",
+  contract_pending: "default",
+  quote_presented: "default",
   negotiating: "default",
+  pre_visit: "secondary",
   lost: "secondary",
   cancelled: "destructive",
 };
-const CONSTRUCTION_VARIANT: Record<string, BadgeVariant> = {
+const CONSTRUCTION_VARIANT: Record<ConstructionStatusValue, BadgeVariant> = {
   done: "success",
   in_progress: "warning",
   not_started: "secondary",
 };
-const SUBSIDY_VARIANT: Record<string, BadgeVariant> = {
-  granted: "success",
-  applying: "default",
-  none: "secondary",
+const SUBSIDY_VARIANT: Record<SubsidyStatusValue, BadgeVariant> = {
+  completed: "success",
+  applied: "default",
+  revising: "warning",
+  preparing: "default",
+  not_applied: "secondary",
 };
 
 // 「ラベル＋バッジ」の小さなステータスチップ（ヘッダー直下の at-a-glance 帯で使用）。
@@ -250,11 +262,12 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   const editable = await getCustomerEditableValues(id);
   if (!editable) notFound();
 
-  const [users, areas, dealers, projectInfo] = await Promise.all([
+  const [users, areas, dealers, projectInfo, projectInfoEditable] = await Promise.all([
     listWholesalerUsers(),
     listActiveAreas(),
     listActiveDealers(),
     getCustomerProjectInfo(id),
+    getCustomerProjectInfoEditable(id),
   ]);
 
   const t = labels.customer;
@@ -425,7 +438,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
             <div className="h-px flex-1 bg-hairline-light" aria-hidden />
           </div>
           <Card className="p-5">
-            <CustomerProjectInfo data={projectInfo} embedded />
+            <CustomerProjectInfo data={projectInfo} embedded editable={projectInfoEditable} />
           </Card>
         </TabsContent>
 
@@ -517,8 +530,8 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </Card>
         </TabsContent>
 
-        {/* 施工状況 — ステータス（プルダウン）/ 工事予定日 / 対応事業者 */}
-        <TabsContent value="construction">
+        {/* 施工状況 — ステータス（プルダウン）/ 工事予定日 / 対応事業者 + PV設置図面 */}
+        <TabsContent value="construction" className="space-y-4">
           <Card className="p-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.construction}</h2>
             <ConstructionStatusPanel
@@ -528,6 +541,14 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 plannedDate: detail.construction.plannedDate,
                 vendor: detail.construction.vendor,
               }}
+            />
+          </Card>
+          <Card className="p-5">
+            <h2 className="mb-3 text-sm font-semibold text-ink">{d.pvDrawing.title}</h2>
+            <CustomerFiles
+              customerId={detail.id}
+              category="PV_DRAWING"
+              files={detail.pvDrawingFiles}
             />
           </Card>
         </TabsContent>

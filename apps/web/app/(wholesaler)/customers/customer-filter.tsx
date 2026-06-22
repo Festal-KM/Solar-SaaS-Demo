@@ -6,19 +6,19 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { labels } from "@/lib/i18n/labels";
 
-import type {
-  ContractStatusValue,
-  ConstructionStatusValue,
-  MaekakuValue,
-  SubsidyStatusValue,
+import {
+  CONSTRUCTION_STATUS_VALUES,
+  CONTRACT_STATUS_VALUES,
+  SUBSIDY_STATUS_VALUES,
 } from "./constants";
+import type { MaekakuValue } from "./constants";
 
 const SELECT_CLASS =
   "flex h-9 w-full rounded-md border border-hairline-light bg-white px-3 py-1 text-sm text-body-light focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary";
 
-const CONTRACT_OPTIONS: ContractStatusValue[] = ["negotiating", "contracted", "lost", "cancelled"];
-const CONSTRUCTION_OPTIONS: ConstructionStatusValue[] = ["not_started", "in_progress", "done"];
-const SUBSIDY_OPTIONS: SubsidyStatusValue[] = ["none", "applying", "granted"];
+const CONTRACT_OPTIONS = CONTRACT_STATUS_VALUES;
+const CONSTRUCTION_OPTIONS = CONSTRUCTION_STATUS_VALUES;
+const SUBSIDY_OPTIONS = SUBSIDY_STATUS_VALUES;
 const MAEKAKU_OPTIONS: MaekakuValue[] = ["present", "absent"];
 
 interface AssigneeOption {

@@ -15,6 +15,11 @@ import { labels } from "@/lib/i18n/labels";
 import { CustomerFilter } from "./customer-filter";
 import { CustomerTable } from "./customer-table";
 import {
+  CONSTRUCTION_STATUS_VALUES,
+  CONTRACT_STATUS_VALUES,
+  SUBSIDY_STATUS_VALUES,
+} from "./constants";
+import {
   listCustomers,
   listWholesalerUsers,
   normalizePageSize,
@@ -40,9 +45,9 @@ interface PageProps {
   }>;
 }
 
-const VALID_CONTRACT: ContractStatusValue[] = ["negotiating", "contracted", "lost", "cancelled"];
-const VALID_CONSTRUCTION: ConstructionStatusValue[] = ["not_started", "in_progress", "done"];
-const VALID_SUBSIDY: SubsidyStatusValue[] = ["none", "applying", "granted"];
+const VALID_CONTRACT = CONTRACT_STATUS_VALUES;
+const VALID_CONSTRUCTION = CONSTRUCTION_STATUS_VALUES;
+const VALID_SUBSIDY = SUBSIDY_STATUS_VALUES;
 const VALID_MAEKAKU: MaekakuValue[] = ["present", "absent"];
 
 // Windowed numeric pagination (max 5 buttons centred on the current page).

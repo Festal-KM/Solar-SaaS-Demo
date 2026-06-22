@@ -135,6 +135,13 @@ async function loadProjectInfo(
       faceToFace: true,
       proposedProduct: true,
       maekakuPreferredAt: true,
+      // コール状況（バッチ B）。マエカク希望電話は maskPhone で DTO 整形時にマスク。
+      postCompletionCallStatus: true,
+      postCompletionCallPreferredAt: true,
+      loanCompletionCallStatus: true,
+      loanCompletionCallPreferredAt: true,
+      generalCallPreferredTime: true,
+      maekakuPreferredPhone: true,
       existingEquipments: {
         orderBy: { category: "asc" },
         select: {
@@ -205,6 +212,7 @@ async function loadProjectInfo(
           downPayment: true,
           creditLifeInsurance: true,
           loanNote: true,
+          loanReviewStatus: true,
         },
       },
       equipment: {
@@ -237,6 +245,7 @@ async function loadProjectInfo(
           surveyCandidates: true,
           constructionCandidates: true,
           status: true,
+          surveyStatus: true,
           vendorName: true,
           fee: true,
           installer: { select: { name: true } },
@@ -353,6 +362,7 @@ async function loadProjectInfo(
         completedDate: isoOrNull(con.completedDate),
         powerSaleStartDate: isoOrNull(con.powerSaleStartDate),
         status: con.status,
+        surveyStatus: con.surveyStatus,
         // 完工後・不備・サンキューコールは親 Contract から伝播（§16.2）。
         postCompletionStatus: c.postCompletionStatus,
         defectStatus: c.defectStatus,
@@ -383,6 +393,7 @@ async function loadProjectInfo(
       downPayment: c.payment?.downPayment ?? null,
       creditLifeInsurance: c.payment?.creditLifeInsurance ?? null,
       loanNote: c.payment?.loanNote ?? null,
+      loanReviewStatus: c.payment?.loanReviewStatus ?? null,
       callStatus: c.callStatus,
       equipmentSerialId: c.equipmentSerialId,
       representativeConstructionId: rep?.id ?? null,
@@ -487,6 +498,17 @@ async function loadProjectInfo(
         panelCount: eq.panelCount,
         attributes: asRecord(eq.attributes),
       })),
+    },
+    // バッチ B: コール状況。マエカク希望電話は連絡先 PII（maskMobilePhone で下4桁マスク）。
+    // マエカク「日時」(maekakuPreferredAt) は本セクションでは扱わない（ヒアリング側）。
+    calls: {
+      maekakuStatus: customer.maekakuStatus,
+      maekakuPreferredPhone: maskMobilePhone(customer.maekakuPreferredPhone, viewer),
+      postCompletionCallStatus: customer.postCompletionCallStatus,
+      postCompletionCallPreferredAt: isoOrNull(customer.postCompletionCallPreferredAt),
+      loanCompletionCallStatus: customer.loanCompletionCallStatus,
+      loanCompletionCallPreferredAt: isoOrNull(customer.loanCompletionCallPreferredAt),
+      generalCallPreferredTime: customer.generalCallPreferredTime,
     },
   };
 

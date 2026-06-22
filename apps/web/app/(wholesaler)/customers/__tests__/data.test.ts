@@ -109,7 +109,7 @@ function makeCustomerRow(overrides: Partial<{
     registeredByUserId: overrides.registeredByUserId ?? "u_assignee",
     contractStatus: overrides.contractStatus ?? "negotiating",
     constructionStatus: overrides.constructionStatus ?? "not_started",
-    subsidyStatus: overrides.subsidyStatus ?? "none",
+    subsidyStatus: overrides.subsidyStatus ?? "not_applied",
     updatedAt: overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
   };
 }
@@ -162,7 +162,7 @@ describe("listCustomers (wholesaler)", () => {
     // Manual columns default to negotiating / not_started / none.
     expect(item.contractStatus).toBe("negotiating");
     expect(item.constructionStatus).toBe("not_started");
-    expect(item.subsidyStatus).toBe("none");
+    expect(item.subsidyStatus).toBe("not_applied");
     expect(item.maekaku).toBe("absent");
     expect(item.nextAppointmentAt).toBeNull();
     // Unresolved registeredByUserId (dealer registrant / no user) → "—".
@@ -247,7 +247,7 @@ describe("listCustomers (wholesaler)", () => {
         id: "cust_full",
         contractStatus: "contracted",
         constructionStatus: "done",
-        subsidyStatus: "granted",
+        subsidyStatus: "completed",
       }),
     ]);
     customerCountMock.mockResolvedValue(1);
@@ -263,7 +263,7 @@ describe("listCustomers (wholesaler)", () => {
 
     expect(item.contractStatus).toBe("contracted");
     expect(item.constructionStatus).toBe("done");
-    expect(item.subsidyStatus).toBe("granted");
+    expect(item.subsidyStatus).toBe("completed");
     expect(item.maekaku).toBe("present");
     expect(item.nextAppointmentAt).toBe(future.toISOString());
   });
@@ -276,7 +276,7 @@ describe("listCustomers (wholesaler)", () => {
         id: "cust_mid",
         contractStatus: "negotiating",
         constructionStatus: "in_progress",
-        subsidyStatus: "applying",
+        subsidyStatus: "applied",
       }),
     ]);
     customerCountMock.mockResolvedValue(1);
@@ -288,7 +288,7 @@ describe("listCustomers (wholesaler)", () => {
 
     expect(item.contractStatus).toBe("negotiating");
     expect(item.constructionStatus).toBe("in_progress");
-    expect(item.subsidyStatus).toBe("applying");
+    expect(item.subsidyStatus).toBe("applied");
   });
 
   it("pushes status filters into the DB where clause", async () => {
@@ -301,7 +301,7 @@ describe("listCustomers (wholesaler)", () => {
     await listCustomers({
       contractStatus: "contracted",
       constructionStatus: "done",
-      subsidyStatus: "granted",
+      subsidyStatus: "completed",
     });
 
     const callArgs = customerFindManyMock.mock.calls[0]![0] as {
@@ -312,7 +312,7 @@ describe("listCustomers (wholesaler)", () => {
     // Direct column equality (manual status columns), not relation some/none.
     expect(callArgs.where.AND).toContainEqual({ contractStatus: "contracted" });
     expect(callArgs.where.AND).toContainEqual({ constructionStatus: "done" });
-    expect(callArgs.where.AND).toContainEqual({ subsidyStatus: "granted" });
+    expect(callArgs.where.AND).toContainEqual({ subsidyStatus: "completed" });
   });
 
   it("respects pagination: pageSize=50 page=2 skips 50 rows", async () => {

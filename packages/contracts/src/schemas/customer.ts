@@ -41,6 +41,58 @@ export const CustomerStatusEnum = z.enum([
 
 export type CustomerStatus = z.infer<typeof CustomerStatusEnum>;
 
+// 営業ステータス（Customer.contractStatus, String 列）。仕様の主要 6 値
+// （初訪前 / 商談中 / 見積提示済 / 契約対応中 / 契約済 / 失注）＋既存 cancelled（解約）。
+export const ContractStatusEnum = z.enum([
+  "pre_visit",
+  "negotiating",
+  "quote_presented",
+  "contract_pending",
+  "contracted",
+  "lost",
+  "cancelled",
+]);
+
+export type ContractStatusValue = z.infer<typeof ContractStatusEnum>;
+
+// 設置申請ステータス（Customer.subsidyStatus, String 列）。
+// 申請前 / 申請準備中 / 申請済 / 修正対応中 / 完了。
+export const SubsidyStatusEnum = z.enum([
+  "not_applied",
+  "preparing",
+  "applied",
+  "revising",
+  "completed",
+]);
+
+export type SubsidyStatusValue = z.infer<typeof SubsidyStatusEnum>;
+
+// 現地調査ステータス（Construction.surveyStatus, String? 列。施工ステータスとは別管理）。
+export const SurveyStatusEnum = z.enum(["not_surveyed", "scheduled", "surveyed"]);
+
+export type SurveyStatusValue = z.infer<typeof SurveyStatusEnum>;
+
+// コール状況ステータス値域（バッチ B）。完工コール / ローン完了コール 共通。
+// 選択 UI・バリデーション・DTO が単一参照する真実（CONTRACT_STATUS_VALUES 等に倣う）。
+export const CALL_STATUS_VALUES = ["not_done", "done", "unnecessary"] as const;
+
+export const CallStatusEnum = z.enum(CALL_STATUS_VALUES);
+
+export type CallStatusValue = z.infer<typeof CallStatusEnum>;
+
+// ローン審査ステータス値域（バッチ C）。ContractPayment.loanReviewStatus。
+// 審査前 / 審査中 / 完了 / 不備在り。選択 UI・バリデーション・DTO が単一参照する真実。
+export const LOAN_REVIEW_STATUS_VALUES = [
+  "not_reviewed",
+  "reviewing",
+  "completed",
+  "defect",
+] as const;
+
+export const LoanReviewStatusEnum = z.enum(LOAN_REVIEW_STATUS_VALUES);
+
+export type LoanReviewStatusValue = z.infer<typeof LoanReviewStatusEnum>;
+
 export const CustomerCreateSchema = z
   .object({
     name: z.string().trim().min(1, "氏名を入力してください").max(255),
@@ -129,7 +181,7 @@ export const CustomerUpdateSchema = z.object({
   closingRelationshipId: z.string().min(1).nullable().optional(),
   // Manual status columns edited from the detail page status cards. Date fields
   // accept a `YYYY-MM-DD` (or ISO) string or null; the action converts to Date.
-  contractStatus: z.enum(["negotiating", "contracted", "lost", "cancelled"]).optional(),
+  contractStatus: ContractStatusEnum.optional(),
   contractPlan: z.string().max(255).nullable().optional(),
   contractAmount: z.number().int().nonnegative().nullable().optional(),
   contractExpectedDate: z.string().nullable().optional(),
@@ -137,7 +189,7 @@ export const CustomerUpdateSchema = z.object({
   constructionPlannedDate: z.string().nullable().optional(),
   constructionCompletedDate: z.string().nullable().optional(),
   constructionVendor: z.string().max(255).nullable().optional(),
-  subsidyStatus: z.enum(["none", "applying", "granted"]).optional(),
+  subsidyStatus: SubsidyStatusEnum.optional(),
   subsidyType: z.string().max(255).nullable().optional(),
   subsidySubmittedDate: z.string().nullable().optional(),
   subsidyGrantedDate: z.string().nullable().optional(),
@@ -207,8 +259,9 @@ export const CustomerMessageCreateSchema = z.object({
 
 export type CustomerMessageCreateInput = z.infer<typeof CustomerMessageCreateSchema>;
 
-// 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント。
-export const CustomerFileCategoryEnum = z.enum(["GENERAL", "APPLICATION"]);
+// 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
+// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット（バッチ C）。
+export const CustomerFileCategoryEnum = z.enum(["GENERAL", "APPLICATION", "PV_DRAWING"]);
 
 export type CustomerFileCategory = z.infer<typeof CustomerFileCategoryEnum>;
 
@@ -315,3 +368,132 @@ export const PresignCustomerFileSchema = z.object({
 });
 
 export type PresignCustomerFileInput = z.infer<typeof PresignCustomerFileSchema>;
+
+// ---------------------------------------------------------------------------
+// F-062 案件情報インライン編集（docs/05 §16）.
+//
+// 顧客詳細「基本情報」タブに統合された案件情報ビュー（CustomerProjectInfo）の
+// 各セクションのインライン編集ペイロード。書き込み先エンティティごとに 1 スキーマ。
+// 日付は YYYY-MM-DD or ISO 文字列で受け、Server Action 側で Date 化する。null で
+// クリア可能。仕入値スナップショット（ContractItem.snapshotPurchasePrice 等）は
+// 一切受け取らない（CLAUDE.md rule #4 / #5）。
+// ---------------------------------------------------------------------------
+
+// 概況（Customer 列）。住居種別・流入経路・マエカク状況・電気料金・世帯。
+export const ProjectOverviewSchema = z.object({
+  customerId: z.string().min(1),
+  electricBill: z.string().max(100).nullable().optional(),
+  household: z.string().max(100).nullable().optional(),
+  housingType: z.string().max(100).nullable().optional(),
+  inflowRoute: InflowRouteEnum.nullable().optional(),
+  maekakuStatus: z.string().max(50).nullable().optional(),
+});
+
+export type ProjectOverviewInput = z.infer<typeof ProjectOverviewSchema>;
+
+// 契約・金額・ローン（Contract + ContractPayment、1 契約単位）。
+export const ProjectContractEditSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+  // Contract 列
+  contractDate: z.string().nullable().optional(),
+  contractAmount: z.number().int().nonnegative().nullable().optional(),
+  equipmentSerialId: z.string().max(255).nullable().optional(),
+  loanReviewCallAt: z.string().nullable().optional(),
+  callStatus: z.enum(["NONE", "SCHEDULED", "DONE", "CALLBACK_WAIT", "NG"]).optional(),
+  // ContractPayment 列（1:1。未存在時は upsert）
+  paymentCount: z.number().int().nonnegative().nullable().optional(),
+  paymentStatus: z.enum(["UNPAID", "PARTIAL", "PAID"]).optional(),
+  depositDate: z.string().nullable().optional(),
+  dealerPayoutDate: z.string().nullable().optional(),
+  loanCompany: z.string().max(255).nullable().optional(),
+  downPayment: z.number().int().nonnegative().nullable().optional(),
+  creditLifeInsurance: z.boolean().nullable().optional(),
+  loanNote: z.string().max(2000).nullable().optional(),
+  // ローン審査ステータス（バッチ C）。null でクリア可、省略は無変更。
+  loanReviewStatus: LoanReviewStatusEnum.nullable().optional(),
+});
+
+export type ProjectContractEditInput = z.infer<typeof ProjectContractEditSchema>;
+
+// 設備明細（ContractEquipment の非価格フィールドのみ。価格・スナップショットは扱わない）。
+export const ProjectEquipmentEditSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+  equipmentId: z.string().min(1),
+  contracted: z.boolean().optional(),
+  manufacturer: z.string().max(255).nullable().optional(),
+  model: z.string().max(255).nullable().optional(),
+  capacity: z.string().max(100).nullable().optional(),
+  quantity: z.number().int().nonnegative().nullable().optional(),
+  installLocation: z.string().max(255).nullable().optional(),
+  introducedStatus: z.enum(["NONE", "EXISTING", "NEW"]).nullable().optional(),
+  warrantyStandard: z.boolean().nullable().optional(),
+  warrantyExtended: z.boolean().nullable().optional(),
+  warrantyDisaster: z.boolean().nullable().optional(),
+  detail: z.string().max(2000).nullable().optional(),
+  attributes: z.record(z.unknown()).nullable().optional(),
+});
+
+export type ProjectEquipmentEditInput = z.infer<typeof ProjectEquipmentEditSchema>;
+
+// 工事・完工（Construction + 親 Contract の完工後/不備/サンキューコール列）。
+export const ProjectConstructionEditSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+  constructionId: z.string().min(1),
+  // Construction 列
+  surveyDate: z.string().nullable().optional(),
+  startedDate: z.string().nullable().optional(),
+  completedDate: z.string().nullable().optional(),
+  powerSaleStartDate: z.string().nullable().optional(),
+  status: z
+    .enum(["REQUEST_PENDING", "REQUESTED", "SURVEYED", "CONSTRUCTING", "DONE", "PAUSED"])
+    .optional(),
+  // 現地調査ステータス（施工ステータスとは別管理）。null でクリア可。
+  surveyStatus: SurveyStatusEnum.nullable().optional(),
+  vendorName: z.string().max(255).nullable().optional(),
+  fee: z.number().int().nonnegative().nullable().optional(),
+  // 親 Contract 列（完工後ステータス・不備・サンキューコール）
+  postCompletionStatus: z.enum(["NONE", "IN_PROGRESS", "DONE"]).optional(),
+  defectStatus: z.enum(["NONE", "OPEN", "RESOLVED"]).optional(),
+  defectDetail: z.string().max(2000).nullable().optional(),
+  thankYouCallAt: z.string().nullable().optional(),
+});
+
+export type ProjectConstructionEditInput = z.infer<typeof ProjectConstructionEditSchema>;
+
+// 認定・設備（申請）（Application）。
+export const ProjectApplicationEditSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+  applicationId: z.string().min(1),
+  status: z.enum(["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "CANCELLED"]).optional(),
+  type: z.string().max(255).nullable().optional(),
+  submittedDate: z.string().nullable().optional(),
+  approvedDate: z.string().nullable().optional(),
+  grantedAmount: z.number().int().nonnegative().nullable().optional(),
+});
+
+export type ProjectApplicationEditInput = z.infer<typeof ProjectApplicationEditSchema>;
+
+// ---------------------------------------------------------------------------
+// コール状況（バッチ B）（Customer 列）.
+//
+// 案件情報「コール状況」セクションのインライン編集ペイロード。完工コール /
+// ローン完了コールのステータス（CallStatusEnum）+ 希望日時、汎用コール希望時間帯
+// （自由記述）、マエカク希望時の電話番号（PII）。日時は YYYY-MM-DD or ISO 文字列で
+// 受け、Server Action 側で Date 化する。各 null でクリア可能、省略は無変更。
+// マエカク希望「日時」(maekakuPreferredAt) はこの面では扱わない（F-063 ヒアリング側）。
+// ---------------------------------------------------------------------------
+export const ProjectCallStatusSchema = z.object({
+  customerId: z.string().min(1),
+  postCompletionCallStatus: CallStatusEnum.nullable().optional(),
+  postCompletionCallPreferredAt: z.string().nullable().optional(),
+  loanCompletionCallStatus: CallStatusEnum.nullable().optional(),
+  loanCompletionCallPreferredAt: z.string().nullable().optional(),
+  generalCallPreferredTime: z.string().max(255).nullable().optional(),
+  maekakuPreferredPhone: z.string().max(50).nullable().optional(),
+});
+
+export type ProjectCallStatusInput = z.infer<typeof ProjectCallStatusSchema>;

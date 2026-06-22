@@ -454,8 +454,9 @@ function build(resolved: Resolved, now: Date): Buffers {
         cust.constructionStatus = r < 0.34 ? "done" : r < 0.7 ? "in_progress" : "not_started";
         cust.constructionVendor = pick(["関東ソーラー設備", "東京エコ工事", "湘南電設"]);
         const s = rng();
-        cust.subsidyStatus = s < 0.34 ? "granted" : s < 0.7 ? "applying" : "none";
-        if (cust.subsidyStatus !== "none") cust.subsidyType = "国補助金（DR/子育てエコ）";
+        cust.subsidyStatus =
+          s < 0.25 ? "completed" : s < 0.5 ? "applied" : s < 0.7 ? "revising" : s < 0.85 ? "preparing" : "not_applied";
+        if (cust.subsidyStatus !== "not_applied") cust.subsidyType = "国補助金（DR/子育てエコ）";
       }
       b.customers.push(cust);
 
@@ -533,15 +534,17 @@ function build(resolved: Resolved, now: Date): Buffers {
               id: `demoev_cons_${i}_${j}`,
               contractId: ctrId,
               status: cust.constructionStatus === "done" ? "DONE" : "CONSTRUCTING",
+              // 現地調査ステータス（施工ステータスとは別管理）。
+              surveyStatus: cust.constructionStatus === "done" ? "surveyed" : "scheduled",
               fileKeys: [],
             });
           }
-          if (cust.subsidyStatus && cust.subsidyStatus !== "none") {
+          if (cust.subsidyStatus && cust.subsidyStatus !== "not_applied") {
             b.applications.push({
               id: `demoev_app_${i}_${j}`,
               contractId: ctrId,
               type: "国補助金",
-              status: cust.subsidyStatus === "granted" ? "APPROVED" : "SUBMITTED",
+              status: cust.subsidyStatus === "completed" ? "APPROVED" : "SUBMITTED",
               fileKeys: [],
             });
           }

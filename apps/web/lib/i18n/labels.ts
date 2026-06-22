@@ -1906,7 +1906,10 @@ export const labels = {
       absent: "未",
     },
     contractStatusLabels: {
+      pre_visit: "初訪前",
       negotiating: "商談中",
+      quote_presented: "見積提示済",
+      contract_pending: "契約対応中",
       contracted: "契約済",
       lost: "失注",
       cancelled: "解約",
@@ -1917,9 +1920,17 @@ export const labels = {
       done: "施工完了",
     },
     subsidyStatusLabels: {
-      none: "未申請",
-      applying: "申請中",
-      granted: "承認済",
+      not_applied: "申請前",
+      preparing: "申請準備中",
+      applied: "申請済",
+      revising: "修正対応中",
+      completed: "完了",
+    },
+    // 現地調査ステータス（施工ステータスとは別管理）。Construction.surveyStatus。
+    surveyStatusLabels: {
+      not_surveyed: "調査前",
+      scheduled: "予定日確定",
+      surveyed: "実施済",
     },
     detail: {
       basicInfo: "基本情報",
@@ -1959,6 +1970,7 @@ export const labels = {
           certification: "認定・設備",
           equipment: "設備明細",
           overview: "概況",
+          calls: "コール状況",
           note: "備考",
         },
         fields: {
@@ -1989,10 +2001,12 @@ export const labels = {
           downPayment: "頭金",
           creditLife: "団体信用生命保険",
           loanNote: "ローン-備考",
+          loanReviewStatus: "ローン審査ステータス",
           callStatus: "架電ステータス",
           surveyCandidateAt: "現地調査日時（候補）",
           constructionCandidateAt: "工事日時（候補）",
           surveyAt: "現調日時",
+          surveyStatus: "現地調査ステータス",
           startedDate: "着工日",
           completedDate: "完工日",
           thankYouCallAt: "サンキューコール日時",
@@ -2020,6 +2034,14 @@ export const labels = {
           submittedDate: "申請日",
           approvedDate: "交付決定日",
           grantedAmount: "交付額",
+          // コール状況（バッチ B）。
+          callMaekakuStatus: "マエカクステータス",
+          maekakuPreferredPhone: "マエカク希望電話",
+          postCompletionCallStatus: "完工コールステータス",
+          postCompletionCallPreferredAt: "完工コール希望日時",
+          loanCompletionCallStatus: "ローン完了コールステータス",
+          loanCompletionCallPreferredAt: "ローン完了コール希望日時",
+          generalCallPreferredTime: "汎用コール希望時間帯",
         },
         // DTO の enum CODE → 表示ラベル。
         callStatusLabels: {
@@ -2033,6 +2055,13 @@ export const labels = {
           UNPAID: "未入金",
           PARTIAL: "一部入金",
           PAID: "入金済み",
+        } as Record<string, string>,
+        // ローン審査ステータス CODE → 表示ラベル（バッチ C・LOAN_REVIEW_STATUS_VALUES）。
+        loanReviewStatusLabels: {
+          not_reviewed: "審査前",
+          reviewing: "審査中",
+          completed: "完了",
+          defect: "不備在り",
         } as Record<string, string>,
         postCompletionStatusLabels: {
           NONE: "未着手",
@@ -2051,6 +2080,12 @@ export const labels = {
           CONSTRUCTING: "施工中",
           DONE: "完工",
           PAUSED: "保留",
+        } as Record<string, string>,
+        // 現地調査ステータス（施工ステータスとは別管理）。Construction.surveyStatus。
+        surveyStatusLabels: {
+          not_surveyed: "調査前",
+          scheduled: "予定日確定",
+          surveyed: "実施済",
         } as Record<string, string>,
         applicationStatusLabels: {
           DRAFT: "下書き",
@@ -2138,6 +2173,19 @@ export const labels = {
             UNKNOWN: "不明",
           } as Record<string, string>,
         },
+        // コール状況のステータス CODE → 表示ラベル（バッチ B・CALL_STATUS_VALUES）。
+        // 既存 callStatusLabels（Contract.callStatus）とは別 namespace（衝突回避）。
+        callPhaseStatusLabels: {
+          not_done: "実施前",
+          done: "実施済",
+          unnecessary: "不要",
+        } as Record<string, string>,
+        // マエカク状況 CODE → 表示ラベル（コール状況セクションで参照）。
+        maekakuStatusDisplayLabels: {
+          pending: "未実施",
+          done: "実施済み",
+          unnecessary: "不要",
+        } as Record<string, string>,
         // クロスセル候補バッジ（docs/05 §17.8）。判定材料の可視化のみ。
         crossSellTitle: "クロスセル候補",
         crossSellLabels: {
@@ -2145,6 +2193,42 @@ export const labels = {
           BATTERY_SUGGEST: "蓄電池提案",
           PV_EXPAND_SUGGEST: "太陽光増設提案",
         } as Record<string, string>,
+        // F-062 案件情報インライン編集（各セクションの編集トリガー / ダイアログ）。
+        edit: {
+          save: "保存",
+          cancel: "キャンセル",
+          unset: "未設定",
+          editOverview: "概況を編集",
+          editHearing: "ヒアリングを編集",
+          editContract: "契約・金額・ローンを編集",
+          editEquipment: "設備明細を編集",
+          editConstruction: "工事・完工を編集",
+          editApplication: "認定・設備（申請）を編集",
+          editCallStatus: "コール状況を編集",
+          // コール状況ステータス選択肢（CALL_STATUS_VALUES）。
+          callStatusLabels: {
+            not_done: "実施前",
+            done: "実施済",
+            unnecessary: "不要",
+          } as Record<string, string>,
+          // 入力補助ラベル（既存 fields/hearing と重複しないもののみ）。
+          familyTitle: "家族属性",
+          contactTitle: "連絡先",
+          inflowRouteLabels: {
+            EVENT: "催事",
+            OUTBOUND_CALL: "アウトバウンド",
+            DIRECT_VISIT: "直接訪問",
+          } as Record<string, string>,
+          maekakuStatusLabels: {
+            pending: "未実施",
+            done: "実施済み",
+            unnecessary: "不要",
+          } as Record<string, string>,
+          presence: {
+            true: "有",
+            false: "無",
+          },
+        },
       },
       tabs: {
         basic: "基本情報",
@@ -2287,6 +2371,10 @@ export const labels = {
       applicationFiles: {
         title: "申請関連ドキュメント",
         empty: "申請関連ドキュメントはありません",
+      },
+      pvDrawing: {
+        title: "PV設置図面",
+        empty: "PV設置図面はありません",
       },
       tasks: {
         title: "タスク / ToDo",

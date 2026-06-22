@@ -13,6 +13,7 @@ import { labels } from "@/lib/i18n/labels";
 
 import { updateCustomerAction } from "../actions";
 
+import { CONTRACT_STATUS_VALUES } from "../constants";
 import type { ContractStatusValue } from "../constants";
 
 interface NegotiationStatusPanelProps {
@@ -106,10 +107,11 @@ export function NegotiationStatusPanel({
             onChange={(e) => setContractStatus(e.target.value as ContractStatusValue)}
             className={selectClass}
           >
-            <option value="negotiating">{t.contractStatusLabels.negotiating}</option>
-            <option value="contracted">{t.contractStatusLabels.contracted}</option>
-            <option value="lost">{t.contractStatusLabels.lost}</option>
-            <option value="cancelled">{t.contractStatusLabels.cancelled}</option>
+            {CONTRACT_STATUS_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {t.contractStatusLabels[s]}
+              </option>
+            ))}
           </select>
         </div>
         <div className="space-y-1.5">

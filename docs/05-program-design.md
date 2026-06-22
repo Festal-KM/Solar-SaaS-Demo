@@ -2530,6 +2530,7 @@ PM エージェントが優先度を判断する未確定事項。
 | 頭金 | `ContractPayment.downPayment` | 新規(16-C) |
 | 団信契約有無 | `ContractPayment.creditLifeInsurance` | 新規(16-C) |
 | ローン備考 | `ContractPayment.loanNote` | 新規(16-C) |
+| ローン審査ステータス | `ContractPayment.loanReviewStatus`（CODE: not_reviewed/reviewing/completed/defect = 審査前/審査中/完了/不備在り。`LOAN_REVIEW_STATUS_VALUES` 単一参照） | 拡張(ContractPayment/batchC) |
 | 架電ステータス | `Contract.callStatus`（enum） | 拡張(Contract/16-B) |
 
 **カテゴリ 5: 工事・完工（source = `Construction`）**
@@ -2687,6 +2688,7 @@ model ContractPayment {
   downPayment         Int?        // 頭金（円）
   creditLifeInsurance Boolean?    // 団体信用生命保険-契約有無
   loanNote            String?     // ローン-備考
+  loanReviewStatus    String?     // ローン審査ステータス（not_reviewed/reviewing/completed/defect、batchC）
   depositDate         DateTime?   // 入金日
   dealerPayoutDate    DateTime?   // 代理店支払日
   createdAt           DateTime @default(now())

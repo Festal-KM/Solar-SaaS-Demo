@@ -1055,18 +1055,32 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
 // Map a sample spec's intent to the manual status columns the list/detail now
 // read. (No "cancelled" appears in the seed.)
 function specManualStatus(spec: SampleCustomerSpec): {
-  contractStatus: "negotiating" | "contracted" | "lost" | "cancelled";
+  contractStatus:
+    | "pre_visit"
+    | "negotiating"
+    | "quote_presented"
+    | "contract_pending"
+    | "contracted"
+    | "lost"
+    | "cancelled";
   contractPlan: string | null;
   constructionStatus: "not_started" | "in_progress" | "done";
-  subsidyStatus: "none" | "applying" | "granted";
+  subsidyStatus: "not_applied" | "preparing" | "applied" | "revising" | "completed";
   subsidyType: string | null;
 } {
+  // dealStatus を新 6 値域に写像してデモを散らす。
   const contractStatus =
     spec.dealStatus === "LOST"
       ? "lost"
       : spec.contract || spec.dealStatus === "CONTRACTED"
         ? "contracted"
-        : "negotiating";
+        : spec.dealStatus === "LIKELY_CONTRACT"
+          ? "contract_pending"
+          : spec.dealStatus === "QUOTED" || spec.dealStatus === "CONSIDERING"
+            ? "quote_presented"
+            : spec.dealStatus === "PROPOSING" || spec.dealStatus === "VISIT_PLANNED"
+              ? "negotiating"
+              : "pre_visit";
 
   const constructionStatus = !spec.contract?.constructionStatus
     ? "not_started"
@@ -1077,19 +1091,19 @@ function specManualStatus(spec: SampleCustomerSpec): {
         : "not_started"; // REQUEST_PENDING
 
   const subsidyStatus = !spec.contract?.applicationStatus
-    ? "none"
+    ? "not_applied"
     : spec.contract.applicationStatus === "APPROVED"
-      ? "granted"
+      ? "completed"
       : spec.contract.applicationStatus === "SUBMITTED"
-        ? "applying"
-        : "none"; // DRAFT
+        ? "applied"
+        : "preparing"; // DRAFT
 
   return {
     contractStatus,
     contractPlan: contractStatus === "contracted" ? "3.5kW 太陽光 + 蓄電池" : null,
     constructionStatus,
     subsidyStatus,
-    subsidyType: subsidyStatus === "none" ? null : "国補助金",
+    subsidyType: subsidyStatus === "not_applied" ? null : "国補助金",
   };
 }
 
@@ -1282,6 +1296,8 @@ async function seedContractProjectData(
         where: { id: rep.id },
         data: {
           surveyDate: day(-7),
+          // 現地調査ステータス（施工ステータスとは独立）。デモは進捗に合わせて散らす。
+          surveyStatus: completed || constructing ? "surveyed" : seq % 2 === 0 ? "scheduled" : "not_surveyed",
           startedDate: constructing || completed ? day(-5) : null,
           completedDate: completed ? day(-1) : null,
           powerSaleStartDate: completed ? day(10) : null,
@@ -1303,6 +1319,7 @@ async function seedContractProjectData(
           downPayment: (seq % 5) * 100000,
           creditLifeInsurance: seq % 2 === 0,
           loanNote: seq % 2 === 0 ? "事前審査承認済み。本審査は契約後に申請。" : null,
+          loanReviewStatus: ["not_reviewed", "reviewing", "completed", "defect"][seq % 4],
           depositDate: completed ? day(-2) : null,
           dealerPayoutDate: completed ? day(5) : null,
         },
@@ -1383,6 +1400,13 @@ async function seedCustomerHearing(
         faceToFace: s % 2 === 0,
         proposedProduct: s % 3 === 0 ? "蓄電池 + V2H" : "太陽光 + 蓄電池",
         maekakuPreferredAt: day(2 + (s % 5)),
+        // コール状況（バッチ B）。not_done/done/unnecessary を巡回投入。
+        postCompletionCallStatus: ["not_done", "done", "unnecessary"][s % 3],
+        postCompletionCallPreferredAt: s % 3 === 0 ? day(3 + (s % 4)) : null,
+        loanCompletionCallStatus: ["done", "unnecessary", "not_done"][s % 3],
+        loanCompletionCallPreferredAt: s % 2 === 0 ? day(1 + (s % 3)) : null,
+        generalCallPreferredTime: s % 2 === 0 ? "平日19:00以降" : "土日終日",
+        maekakuPreferredPhone: `080-2${String(1000 + s).padStart(4, "0")}-${String(4000 + s).padStart(4, "0")}`,
       },
     });
 
@@ -1583,9 +1607,10 @@ async function seedCustomerFiles(
   });
   if (!customer) return;
 
-  const seedFiles: { fileName: string; category: "GENERAL" | "APPLICATION" }[] = [
+  const seedFiles: { fileName: string; category: "GENERAL" | "APPLICATION" | "PV_DRAWING" }[] = [
     { fileName: "見積書サンプル.pdf", category: "GENERAL" },
     { fileName: "設置申請書サンプル.pdf", category: "APPLICATION" },
+    { fileName: "PV設置図面サンプル.pdf", category: "PV_DRAWING" },
   ];
   for (const sf of seedFiles) {
     const exists = await tx.customerFile.findFirst({
@@ -1593,7 +1618,12 @@ async function seedCustomerFiles(
       select: { id: true },
     });
     if (exists) continue;
-    const prefix = sf.category === "APPLICATION" ? "applications" : "files";
+    const prefix =
+      sf.category === "APPLICATION"
+        ? "applications"
+        : sf.category === "PV_DRAWING"
+          ? "pv-drawings"
+          : "files";
     await tx.customerFile.create({
       data: {
         customerId: customer.id,

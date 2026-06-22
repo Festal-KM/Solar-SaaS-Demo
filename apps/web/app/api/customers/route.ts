@@ -16,7 +16,13 @@ import { UnauthorizedError, ForbiddenError } from "@/lib/errors";
 import { assertCan } from "@/lib/permissions/can";
 import { getTenantContext } from "@/lib/tenancy/context";
 
-import { listCustomers, normalizePageSize } from "../../(wholesaler)/customers/data";
+import {
+  CONSTRUCTION_STATUS_VALUES,
+  CONTRACT_STATUS_VALUES,
+  SUBSIDY_STATUS_VALUES,
+  listCustomers,
+  normalizePageSize,
+} from "../../(wholesaler)/customers/data";
 import type {
   ContractStatusValue,
   ConstructionStatusValue,
@@ -50,9 +56,9 @@ const VALID_CHANNELS: AcquisitionChannel[] = [
   "OTHER",
 ];
 
-const VALID_CONTRACT: ContractStatusValue[] = ["negotiating", "contracted", "lost", "cancelled"];
-const VALID_CONSTRUCTION: ConstructionStatusValue[] = ["not_started", "in_progress", "done"];
-const VALID_SUBSIDY: SubsidyStatusValue[] = ["none", "applying", "granted"];
+const VALID_CONTRACT = CONTRACT_STATUS_VALUES;
+const VALID_CONSTRUCTION = CONSTRUCTION_STATUS_VALUES;
+const VALID_SUBSIDY = SUBSIDY_STATUS_VALUES;
 const VALID_MAEKAKU: MaekakuValue[] = ["present", "absent"];
 
 export async function GET(request: Request): Promise<NextResponse> {

@@ -22,8 +22,9 @@ import type { RelatedFile } from "./data";
 interface CustomerFilesProps {
   customerId: string;
   files: RelatedFile[];
-  // GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント。
-  category?: "GENERAL" | "APPLICATION";
+  // GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
+  // PV_DRAWING=施工状況タブの PV設置図面。
+  category?: "GENERAL" | "APPLICATION" | "PV_DRAWING";
 }
 
 export function CustomerFiles({ customerId, files, category = "GENERAL" }: CustomerFilesProps) {
@@ -105,7 +106,11 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
       {/* 一覧 */}
       {files.length === 0 ? (
         <p className="text-sm text-mute-light">
-          {category === "APPLICATION" ? d.applicationFiles.empty : d.files.empty}
+          {category === "APPLICATION"
+            ? d.applicationFiles.empty
+            : category === "PV_DRAWING"
+              ? d.pvDrawing.empty
+              : d.files.empty}
         </p>
       ) : (
         <ul className="divide-y divide-hairline-light">

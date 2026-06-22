@@ -13,12 +13,9 @@ import { Label } from "@/components/ui/label";
 import { labels } from "@/lib/i18n/labels";
 
 import { updateCustomerAction } from "../actions";
+import { CONSTRUCTION_STATUS_VALUES, SUBSIDY_STATUS_VALUES } from "../constants";
 
-import type {
-  ContractStatusValue,
-  ConstructionStatusValue,
-  SubsidyStatusValue,
-} from "../constants";
+import type { ConstructionStatusValue, SubsidyStatusValue } from "../constants";
 
 // ISO → <input type="date"> 用 YYYY-MM-DD（ローカル日付）。
 function toDateInput(iso: string | null): string {
@@ -170,9 +167,11 @@ export function ConstructionStatusPanel({
             onChange={(e) => setStatus(e.target.value as ConstructionStatusValue)}
             className={FIELD}
           >
-            <option value="not_started">{t.constructionStatusLabels.not_started}</option>
-            <option value="in_progress">{t.constructionStatusLabels.in_progress}</option>
-            <option value="done">{t.constructionStatusLabels.done}</option>
+            {CONSTRUCTION_STATUS_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {t.constructionStatusLabels[s]}
+              </option>
+            ))}
           </select>
         </div>
         <div className="space-y-1.5">
@@ -260,9 +259,11 @@ export function SubsidyStatusPanel({
             onChange={(e) => setStatus(e.target.value as SubsidyStatusValue)}
             className={FIELD}
           >
-            <option value="none">{t.subsidyStatusLabels.none}</option>
-            <option value="applying">{t.subsidyStatusLabels.applying}</option>
-            <option value="granted">{t.subsidyStatusLabels.granted}</option>
+            {SUBSIDY_STATUS_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {t.subsidyStatusLabels[s]}
+              </option>
+            ))}
           </select>
         </div>
         <div className="space-y-1.5">

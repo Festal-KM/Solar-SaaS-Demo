@@ -57,7 +57,12 @@ export const presignCustomerFileUpload = withServerActionContext<
       throw new NotFoundError("顧客が見つかりません");
     }
 
-    const prefix = parsed.category === "APPLICATION" ? "applications" : "files";
+    const prefix =
+      parsed.category === "APPLICATION"
+        ? "applications"
+        : parsed.category === "PV_DRAWING"
+          ? "pv-drawings"
+          : "files";
     const key = `customers/${parsed.customerId}/${prefix}/${randomUUID()}-${sanitizeFileName(parsed.fileName)}`;
     const { putUrl, headers } = await presignUpload({
       key,

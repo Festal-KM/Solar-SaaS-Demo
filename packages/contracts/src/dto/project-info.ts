@@ -62,6 +62,8 @@ export interface ProjectContractDto {
   downPayment: number | null;
   creditLifeInsurance: boolean | null;
   loanNote: string | null;
+  // ローン審査ステータス（バッチ C）。CODE（not_reviewed/reviewing/completed/defect）。
+  loanReviewStatus: string | null;
   callStatus: "NONE" | "SCHEDULED" | "DONE" | "CALLBACK_WAIT" | "NG";
   equipmentSerialId: string | null;
   representativeConstructionId: string | null;
@@ -78,6 +80,8 @@ export interface ProjectConstructionDto {
   completedDate: string | null;
   powerSaleStartDate: string | null;
   status: string;
+  // 現地調査ステータス（施工ステータスとは別管理）: not_surveyed/scheduled/surveyed/null。
+  surveyStatus: string | null;
   postCompletionStatus: "NONE" | "IN_PROGRESS" | "DONE";
   defectStatus: "NONE" | "OPEN" | "RESOLVED";
   defectDetail: string | null;
@@ -159,6 +163,20 @@ export interface ProjectHearingDto {
 export type CustomerHearingDto = ProjectHearingDto;
 export type CustomerHearingForDealerDto = ProjectHearingForDealerDto;
 
+// コール状況（バッチ B）。完工コール / ローン完了コールのステータス + 希望日時、
+// 汎用コール希望時間帯、マエカク希望電話。ステータスは CallStatusEnum の CODE
+// （not_done/done/unnecessary）。マエカク希望電話は連絡先 PII のため maskPhone 相当
+// 適用後の文字列（ヒアリング連絡先と同方針）。マエカク「日時」は表示・保持しない。
+export interface ProjectCallsDto {
+  maekakuStatus: string | null;
+  maekakuPreferredPhone: string; // maskPhone 適用後（'未設定' / '***-****-XXXX' / 生番号）
+  postCompletionCallStatus: string | null;
+  postCompletionCallPreferredAt: string | null;
+  loanCompletionCallStatus: string | null;
+  loanCompletionCallPreferredAt: string | null;
+  generalCallPreferredTime: string | null;
+}
+
 export interface ProjectInfoDto {
   basic: {
     customerId: string;
@@ -193,6 +211,8 @@ export interface ProjectInfoDto {
   financials: ProjectFinancialsDto;
   // F-063 追加カテゴリ: ヒアリング（住環境・家族）。契約後設備 equipment（カテゴリ 7）とは別概念。
   hearing: ProjectHearingDto;
+  // バッチ B: コール状況（完工/ローン完了コール・汎用希望時間帯・マエカク希望電話）。
+  calls: ProjectCallsDto;
 }
 
 // ---------------------------------------------------------------------------

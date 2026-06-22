@@ -136,6 +136,7 @@ export interface CustomerDetail {
   history: HistoryEntry[];
   files: RelatedFile[]; // 関連ファイルタブ（GENERAL）
   applicationFiles: RelatedFile[]; // 設置申請タブの申請関連ドキュメント（APPLICATION）
+  pvDrawingFiles: RelatedFile[]; // 施工状況タブの PV設置図面（PV_DRAWING）
   tasks: CustomerTask[];
   messages: ChatMessage[];
   currentUserId: string; // 自分のメッセージ判定用（チャット右寄せ）
@@ -399,6 +400,9 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
     const applicationFiles: RelatedFile[] = fileRows
       .filter((f) => f.category === "APPLICATION")
       .map(toRelatedFile);
+    const pvDrawingFiles: RelatedFile[] = fileRows
+      .filter((f) => f.category === "PV_DRAWING")
+      .map(toRelatedFile);
 
     const messages: ChatMessage[] = messageRows.map((m) => ({
       id: m.id,
@@ -460,6 +464,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       history,
       files,
       applicationFiles,
+      pvDrawingFiles,
       tasks,
       messages,
       currentUserId: ctx.actorUserId,

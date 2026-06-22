@@ -94,6 +94,7 @@ function baseDto(): ProjectInfoDto {
         completedDate: null,
         powerSaleStartDate: null,
         status: "DONE",
+        surveyStatus: "surveyed",
         postCompletionStatus: "DONE",
         defectStatus: "NONE",
         defectDetail: null,

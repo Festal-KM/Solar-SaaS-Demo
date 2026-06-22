@@ -24,6 +24,7 @@ import { labels } from "@/lib/i18n/labels";
 
 import { updateCustomerAction } from "../actions";
 
+import { CONTRACT_STATUS_VALUES, SUBSIDY_STATUS_VALUES } from "../constants";
 import type {
   ContractStatusValue,
   ConstructionStatusValue,
@@ -161,10 +162,11 @@ export function EditContractStatusDialog({
           value={status}
           onChange={(e) => setStatus(e.target.value as ContractStatusValue)}
         >
-          <option value="negotiating">{t.contractStatusLabels.negotiating}</option>
-          <option value="contracted">{t.contractStatusLabels.contracted}</option>
-          <option value="lost">{t.contractStatusLabels.lost}</option>
-          <option value="cancelled">{t.contractStatusLabels.cancelled}</option>
+          {CONTRACT_STATUS_VALUES.map((s) => (
+            <option key={s} value={s}>
+              {t.contractStatusLabels[s]}
+            </option>
+          ))}
         </select>
       </div>
       <div className="space-y-1.5">
@@ -343,9 +345,11 @@ export function EditSubsidyStatusDialog({
           value={status}
           onChange={(e) => setStatus(e.target.value as SubsidyStatusValue)}
         >
-          <option value="none">{t.subsidyStatusLabels.none}</option>
-          <option value="applying">{t.subsidyStatusLabels.applying}</option>
-          <option value="granted">{t.subsidyStatusLabels.granted}</option>
+          {SUBSIDY_STATUS_VALUES.map((s) => (
+            <option key={s} value={s}>
+              {t.subsidyStatusLabels[s]}
+            </option>
+          ))}
         </select>
       </div>
       <div className="space-y-1.5">

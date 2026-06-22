@@ -2,12 +2,29 @@
 // 返す `ProjectInfoDto`（二次店は原価キー物理除外済の `ProjectInfoForDealerDto`）を
 // 受け取り、9 カテゴリをカテゴリ別に閲覧表示する。読み取り専用（編集は F-062）。
 
+import { deriveCrossSellBadges } from "@solar/contracts";
 import { ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { labels } from "@/lib/i18n/labels";
-import { deriveCrossSellBadges } from "@solar/contracts";
 
+import {
+  EditApplicationDialog,
+  EditCallStatusDialog,
+  EditConstructionDialog,
+  EditContractDialog,
+  EditEquipmentDialog,
+  EditHearingDialog,
+  EditOverviewDialog,
+} from "./project-info-edit";
+
+import type {
+  ProjectApplicationEditable,
+  ProjectConstructionEditable,
+  ProjectContractEditable,
+  ProjectEquipmentEditable,
+  ProjectInfoEditable,
+} from "@/lib/customer/get-project-info-editable";
 import type {
   EquipmentCategoryKey,
   EquipmentItemDto,
@@ -77,10 +94,21 @@ function MetaItem({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  editSlot,
+}: {
+  title: string;
+  children: React.ReactNode;
+  editSlot?: React.ReactNode;
+}) {
   return (
     <section>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">{title}</h3>
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">{title}</h3>
+        {editSlot}
+      </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3">
         {children}
       </dl>
@@ -92,18 +120,23 @@ function EquipmentCard({
   title,
   item,
   rows,
+  editSlot,
 }: {
   title: string;
   item: AnyEquipmentItem;
   rows: { label: string; value: string }[];
+  editSlot?: React.ReactNode;
 }) {
   return (
     <div className="rounded-md border border-hairline-light p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-ink">{title}</p>
-        <Badge variant={item.contracted ? "success" : "secondary"}>
-          {item.contracted ? p.contracted : p.notContracted}
-        </Badge>
+        <div className="flex items-center gap-1">
+          <Badge variant={item.contracted ? "success" : "secondary"}>
+            {item.contracted ? p.contracted : p.notContracted}
+          </Badge>
+          {editSlot}
+        </div>
       </div>
       {item.contracted ? (
         <dl className="grid grid-cols-2 gap-x-5 gap-y-2.5 sm:grid-cols-3">
@@ -206,24 +239,27 @@ function emptyItem(): AnyEquipmentItem {
   };
 }
 
-function EquipmentGrid({ equipment }: { equipment: AnyEquipment }) {
+function EquipmentGrid({
+  equipment,
+  editSlotFor,
+}: {
+  equipment: AnyEquipment;
+  // 代表設備行（firstOrEmpty）に対する編集トリガー。id が空（未契約プレースホルダ）の
+  // ときは編集不可（null）。
+  editSlotFor?: (item: AnyEquipmentItem, title: string) => React.ReactNode;
+}) {
+  const card = (title: string, item: AnyEquipmentItem, rows: { label: string; value: string }[]) => (
+    <EquipmentCard title={title} item={item} rows={rows} editSlot={editSlotFor?.(item, title)} />
+  );
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      <EquipmentCard title={e.pv} item={firstOrEmpty(equipment.PV)} rows={pvRows(firstOrEmpty(equipment.PV))} />
-      <EquipmentCard title={e.bt} item={firstOrEmpty(equipment.BT)} rows={btRows(firstOrEmpty(equipment.BT))} />
-      <EquipmentCard title={e.eq} item={firstOrEmpty(equipment.EQ)} rows={eqRows(firstOrEmpty(equipment.EQ))} />
-      <EquipmentCard title={e.ih} item={firstOrEmpty(equipment.IH)} rows={ihRows(firstOrEmpty(equipment.IH))} />
-      <EquipmentCard title={e.ac} item={firstOrEmpty(equipment.AC)} rows={acRows(firstOrEmpty(equipment.AC))} />
-      <EquipmentCard
-        title={e.accessory}
-        item={firstOrEmpty(equipment.ACCESSORY)}
-        rows={accessoryRows(firstOrEmpty(equipment.ACCESSORY))}
-      />
-      <EquipmentCard
-        title={e.gift}
-        item={firstOrEmpty(equipment.GIFT)}
-        rows={giftRows(firstOrEmpty(equipment.GIFT))}
-      />
+      {card(e.pv, firstOrEmpty(equipment.PV), pvRows(firstOrEmpty(equipment.PV)))}
+      {card(e.bt, firstOrEmpty(equipment.BT), btRows(firstOrEmpty(equipment.BT)))}
+      {card(e.eq, firstOrEmpty(equipment.EQ), eqRows(firstOrEmpty(equipment.EQ)))}
+      {card(e.ih, firstOrEmpty(equipment.IH), ihRows(firstOrEmpty(equipment.IH)))}
+      {card(e.ac, firstOrEmpty(equipment.AC), acRows(firstOrEmpty(equipment.AC)))}
+      {card(e.accessory, firstOrEmpty(equipment.ACCESSORY), accessoryRows(firstOrEmpty(equipment.ACCESSORY)))}
+      {card(e.gift, firstOrEmpty(equipment.GIFT), giftRows(firstOrEmpty(equipment.GIFT)))}
     </div>
   );
 }
@@ -273,8 +309,10 @@ function ExistingEquipmentCard({ eq }: { eq: AnyExistingEquipment }) {
 
 function HearingSection({
   hearing,
+  editSlot,
 }: {
   hearing: ProjectHearingDto | ProjectHearingForDealerDto;
+  editSlot?: React.ReactNode;
 }) {
   const badges = deriveCrossSellBadges(hearing.existingEquipments);
   const guide = hearing.guideAttendee ? h.guideAttendeeLabels[hearing.guideAttendee] ?? null : null;
@@ -283,6 +321,7 @@ function HearingSection({
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">{h.title}</h3>
+        {editSlot}
         {/* クロスセル候補バッジ（判定材料の可視化のみ・自動提案はしない） */}
         {badges.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -349,16 +388,38 @@ function HearingSection({
 export function CustomerProjectInfo({
   data,
   embedded = false,
+  editable = null,
 }: {
   data: CustomerProjectInfoData;
   // 「基本情報」タブ内に埋め込むとき (embedded) は、上段の編集カード（担当者 /
   // 顧客基本情報 / メモ）と重複する 基本情報・体制・備考 セクションを抑制し、
   // 案件固有（契約・金額 / 契約明細 / 工事・完工 / 認定・設備 / 概況）のみを表示する。
   embedded?: boolean;
+  // F-062 編集用の生値 + ID 一式。customer.update 権限保持者（卸業者/SaaS）のみ非 null。
+  // null（二次店・read-only）では編集トリガーを一切描画しない。
+  editable?: ProjectInfoEditable | null;
 }) {
   const f = p.fields;
   const contracts = data.contracts as AnyContract[];
   const constructions = data.constructions as AnyConstruction[];
+  const customerId = editable?.customerId ?? null;
+
+  // contractId → 編集用 raw 値の引き当て（表示 DTO と editable は同順だが id で堅牢に対応）。
+  const editContractById = new Map<string, ProjectContractEditable>(
+    (editable?.contracts ?? []).map((ec) => [ec.contractId, ec]),
+  );
+  const editConstructionById = new Map<string, ProjectConstructionEditable>(
+    (editable?.constructions ?? []).map((c) => [c.constructionId, c]),
+  );
+  const editApplicationById = new Map<string, ProjectApplicationEditable>(
+    (editable?.applications ?? []).map((a) => [a.applicationId, a]),
+  );
+  function editEquipmentById(contractId: string, equipmentId: string): ProjectEquipmentEditable | null {
+    if (!editable) return null;
+    return (
+      (editable.equipmentByContract[contractId] ?? []).find((e) => e.id === equipmentId) ?? null
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -401,11 +462,16 @@ export function CustomerProjectInfo({
           {p.noContract}
         </p>
       ) : (
-        contracts.map((c, idx) => (
+        contracts.map((c, idx) => {
+          const ec = editContractById.get(c.contractId);
+          return (
           <div key={c.contractId} className="space-y-4 rounded-md border border-hairline-light p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
-              {`${p.sections.contract} #${idx + 1}`}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+                {`${p.sections.contract} #${idx + 1}`}
+              </h3>
+              {customerId && ec ? <EditContractDialog customerId={customerId} initial={ec} /> : null}
+            </div>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
               <MetaItem label={f.contractDate} value={fmtDate(c.contractDate)} />
               <MetaItem label={f.proposalAmount} value={fmtYen(c.proposedAmount)} />
@@ -452,6 +518,14 @@ export function CustomerProjectInfo({
                   label={f.callStatus}
                   value={p.callStatusLabels[c.callStatus] ?? c.callStatus}
                 />
+                <MetaItem
+                  label={f.loanReviewStatus}
+                  value={
+                    c.loanReviewStatus
+                      ? (p.loanReviewStatusLabels[c.loanReviewStatus] ?? c.loanReviewStatus)
+                      : null
+                  }
+                />
                 <MetaItem label={f.loanNote} value={c.loanNote} />
               </dl>
             </div>
@@ -461,10 +535,24 @@ export function CustomerProjectInfo({
               <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
                 {p.sections.equipment}
               </h4>
-              <EquipmentGrid equipment={c.equipment} />
+              <EquipmentGrid
+                equipment={c.equipment}
+                editSlotFor={
+                  customerId
+                    ? (item, title) => {
+                        if (!item.id) return null;
+                        const ee = editEquipmentById(c.contractId, item.id);
+                        return ee ? (
+                          <EditEquipmentDialog customerId={customerId} initial={ee} title={title} />
+                        ) : null;
+                      }
+                    : undefined
+                }
+              />
             </div>
           </div>
-        ))
+          );
+        })
       )}
 
       {/* 工事・完工（全 Construction 行） */}
@@ -478,32 +566,46 @@ export function CustomerProjectInfo({
           </p>
         ) : (
           <div className="space-y-3">
-            {constructions.map((con) => (
-              <dl
+            {constructions.map((con) => {
+              const ecn = editConstructionById.get(con.constructionId);
+              return (
+              <div
                 key={con.constructionId}
-                className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3"
+                className="rounded-md border border-hairline-light p-4"
               >
-                <MetaItem
-                  label={f.completionStatus}
-                  value={p.constructionStatusLabels[con.status] ?? con.status}
-                />
-                <MetaItem label={f.surveyAt} value={fmtDateTime(con.surveyDate)} />
-                <MetaItem label={f.startedDate} value={fmtDate(con.startedDate)} />
-                <MetaItem label={f.completedDate} value={fmtDate(con.completedDate)} />
-                <MetaItem label={f.powerSaleStartDate} value={fmtDate(con.powerSaleStartDate)} />
-                <MetaItem label={f.thankYouCallAt} value={fmtDateTime(con.thankYouCallAt)} />
-                <MetaItem
-                  label={f.postCompletionStatus}
-                  value={p.postCompletionStatusLabels[con.postCompletionStatus] ?? con.postCompletionStatus}
-                />
-                <MetaItem
-                  label={f.defectStatus}
-                  value={p.defectStatusLabels[con.defectStatus] ?? con.defectStatus}
-                />
-                <MetaItem label={f.defectDetail} value={con.defectDetail} />
-                <MetaItem label={f.vendorName} value={con.vendorName} />
-              </dl>
-            ))}
+                {customerId && ecn ? (
+                  <div className="mb-1 flex justify-end">
+                    <EditConstructionDialog customerId={customerId} initial={ecn} />
+                  </div>
+                ) : null}
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                  <MetaItem
+                    label={f.completionStatus}
+                    value={p.constructionStatusLabels[con.status] ?? con.status}
+                  />
+                  <MetaItem
+                    label={f.surveyStatus}
+                    value={con.surveyStatus ? p.surveyStatusLabels[con.surveyStatus] ?? con.surveyStatus : null}
+                  />
+                  <MetaItem label={f.surveyAt} value={fmtDateTime(con.surveyDate)} />
+                  <MetaItem label={f.startedDate} value={fmtDate(con.startedDate)} />
+                  <MetaItem label={f.completedDate} value={fmtDate(con.completedDate)} />
+                  <MetaItem label={f.powerSaleStartDate} value={fmtDate(con.powerSaleStartDate)} />
+                  <MetaItem label={f.thankYouCallAt} value={fmtDateTime(con.thankYouCallAt)} />
+                  <MetaItem
+                    label={f.postCompletionStatus}
+                    value={p.postCompletionStatusLabels[con.postCompletionStatus] ?? con.postCompletionStatus}
+                  />
+                  <MetaItem
+                    label={f.defectStatus}
+                    value={p.defectStatusLabels[con.defectStatus] ?? con.defectStatus}
+                  />
+                  <MetaItem label={f.defectDetail} value={con.defectDetail} />
+                  <MetaItem label={f.vendorName} value={con.vendorName} />
+                </dl>
+              </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -519,35 +621,106 @@ export function CustomerProjectInfo({
           </p>
         ) : (
           <div className="space-y-3">
-            {data.applications.map((a) => (
-              <dl
+            {data.applications.map((a) => {
+              const eap = editApplicationById.get(a.applicationId);
+              return (
+              <div
                 key={a.applicationId}
-                className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3"
+                className="rounded-md border border-hairline-light p-4"
               >
-                <MetaItem
-                  label={f.certApplicationStatus}
-                  value={p.applicationStatusLabels[a.status] ?? a.status}
-                />
-                <MetaItem label={f.applicationType} value={a.type} />
-                <MetaItem label={f.submittedDate} value={fmtDate(a.submittedDate)} />
-                <MetaItem label={f.approvedDate} value={fmtDate(a.approvedDate)} />
-                <MetaItem label={f.grantedAmount} value={fmtYen(a.grantedAmount)} />
-              </dl>
-            ))}
+                {customerId && eap ? (
+                  <div className="mb-1 flex justify-end">
+                    <EditApplicationDialog customerId={customerId} initial={eap} />
+                  </div>
+                ) : null}
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                  <MetaItem
+                    label={f.certApplicationStatus}
+                    value={p.applicationStatusLabels[a.status] ?? a.status}
+                  />
+                  <MetaItem label={f.applicationType} value={a.type} />
+                  <MetaItem label={f.submittedDate} value={fmtDate(a.submittedDate)} />
+                  <MetaItem label={f.approvedDate} value={fmtDate(a.approvedDate)} />
+                  <MetaItem label={f.grantedAmount} value={fmtYen(a.grantedAmount)} />
+                </dl>
+              </div>
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* ヒアリング（住環境・家族）— F-063。既設設備（現況）/ 家族属性 / 連絡先 / クロスセル候補 */}
-      <HearingSection hearing={data.hearing} />
+      <HearingSection
+        hearing={data.hearing}
+        editSlot={
+          customerId && editable ? (
+            <EditHearingDialog customerId={customerId} initial={editable.hearing} />
+          ) : null
+        }
+      />
 
       {/* 概況 */}
-      <Section title={p.sections.overview}>
+      <Section
+        title={p.sections.overview}
+        editSlot={
+          customerId && editable ? (
+            <EditOverviewDialog customerId={customerId} initial={editable.overview} />
+          ) : null
+        }
+      >
         <MetaItem label={f.electricBill} value={data.overview.electricBill} />
         <MetaItem label={f.household} value={data.overview.household} />
         <MetaItem label={f.housingType} value={data.overview.housingType} />
         <MetaItem label={f.inflowRoute} value={data.overview.inflowRoute} />
         <MetaItem label={f.maekakuStatus} value={data.overview.maekakuStatus} />
+      </Section>
+
+      {/* コール状況（バッチ B）。完工/ローン完了コール・汎用希望時間帯・マエカク希望電話 */}
+      <Section
+        title={p.sections.calls}
+        editSlot={
+          customerId && editable ? (
+            <EditCallStatusDialog customerId={customerId} initial={editable.calls} />
+          ) : null
+        }
+      >
+        <MetaItem
+          label={f.callMaekakuStatus}
+          value={
+            data.calls.maekakuStatus
+              ? p.maekakuStatusDisplayLabels[data.calls.maekakuStatus] ?? data.calls.maekakuStatus
+              : null
+          }
+        />
+        <MetaItem label={f.maekakuPreferredPhone} value={data.calls.maekakuPreferredPhone} />
+        <MetaItem
+          label={f.postCompletionCallStatus}
+          value={
+            data.calls.postCompletionCallStatus
+              ? p.callPhaseStatusLabels[data.calls.postCompletionCallStatus] ??
+                data.calls.postCompletionCallStatus
+              : null
+          }
+        />
+        <MetaItem
+          label={f.postCompletionCallPreferredAt}
+          value={fmtDateTime(data.calls.postCompletionCallPreferredAt)}
+        />
+        <MetaItem
+          label={f.loanCompletionCallStatus}
+          value={
+            data.calls.loanCompletionCallStatus
+              ? p.callPhaseStatusLabels[data.calls.loanCompletionCallStatus] ??
+                data.calls.loanCompletionCallStatus
+              : null
+          }
+        />
+        <MetaItem
+          label={f.loanCompletionCallPreferredAt}
+          value={fmtDateTime(data.calls.loanCompletionCallPreferredAt)}
+        />
+        <MetaItem label={f.generalCallPreferredTime} value={data.calls.generalCallPreferredTime} />
       </Section>
 
       {/* 備考（埋め込み時は上段のメモカードと重複するため非表示） */}
