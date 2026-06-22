@@ -15,10 +15,10 @@ import { expect, test, type Page } from "@playwright/test";
 //
 // R2 は本環境では placeholder 認証のため実 PUT は通らない。よって E2E では seed が
 // 投入したメタデータのみのファイル行（一覧描画は DB 行だけで成立）でカテゴリ分離を検証する。
-// seed（seedCustomerActivities, i===0）は先頭サンプル顧客「サンプル佐藤 一郎」に
+// seed（seedCustomerActivities, i===0）は先頭サンプル顧客「佐藤 一馬」に
 //   GENERAL: 見積書サンプル.pdf / APPLICATION: 設置申請書サンプル.pdf
 // を冪等投入する。一覧の表示名は MASKED（"***様"）だが検索クエリは DB の生 name を
-// contains マッチするため、query=佐藤 で該当顧客 1 行を決定的に取得できる。
+// contains マッチするため、query=佐藤 一馬 で該当顧客 1 行を決定的に取得できる。
 //
 // 認証は demo@solar-saas.demo / Demo1234!（WHOLESALER_ADMIN, 2FA off, seed 投入済）。
 // Seed は tests/e2e/global-setup.ts で全 spec 起動前に 1 回だけ実行される。
@@ -26,9 +26,9 @@ import { expect, test, type Page } from "@playwright/test";
 const DEMO_EMAIL = "demo@solar-saas.demo";
 const DEMO_PASSWORD = "Demo1234!";
 
-// seed の先頭サンプル顧客「サンプル佐藤 一郎」を生 name の contains 検索で一意に絞る
-// （イベントデモ顧客にも「佐藤」が居るため、サンプル接頭辞込みで一意化する）。
-const SEEDED_CUSTOMER_QUERY = "サンプル佐藤";
+// seed の先頭サンプル顧客「佐藤 一馬」を生 name の contains 検索で一意に絞る
+// （イベントデモ顧客にも「佐藤」が居るため、固有の名「一馬」込みで一意化する）。
+const SEEDED_CUSTOMER_QUERY = "佐藤 一馬";
 const GENERAL_FILE = "見積書サンプル.pdf";
 const APPLICATION_FILE = "設置申請書サンプル.pdf";
 

@@ -20,8 +20,8 @@ test("saas_admin can change a tenant plan and see the new history row", async ({
   await expect(page.getByRole("heading", { name: "プラン管理" })).toBeVisible();
 
   // Pilot wholesaler row → detail page. The seed always creates
-  // "パイロット卸 株式会社" so we navigate via that link.
-  await page.getByRole("link", { name: "パイロット卸 株式会社" }).first().click();
+  // "株式会社サンライズソーラー" so we navigate via that link.
+  await page.getByRole("link", { name: "株式会社サンライズソーラー" }).first().click();
   await page.waitForURL(/\/plans\/[^/]+$/, { timeout: 15_000 });
 
   await expect(page.getByRole("heading", { name: "新プランを適用" })).toBeVisible();
@@ -40,5 +40,5 @@ test("saas_admin can change a tenant plan and see the new history row", async ({
   // Billing page should also surface this tenant.
   await page.goto("/billing");
   await expect(page.getByRole("heading", { name: "請求状況（オフライン記録）" })).toBeVisible();
-  await expect(page.getByText("パイロット卸 株式会社")).toBeVisible();
+  await expect(page.getByText("株式会社サンライズソーラー")).toBeVisible();
 });

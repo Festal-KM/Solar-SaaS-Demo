@@ -6,7 +6,7 @@
 //     rows require a tenantId; so we materialise a synthetic wholesaler
 //     dedicated to the operator. RLS-wise this tenant has no Relationships
 //     and never appears in dealer / wholesaler-internal joins.
-//   - The pilot WHOLESALER ("パイロット卸 株式会社") plus its three DEALER
+//   - The pilot WHOLESALER ("株式会社サンライズソーラー") plus its three DEALER
 //     tenants (alpha / beta / gamma) and three Relationship rows wiring them
 //     together with varied default scopes.
 //   - One ACTIVE user per app role (12 in total): saas_admin + the five
@@ -63,10 +63,10 @@ const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? "Demo1234!";
 // itself doesn't enforce it but we add a runtime guard via upsert-by-find).
 const TENANT_KEY = {
   saasOps: "Solar SaaS 運営",
-  pilotWholesaler: "パイロット卸 株式会社",
-  dealerAlpha: "二次店アルファ",
-  dealerBeta: "二次店ベータ",
-  dealerGamma: "二次店ガンマ",
+  pilotWholesaler: "株式会社サンライズソーラー",
+  dealerAlpha: "株式会社グリーンフィールド",
+  dealerBeta: "あおぞらエナジー株式会社",
+  dealerGamma: "株式会社スマイル電設",
 } as const;
 
 type UserSeed = {
@@ -86,84 +86,84 @@ const DEALER_SCOPE_BY_KEY: Record<"dealerAlpha" | "dealerBeta" | "dealerGamma", 
 const USER_SEEDS: UserSeed[] = [
   {
     email: "saas_admin@solar-saas.dev",
-    name: "SaaS 運営者",
+    name: "高田 健司",
     tenantKey: "saasOps",
     role: "SAAS_ADMIN",
     twoFactorRequired: true,
   },
   {
     email: "wholesaler_admin@solar-saas.dev",
-    name: "卸業者 管理者",
+    name: "山下 浩一",
     tenantKey: "pilotWholesaler",
     role: "WHOLESALER_ADMIN",
     twoFactorRequired: true,
   },
   {
     email: "wholesaler_event_team@solar-saas.dev",
-    name: "イベント班 担当",
+    name: "佐藤 美咲",
     tenantKey: "pilotWholesaler",
     role: "WHOLESALER_EVENT_TEAM",
     twoFactorRequired: false,
   },
   {
     email: "wholesaler_call_team@solar-saas.dev",
-    name: "コール班 担当",
+    name: "田中 由美",
     tenantKey: "pilotWholesaler",
     role: "WHOLESALER_CALL_TEAM",
     twoFactorRequired: false,
   },
   {
     email: "wholesaler_direct_sales@solar-saas.dev",
-    name: "直販 担当",
+    name: "鈴木 大輔",
     tenantKey: "pilotWholesaler",
     role: "WHOLESALER_DIRECT_SALES",
     twoFactorRequired: false,
   },
   {
     email: "wholesaler_field_staff@solar-saas.dev",
-    name: "現場 担当",
+    name: "中村 翔太",
     tenantKey: "pilotWholesaler",
     role: "WHOLESALER_FIELD_STAFF",
     twoFactorRequired: false,
   },
   {
     email: "alpha-admin@solar-saas.dev",
-    name: "アルファ 管理者",
+    name: "小林 誠",
     tenantKey: "dealerAlpha",
     role: "DEALER_ADMIN",
     twoFactorRequired: false,
   },
   {
     email: "alpha-staff@solar-saas.dev",
-    name: "アルファ 担当",
+    name: "加藤 健太",
     tenantKey: "dealerAlpha",
     role: "DEALER_STAFF",
     twoFactorRequired: false,
   },
   {
     email: "beta-admin@solar-saas.dev",
-    name: "ベータ 管理者",
+    name: "渡辺 隆",
     tenantKey: "dealerBeta",
     role: "DEALER_ADMIN",
     twoFactorRequired: false,
   },
   {
     email: "beta-staff@solar-saas.dev",
-    name: "ベータ 担当",
+    name: "伊藤 直樹",
     tenantKey: "dealerBeta",
     role: "DEALER_STAFF",
     twoFactorRequired: false,
   },
   {
     email: "gamma-admin@solar-saas.dev",
-    name: "ガンマ 管理者",
+    name: "山本 和也",
     tenantKey: "dealerGamma",
     role: "DEALER_ADMIN",
     twoFactorRequired: false,
   },
   {
     email: "gamma-staff@solar-saas.dev",
-    name: "ガンマ 担当",
+    name: "松本 亮",
     tenantKey: "dealerGamma",
     role: "DEALER_STAFF",
     twoFactorRequired: false,
@@ -367,7 +367,7 @@ export async function seedAll(): Promise<SeedSummary> {
     const demoPasswordHash = await hashPilotPassword(DEMO_PASSWORD);
     await upsertUser(tx, {
       email: "demo@solar-saas.demo",
-      name: "管理者デモアカウント",
+      name: "藤原 健太郎",
       tenantId: tenantIdByKey.pilotWholesaler,
       role: "WHOLESALER_ADMIN",
       twoFactorRequired: false,
@@ -379,7 +379,7 @@ export async function seedAll(): Promise<SeedSummary> {
     // having created one first. VenueProvider has no schema-level UNIQUE
     // constraint beyond `id`, so we find-or-create manually.
     const existingVp = await tx.venueProvider.findFirst({
-      where: { wholesalerId: pilot.id, name: "シードテスト会場" },
+      where: { wholesalerId: pilot.id, name: "スーパービバホーム" },
       select: { id: true },
     });
     const venueProvider = existingVp
@@ -387,7 +387,7 @@ export async function seedAll(): Promise<SeedSummary> {
       : await tx.venueProvider.create({
           data: {
             wholesalerId: pilot.id,
-            name: "シードテスト会場",
+            name: "スーパービバホーム",
             area: "東京都",
             isActive: true,
           },
@@ -916,9 +916,12 @@ export async function seedAll(): Promise<SeedSummary> {
   }, { timeout: 300_000, maxWait: 60_000 });
 }
 
-// Sample-customer name prefix — used both to generate the dataset and to detect
-// an existing run (idempotency guard).
-const SAMPLE_CUSTOMER_PREFIX = "サンプル";
+// Demo customers carry realistic names (no synthetic prefix). The idempotency
+// guard matches the exact full names of this fixed sample set instead.
+function sampleCustomerName(spec: { family: string; given: string }): string {
+  return `${spec.family} ${spec.given}`;
+}
+const SAMPLE_CUSTOMER_NAMES = (): string[] => SAMPLE_CUSTOMERS.map(sampleCustomerName);
 
 interface SampleCustomerSpec {
   family: string;
@@ -946,11 +949,11 @@ interface SampleCustomerSpec {
 
 const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 提案中 (no deal) / マエカク 無 / 未着工 / 未申請
-  { family: "佐藤", given: "一郎", address: "東京都新宿区西新宿1-1-1", withPreCall: false },
+  { family: "佐藤", given: "一馬", address: "東京都新宿区西新宿1-1-1", withPreCall: false },
   // 提案中 (early deal) / マエカク 有 / upcoming appt
   {
     family: "鈴木",
-    given: "次郎",
+    given: "雄太",
     address: "東京都渋谷区道玄坂2-2-2",
     apptInDays: 3,
     withPreCall: true,
@@ -959,7 +962,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 商談中 (QUOTED) / マエカク 有 / upcoming appt
   {
     family: "高橋",
-    given: "三郎",
+    given: "涼介",
     address: "神奈川県横浜市西区みなとみらい3-3",
     apptInDays: 5,
     withPreCall: true,
@@ -968,7 +971,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 商談中 (CONSIDERING) / マエカク 無 / past appt
   {
     family: "田中",
-    given: "四郎",
+    given: "大樹",
     address: "埼玉県さいたま市大宮区桜木町4-4",
     apptInDays: -10,
     withPreCall: false,
@@ -977,7 +980,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 商談中 (LIKELY_CONTRACT) / マエカク 有
   {
     family: "伊藤",
-    given: "五郎",
+    given: "駿",
     address: "千葉県千葉市中央区中央5-5",
     apptInDays: 7,
     withPreCall: true,
@@ -986,7 +989,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 失注 / マエカク 無 / past appt
   {
     family: "渡辺",
-    given: "六郎",
+    given: "颯太",
     address: "東京都品川区大崎6-6",
     apptInDays: -20,
     withPreCall: false,
@@ -995,7 +998,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 契約済み / 未着工 / 未申請 / マエカク 有
   {
     family: "山本",
-    given: "七郎",
+    given: "隆志",
     address: "東京都目黒区中目黒7-7",
     apptInDays: 2,
     withPreCall: true,
@@ -1005,7 +1008,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 契約済み / 着工中 / 申請中 / マエカク 有
   {
     family: "中村",
-    given: "八郎",
+    given: "健吾",
     address: "神奈川県川崎市中原区小杉町8-8",
     apptInDays: 4,
     withPreCall: true,
@@ -1015,7 +1018,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 契約済み / 施工完了 / 交付決定 / マエカク 無
   {
     family: "小林",
-    given: "九郎",
+    given: "拓海",
     address: "埼玉県川口市本町9-9",
     apptInDays: -30,
     withPreCall: false,
@@ -1025,7 +1028,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 契約済み / 施工完了 / 申請中 / マエカク 有
   {
     family: "加藤",
-    given: "十郎",
+    given: "悠斗",
     address: "千葉県船橋市本町10-10",
     apptInDays: 10,
     withPreCall: true,
@@ -1035,7 +1038,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 契約済み / 着工中 / 未申請 / マエカク 無
   {
     family: "吉田",
-    given: "十一",
+    given: "美穂",
     address: "東京都世田谷区三軒茶屋11-11",
     withPreCall: false,
     dealStatus: "CONTRACTED",
@@ -1044,7 +1047,7 @@ const SAMPLE_CUSTOMERS: SampleCustomerSpec[] = [
   // 提案中 (VISIT_PLANNED) / マエカク 有 / upcoming appt
   {
     family: "山田",
-    given: "十二",
+    given: "香織",
     address: "神奈川県相模原市中央区中央12-12",
     apptInDays: 1,
     withPreCall: true,
@@ -1124,14 +1127,14 @@ async function seedCustomers(
   // manual status columns existed → still holding column DEFAULTS), UPDATE their
   // status columns to keep the demo's variety instead of skipping.
   const existing = await tx.customer.findFirst({
-    where: { wholesalerId, name: { startsWith: SAMPLE_CUSTOMER_PREFIX } },
+    where: { wholesalerId, name: { in: SAMPLE_CUSTOMER_NAMES() } },
     select: { id: true },
   });
   if (existing) {
     for (const spec of SAMPLE_CUSTOMERS) {
       const manual = specManualStatus(spec);
       await tx.customer.updateMany({
-        where: { wholesalerId, name: `${SAMPLE_CUSTOMER_PREFIX}${spec.family} ${spec.given}` },
+        where: { wholesalerId, name: sampleCustomerName(spec) },
         data: {
           area: leadingPrefecture(spec.address),
           contractStatus: manual.contractStatus,
@@ -1152,7 +1155,7 @@ async function seedCustomers(
     const customer = await tx.customer.create({
       data: {
         wholesalerId,
-        name: `${SAMPLE_CUSTOMER_PREFIX}${spec.family} ${spec.given}`,
+        name: sampleCustomerName(spec),
         phone: `090-0000-${String(phoneSeq++).padStart(4, "0")}`,
         address: spec.address,
         area: leadingPrefecture(spec.address),
@@ -1544,7 +1547,7 @@ async function seedCustomerActivities(
   for (let i = 0; i < SAMPLE_CUSTOMERS.length; i += 1) {
     const spec = SAMPLE_CUSTOMERS[i]!;
     const customer = await tx.customer.findFirst({
-      where: { wholesalerId, name: `${SAMPLE_CUSTOMER_PREFIX}${spec.family} ${spec.given}` },
+      where: { wholesalerId, name: sampleCustomerName(spec) },
       select: { id: true },
     });
     if (!customer) continue;
@@ -1602,7 +1605,7 @@ async function seedCustomerFiles(
   const spec = SAMPLE_CUSTOMERS[0];
   if (!spec) return;
   const customer = await tx.customer.findFirst({
-    where: { wholesalerId, name: `${SAMPLE_CUSTOMER_PREFIX}${spec.family} ${spec.given}` },
+    where: { wholesalerId, name: sampleCustomerName(spec) },
     select: { id: true },
   });
   if (!customer) return;

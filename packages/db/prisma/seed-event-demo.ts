@@ -175,7 +175,7 @@ interface Resolved {
 async function ensureMasters(tx: TxClient): Promise<Resolved> {
   // パイロット卸テナント。
   const pilot = await tx.tenant.findFirst({
-    where: { name: "パイロット卸 株式会社", type: "WHOLESALER" },
+    where: { name: "株式会社サンライズソーラー", type: "WHOLESALER" },
     select: { id: true },
   });
   if (!pilot) throw new Error("パイロット卸テナントが見つかりません（先に db:seed を実行）");

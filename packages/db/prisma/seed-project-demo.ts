@@ -10,7 +10,7 @@
 //       * ContractPayment … payment 未作成のときのみ create（1:1）
 //       * ContractEquipment … equipment 0 件のときのみ create
 //   - SYSTEM_TENANT_CONTEXT（is_saas_admin）で withTenant を通し RLS を満たす。
-//   - 対象テナントは名前 "パイロット卸 株式会社"（seed.ts の TENANT_KEY と一致）。
+//   - 対象テナントは名前 "株式会社サンライズソーラー"（seed.ts の TENANT_KEY と一致）。
 //
 // 実行: DATABASE_URL=<prod public proxy> pnpm -F @solar/db exec tsx prisma/seed-project-demo.ts
 
@@ -20,7 +20,7 @@ import { rawPrisma, SYSTEM_TENANT_CONTEXT, withTenant } from "../src/index.js";
 
 import type { TxClient } from "../src/with-tenant.js";
 
-const PILOT_NAME = "パイロット卸 株式会社";
+const PILOT_NAME = "株式会社サンライズソーラー";
 
 async function seedContractProjectData(
   tx: TxClient,

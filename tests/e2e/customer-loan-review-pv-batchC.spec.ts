@@ -14,7 +14,7 @@ import { expect, test, type Page } from "@playwright/test";
 // R2 は本環境では placeholder 認証のため実 PUT は通らない。よって既存
 // customer-application-files.spec と同方針で、seed が投入したメタデータ行
 // （一覧描画は DB 行だけで成立）のカテゴリ別描画でカテゴリ分離を検証する。
-// seed（seedCustomerActivities, i===0）は先頭サンプル顧客「サンプル佐藤 一郎」に
+// seed（seedCustomerActivities, i===0）は先頭サンプル顧客「佐藤 一馬」に
 //   GENERAL: 見積書サンプル.pdf / APPLICATION: 設置申請書サンプル.pdf /
 //   PV_DRAWING: PV設置図面サンプル.pdf
 // を冪等投入する。
@@ -26,8 +26,8 @@ import { expect, test, type Page } from "@playwright/test";
 const DEMO_EMAIL = "demo@solar-saas.demo";
 const DEMO_PASSWORD = "Demo1234!";
 
-// seed の先頭サンプル顧客「サンプル佐藤 一郎」を生 name の contains 検索で一意に絞る。
-const SEEDED_CUSTOMER_QUERY = "サンプル佐藤";
+// seed の先頭サンプル顧客「佐藤 一馬」を生 name の contains 検索で一意に絞る。
+const SEEDED_CUSTOMER_QUERY = "佐藤 一馬";
 const GENERAL_FILE = "見積書サンプル.pdf";
 const APPLICATION_FILE = "設置申請書サンプル.pdf";
 const PV_DRAWING_FILE = "PV設置図面サンプル.pdf";
