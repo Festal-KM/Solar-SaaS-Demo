@@ -4,7 +4,9 @@ import { expect, test, type Page } from "@playwright/test";
 //
 // 検証対象（要件改修 3 点）:
 //   1. 基本情報タブの顧客基本情報カードに「電気契約状況 / お客様番号 / 供給地点番号 /
-//      設備ID」の各ラベルが表示される（値は seed 依存で未設定でも可。dt ラベル存在を検証）。
+//      設備ID」の各ラベルが表示される（値は seed 依存で未設定でも可。基本情報タブ
+//      再設計でカードはポップアップ廃止 → インライン編集の入力欄になったため、
+//      読み取り専用 dt ではなく <Label htmlFor> として描画される。getByLabel で検証）。
 //   2. 基本情報タブに「マエカク希望日時」が表示されない（連絡先ブロックから撤去済み）。
 //   3. 商談履歴タブの「現在の商談状況」カード近傍に電話番号（マスク済み表示値）が出る。
 //
@@ -52,9 +54,10 @@ test.describe("顧客詳細 基本情報タブ 電気契約・設備項目 + 商
     await expect(panel).toBeVisible();
 
     for (const label of ELECTRIC_FIELD_LABELS) {
+      // インライン編集の入力欄に紐づくラベル（<Label htmlFor>）を accessible name で検証。
       await expect(
-        panel.locator("dt", { hasText: label }).first(),
-        `基本情報カードに「${label}」ラベルが表示される`,
+        panel.getByLabel(label, { exact: true }).first(),
+        `基本情報カードに「${label}」入力欄ラベルが表示される`,
       ).toBeVisible();
     }
   });

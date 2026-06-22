@@ -2,7 +2,7 @@
 
 // F-062 案件情報インライン編集ダイアログ群。CustomerProjectInfo（基本情報タブ統合
 // ビュー）の各セクション見出しの右に出る鉛筆トリガー → Dialog でフォーム編集 →
-// サーバーアクション保存 → toast + router.refresh()。EditBasicInfoDialog の UX に合わせる。
+// サーバーアクション保存 → toast + router.refresh()。
 //
 // 編集対象は既存列のみ。仕入値スナップショット（ContractItem.snapshot*）は扱わない。
 

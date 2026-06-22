@@ -307,6 +307,29 @@ function ExistingEquipmentCard({ eq }: { eq: AnyExistingEquipment }) {
   );
 }
 
+// 既存設備（現況）を単独で表示する読み取り専用ビュー。基本情報タブの「現状情報」
+// セクションから再利用する（ヒアリング全体ではなく既設設備のみを切り出す）。
+export function ExistingEquipmentDisplay({
+  hearing,
+}: {
+  hearing: ProjectHearingDto | ProjectHearingForDealerDto;
+}) {
+  if (hearing.existingEquipments.length === 0) {
+    return (
+      <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+        {h.noExisting}
+      </p>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+      {hearing.existingEquipments.map((eq) => (
+        <ExistingEquipmentCard key={eq.id} eq={eq as AnyExistingEquipment} />
+      ))}
+    </div>
+  );
+}
+
 function HearingSection({
   hearing,
   editSlot,

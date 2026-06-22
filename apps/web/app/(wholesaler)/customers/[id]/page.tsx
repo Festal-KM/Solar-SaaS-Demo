@@ -1,7 +1,8 @@
 // 卸業者側 顧客詳細ページ (F-031 / docs/04 §1.3 / wireframes/CustomerDetail.png).
-// 行クリックの遷移先。基本情報（左・縦長）/ 契約状況・施工状況・設置申請状況の
-// 3 カード（右上・横並び）/ メモ（右下・横幅いっぱい）/ 商談履歴（最下部・全幅・
-// スレッド形式）。PII は data ローダーでマスク済み。
+// 行クリックの遷移先。基本情報タブは 担当者 → 現状情報（顧客情報カード内インライン編集
+// ＋既存設備＋メモ）→ 契約予定情報（案件情報 embedded）の順に見出しで区分する。
+// 顧客情報・メモはポップアップではなくカード内インライン編集（status-panels と同 idiom）。
+// PII は data ローダーで表示マスク済み、編集入力は editable.* の生値を用いる。
 
 import { withTenant } from "@solar/db";
 import { Building2, CalendarClock, User2 } from "lucide-react";
@@ -23,11 +24,13 @@ import { getTenantContext } from "@/lib/tenancy/context";
 
 import { listActiveAreas, listActiveDealers } from "../../event-detail/data";
 import { listWholesalerUsers } from "../data";
+import { BasicInfoInlineEdit, MemoInlineEdit } from "./basic-info-edit";
 import { CustomerChat } from "./customer-chat";
 import { CustomerFiles } from "./customer-files";
 import { CustomerHistory } from "./customer-history";
 import {
   CustomerProjectInfo,
+  ExistingEquipmentDisplay,
   ProjectCallStatusSection,
   ProjectConstructionList,
   ProjectLoanInfoList,
@@ -35,8 +38,6 @@ import {
 import { CustomerTasks } from "./customer-tasks";
 import { getCustomerDetail } from "./data";
 import { EditAssigneeDialog } from "./edit-assignee-dialog";
-import { EditBasicInfoDialog } from "./edit-basic-info-dialog";
-import { EditMemoDialog } from "./edit-memo-dialog";
 import { NegotiationStatusPanel } from "./negotiation-status-panel";
 import { NewActivityDialog } from "./new-activity-dialog";
 import {
@@ -50,8 +51,8 @@ import type {
   ConstructionStatusValue,
   SubsidyStatusValue,
 } from "../constants";
+import type { EditBasicInfoInitial } from "./basic-info-edit";
 import type { AssigneeDisplay } from "./data";
-import type { EditBasicInfoInitial } from "./edit-basic-info-dialog";
 import type { InflowRoute } from "@solar/contracts";
 
 export const dynamic = "force-dynamic";
@@ -128,6 +129,18 @@ function StatusChip({
       <span className="text-xs text-mute-light">{label}</span>
       <Badge variant={variant}>{value}</Badge>
     </span>
+  );
+}
+
+// 基本情報タブの区分見出し（現状情報 / 契約予定情報）。タイトル + 補足 + 区切り線で
+// 情報階層を明示する。
+function SectionHeading({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-2">
+      <h2 className="text-base font-semibold text-ink">{title}</h2>
+      <span className="text-xs text-mute-light">{hint}</span>
+      <div className="h-px flex-1 bg-hairline-light" aria-hidden />
+    </div>
   );
 }
 
@@ -281,6 +294,32 @@ export default async function CustomerDetailPage({ params }: PageProps) {
 
   const postalDisplay = detail.postalCode ? `〒${detail.postalCode}` : null;
 
+  // customer.update 権限保持者のみ raw 値（マスク前）で初期化したインライン編集を描画。
+  // editable が null（二次店・閲覧のみ）のときは読み取り専用 InfoRow（マスク済み）を表示。
+  const basicInitial: EditBasicInfoInitial | null = editable
+    ? {
+        name: editable.name,
+        kana: editable.kana,
+        phone: editable.phone,
+        email: editable.email,
+        postalCode: editable.postalCode,
+        address: editable.address,
+        area: editable.area,
+        inflowRoute: editable.inflowRoute,
+        prefecture: editable.prefecture,
+        city: editable.city,
+        addressLine: editable.addressLine,
+        birthDate: editable.birthDate,
+        buildYear: editable.buildYear,
+        tossDept: editable.tossDept,
+        belongDept: editable.belongDept,
+        electricContractStatus: editable.electricContractStatus,
+        electricAccountNo: editable.electricAccountNo,
+        supplyPointNo: editable.supplyPointNo,
+        equipmentId: editable.equipmentId,
+      }
+    : null;
+
   // 商談履歴タブ: 見積提示は右の見積セクションへ分離し、左の商談履歴からは除外する。
   const quoteEntries = detail.history.filter((e) => e.category === "quote");
   const historyEntries = detail.history.filter((e) => e.category !== "quote");
@@ -345,7 +384,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           <TabsTrigger value="chat">{d.tabs.chat}</TabsTrigger>
         </TabsList>
 
-        {/* 基本情報タブ — 担当者 + 基本情報 + メモ */}
+        {/* 基本情報タブ — 担当者 + 現状情報（顧客情報・既存設備）/ 契約予定情報（案件） */}
         <TabsContent value="basic" className="space-y-4">
           {/* 担当者 — トスアップ / クロージングを自社社員 or 二次店から登録。 */}
           <Card className="p-5">
@@ -367,36 +406,18 @@ export default async function CustomerDetailPage({ params }: PageProps) {
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Card className="p-5 lg:col-span-2">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-ink">{d.customerInfo}</h2>
-                <EditBasicInfoDialog
-                  customerId={detail.id}
-                  initial={{
-                    name: editable.name,
-                    kana: editable.kana,
-                    phone: editable.phone,
-                    email: editable.email,
-                    postalCode: editable.postalCode,
-                    address: editable.address,
-                    area: editable.area,
-                    inflowRoute: editable.inflowRoute,
-                    prefecture: editable.prefecture,
-                    city: editable.city,
-                    addressLine: editable.addressLine,
-                    birthDate: editable.birthDate,
-                    buildYear: editable.buildYear,
-                    tossDept: editable.tossDept,
-                    belongDept: editable.belongDept,
-                    electricContractStatus: editable.electricContractStatus,
-                    electricAccountNo: editable.electricAccountNo,
-                    supplyPointNo: editable.supplyPointNo,
-                    equipmentId: editable.equipmentId,
-                  }}
-                  areas={areas}
-                />
-              </div>
+          {/* ── 現状情報 — 顧客の連絡先・既存設備・電気契約など現在の状況 ── */}
+          <SectionHeading title={d.currentInfoSection} hint={d.currentInfoHint} />
+
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-semibold text-ink">{d.customerInfo}</h2>
+            {basicInitial ? (
+              <BasicInfoInlineEdit
+                customerId={detail.id}
+                initial={basicInitial}
+                areas={areas}
+              />
+            ) : (
               <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                 <InfoRow label={d.fields.kana} value={detail.kana} />
                 <InfoRow
@@ -424,26 +445,35 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 <InfoRow label={d.fields.supplyPointNo} value={detail.supplyPointNo} />
                 <InfoRow label={d.fields.equipmentId} value={detail.equipmentId} />
               </dl>
-            </Card>
+            )}
+          </Card>
 
-            <Card className="p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-ink">{d.memo}</h2>
-                <EditMemoDialog customerId={detail.id} initial={{ note: editable.note }} />
-              </div>
+          {/* 既存設備（現況）— ヒアリング由来。表示のみ（編集はヒアリングタブ経路）。 */}
+          <Card className="p-5">
+            <div className="mb-1 flex items-baseline gap-2">
+              <h2 className="text-sm font-semibold text-ink">{d.existingEquipmentTitle}</h2>
+              <span className="text-xs text-mute-light">{d.existingEquipmentHint}</span>
+            </div>
+            <div className="mt-3">
+              <ExistingEquipmentDisplay hearing={projectInfo.hearing} />
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-semibold text-ink">{d.memo}</h2>
+            {basicInitial ? (
+              <MemoInlineEdit customerId={detail.id} initial={{ note: editable.note }} />
+            ) : (
               <p className="whitespace-pre-wrap text-sm text-body-light">
                 {detail.note && detail.note.length > 0 ? detail.note : d.noMemo}
               </p>
-            </Card>
-          </div>
+            )}
+          </Card>
 
-          {/* 案件情報 — F-061 統合ビュー。基本情報タブ内に統合表示（重複する
-              基本情報・体制・備考は embedded で抑制し、案件固有のみ表示）。
-              編集カード群とのセクション境界を見出し付き区切り線で明示する。 */}
-          <div className="flex items-center gap-3 pt-2">
-            <h2 className="text-sm font-semibold text-ink">{d.tabs.projectInfo}</h2>
-            <div className="h-px flex-1 bg-hairline-light" aria-hidden />
-          </div>
+          {/* ── 契約予定情報 — これから契約する案件のプラン・金額・予定日など ── */}
+          {/* F-061 統合ビュー。重複する基本情報・体制・備考は embedded で抑制し、
+              案件固有のみ表示する。 */}
+          <SectionHeading title={d.plannedInfoSection} hint={d.plannedInfoHint} />
           <Card className="p-5">
             <CustomerProjectInfo data={projectInfo} embedded editable={projectInfoEditable} />
           </Card>

@@ -2746,6 +2746,15 @@ model ContractPayment {
 > が二次店に `null` を返すため、二次店では値も編集トリガーも一切描画しない（CLAUDE.md #5）。
 > これら 3 セクション（ローン・団信／コール状況／工事・完工）は案件情報統合ビュー（`CustomerProjectInfo` の embedded 表示）からは
 > 抑制し重複を排す。非 embedded（単体表示）では従来通り 9 カテゴリを全表示する。
+>
+> **基本情報タブ 再構成（追補）**: 基本情報タブは情報階層を「担当者 → **現状情報** → **契約予定情報**」の 3 区分に見出し付きで分割する。
+> - **現状情報**: 顧客情報カード（連絡先・属性・電気契約/設備）＋ 既存設備（`CustomerExistingEquipment` の現況・表示のみ）＋ メモ。
+> - **契約予定情報**: 案件情報統合ビュー（`CustomerProjectInfo` embedded。契約プラン・金額・予定日など案件固有）。
+> 顧客情報・メモは **ポップアップ（旧 `EditBasicInfoDialog`/`EditMemoDialog`）を廃止し、カード内インライン編集**に置換する
+> （`status-panels` と同 idiom: 生値 state + dirty 追跡 + Save/キャンセル + `updateCustomerAction` + `router.refresh`）。
+> 入力初期値はマスク前の生値（`getCustomerEditableValues`）、表示マスク（name/phone/address）は読み取り専用フォールバックにのみ適用する。
+> `customer.update` 権限が無い場合（二次店・閲覧のみ）はインライン編集を描画せず読み取り専用 `InfoRow`（マスク済み）を表示する。
+> 既存設備の編集は F-063 ヒアリング編集経路（`EditHearingDialog`）に集約し、基本情報タブの現状情報では表示のみとする。
 
 ### 16.6 段階移行プラン
 
