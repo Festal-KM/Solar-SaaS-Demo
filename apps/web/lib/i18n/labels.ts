@@ -2247,6 +2247,7 @@ export const labels = {
         history: "商談履歴",
         contract: "契約状況",
         loan: "ローン情報",
+        profit: "損益計算",
         construction: "施工状況",
         subsidy: "設置申請状況",
         calls: "コール状況",
@@ -2257,6 +2258,27 @@ export const labels = {
       loanTab: {
         empty: "ローン情報を表示できる契約がありません。",
         contractHeading: "契約",
+      },
+      // 損益計算タブ（契約単位の売上・原価・粗利）。機密財務のため卸業者限定。
+      profitTab: {
+        title: "損益計算",
+        empty: "損益を計算できる契約がありません。",
+        notCalculated: "未計算",
+        contractHeading: "契約",
+        totalRow: "合計",
+        columns: {
+          contract: "契約",
+          contractDate: "契約日",
+          salesPrice: "売上",
+          purchaseTotal: "仕入合計",
+          dealerTotal: "二次店仕入",
+          constructionFee: "施工費",
+          otherCost: "その他原価",
+          discount: "値引",
+          projectProfit: "案件粗利",
+          wholesaleProfit: "卸粗利",
+          profitRate: "粗利率",
+        },
       },
       constructionTab: {
         title: "施工コスト",

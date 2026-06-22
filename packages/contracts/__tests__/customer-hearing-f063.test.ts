@@ -182,6 +182,7 @@ describe("toProjectInfoDealerDto — hearing.existingEquipments の物理除外�
         constructionFee: 1,
         otherCost: 1,
       },
+      profitAndLoss: [],
       hearing: {
         husbandAge: "40代",
         wifeAge: "30代",

@@ -2983,6 +2983,13 @@ export function getProjectInfo(
    `constructions[].fee` / `equipment.*[].snapshotPurchasePrice` を削除し、
    表示金額は `contractAmount` / `proposedAmount` / `incentiveGrossProfit` / `incentiveAmount` に限定（§16.4）。
 
+> **損益計算セクション（`profitAndLoss[]`、契約単位 P&L）**: `getProjectInfo` は `GrossProfit`（`Contract` 1:1）が
+> 存在する契約のみ `profitAndLoss[]` に集約する（`salesPrice` / `purchaseTotal` / `dealerTotal` / `constructionFee` /
+> `otherCost` / `discount` / `projectProfit` / `wholesaleProfit` / `profitRate`）。**売上・仕入値・原価・粗利を含む
+> 機密財務のため、`toProjectInfoDealerDto` がセクション丸ごと物理除外**（`profitAndLoss` キーを `Object.keys` に出さない／
+> #4・#5）。UI の「損益計算」タブは卸業者/SaaS 限定で、二次店 DTO にはキー自体が無いためタブを描画しない二重ゲート。
+> 未計算契約は配列に含めず（UI は「未計算」空状態）。`profitRate` は 0..1 を保持し UI 側で `%` 表示。
+
 > エラー処理: `customerId` が現テナントスコープ外（RLS で 0 件）の場合は `NotFoundError`（§9 各層方針）を throw。
 > F-062 編集（P1）は本ローダを使わず各 source of truth へ書き戻し、F-061 ビューは再集計のみ。
 

@@ -34,6 +34,7 @@ import {
   ProjectCallStatusSection,
   ProjectConstructionList,
   ProjectLoanInfoList,
+  ProjectProfitList,
 } from "./customer-project-info";
 import { CustomerTasks } from "./customer-tasks";
 import { getCustomerDetail } from "./data";
@@ -324,6 +325,12 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   const quoteEntries = detail.history.filter((e) => e.category === "quote");
   const historyEntries = detail.history.filter((e) => e.category !== "quote");
 
+  // 損益計算（売上・原価・粗利）は機密財務。profitAndLoss キーは卸業者/SaaS の
+  // ProjectInfoDto にのみ存在し、二次店 DTO（ProjectInfoForDealerDto）では物理除外済。
+  // キーの有無を直接ゲートにすることで、タブ自体を二次店では描画しない（#4・#5）。
+  const showProfitTab = "profitAndLoss" in projectInfo;
+  const profitRows = "profitAndLoss" in projectInfo ? projectInfo.profitAndLoss : [];
+
   return (
     <div className="space-y-6">
       <Breadcrumb
@@ -376,6 +383,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           <TabsTrigger value="history">{d.tabs.history}</TabsTrigger>
           <TabsTrigger value="contract">{d.tabs.contract}</TabsTrigger>
           <TabsTrigger value="loan">{d.tabs.loan}</TabsTrigger>
+          {showProfitTab ? <TabsTrigger value="profit">{d.tabs.profit}</TabsTrigger> : null}
           <TabsTrigger value="construction">{d.tabs.construction}</TabsTrigger>
           <TabsTrigger value="subsidy">{d.tabs.subsidy}</TabsTrigger>
           <TabsTrigger value="calls">{d.tabs.calls}</TabsTrigger>
@@ -574,6 +582,17 @@ export default async function CustomerDetailPage({ params }: PageProps) {
             <ProjectLoanInfoList data={projectInfo} editable={projectInfoEditable} />
           </Card>
         </TabsContent>
+
+        {/* 損益計算 — 契約単位の売上・各原価・粗利を表で一覧（合計行付き）。機密財務の
+            ため卸業者/SaaS 限定（二次店では profitAndLoss 物理除外・タブ非描画）。 */}
+        {showProfitTab ? (
+          <TabsContent value="profit">
+            <Card className="p-5">
+              <h2 className="mb-4 text-sm font-semibold text-ink">{d.profitTab.title}</h2>
+              <ProjectProfitList rows={profitRows} />
+            </Card>
+          </TabsContent>
+        ) : null}
 
         {/* 施工状況 — ステータス（プルダウン）/ 工事予定日 / 対応事業者 + PV設置図面 */}
         <TabsContent value="construction" className="space-y-4">

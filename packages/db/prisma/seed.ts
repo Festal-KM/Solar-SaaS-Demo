@@ -1263,9 +1263,11 @@ async function seedContractProjectData(
     select: {
       id: true,
       contractDate: true,
+      contractAmount: true,
       payment: { select: { id: true } },
       equipment: { select: { id: true } },
       constructions: { select: { id: true, status: true } },
+      grossProfit: { select: { id: true } },
     },
   });
 
@@ -1362,6 +1364,36 @@ async function seedContractProjectData(
           },
         });
       }
+    }
+
+    // GrossProfit（1:1）— 損益計算タブの実データ化。未作成のときのみ（冪等）。
+    // 売上＝契約金額、各原価をデモ係数で算出し、粗利・粗利率を一貫値で確定保持する。
+    if (!c.grossProfit) {
+      const sales = Number(c.contractAmount ?? 0) || 3500000;
+      const purchase = Math.round(sales * 0.55);
+      const dealer = Math.round(sales * 0.65);
+      const constructionFee = 850000 + (seq % 4) * 50000;
+      const otherCost = 50000 + (seq % 3) * 30000;
+      const discount = (seq % 3) * 50000;
+      const projectProfit = sales - purchase - constructionFee - otherCost - discount;
+      const wholesaleProfit = sales - dealer - discount;
+      const profitRate = sales > 0 ? projectProfit / sales : 0;
+      await tx.grossProfit.create({
+        data: {
+          contractId: c.id,
+          salesPrice: sales.toString(),
+          purchaseTotal: purchase.toString(),
+          dealerTotal: dealer.toString(),
+          constructionFee: constructionFee.toString(),
+          otherCost: otherCost.toString(),
+          discount: discount.toString(),
+          projectProfit: projectProfit.toString(),
+          wholesaleProfit: wholesaleProfit.toString(),
+          profitRate: profitRate.toFixed(4),
+          incentiveTargetProfit: projectProfit.toString(),
+          incentiveTargetType: "PROJECT_PROFIT",
+        },
+      });
     }
   }
 }

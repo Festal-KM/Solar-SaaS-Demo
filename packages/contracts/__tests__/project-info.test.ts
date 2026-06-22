@@ -15,6 +15,7 @@ import {
   emptyEquipmentByCategory,
   pickRepresentativeConstruction,
   toProjectInfoDealerDto,
+  toProjectInfoWholesalerDto,
   type EquipmentItemDto,
   type ProjectInfoDto,
 } from "../src/dto/project-info.js";
@@ -124,6 +125,21 @@ function baseDto(): ProjectInfoDto {
       otherCost: 50000,
       constructionFeeBreakdown: { labor: 100000 },
     },
+    profitAndLoss: [
+      {
+        contractId: "ct1",
+        contractDate: null,
+        salesPrice: 3500000,
+        purchaseTotal: 2000000,
+        dealerTotal: 2500000,
+        constructionFee: 200000,
+        otherCost: 50000,
+        discount: 0,
+        projectProfit: 1250000,
+        wholesaleProfit: 1000000,
+        profitRate: 0.3571,
+      },
+    ],
     hearing: {
       husbandAge: "40代",
       wifeAge: "30代",
@@ -175,6 +191,12 @@ describe("toProjectInfoDealerDto — 仕入値・原価の物理除外（#5）",
     }
   });
 
+  it("損益計算（profitAndLoss）セクションが丸ごと物理除外される（#4・#5）", () => {
+    const dealer = toProjectInfoDealerDto(baseDto());
+    expect(Object.keys(dealer)).not.toContain("profitAndLoss");
+    expect("profitAndLoss" in dealer).toBe(false);
+  });
+
   it("JSON シリアライズ後にも原価キー名が出現しない", () => {
     const json = JSON.stringify(toProjectInfoDealerDto(baseDto()));
     expect(json).not.toContain("snapshotPurchasePrice");
@@ -184,6 +206,19 @@ describe("toProjectInfoDealerDto — 仕入値・原価の物理除外（#5）",
     expect(json).not.toContain("otherCost");
     // construction の fee キーも出ない（"feeXxx" のような別キーは無いので素直に判定）。
     expect(json).not.toMatch(/"fee":/);
+    // 損益計算の機密キー（売上・粗利・粗利率）も二次店 JSON に出ない。
+    expect(json).not.toContain("profitAndLoss");
+    expect(json).not.toContain("salesPrice");
+    expect(json).not.toContain("projectProfit");
+    expect(json).not.toContain("wholesaleProfit");
+    expect(json).not.toContain("profitRate");
+  });
+
+  it("wholesaler DTO は profitAndLoss をそのまま保持する", () => {
+    const dto = baseDto();
+    const wholesaler = toProjectInfoWholesalerDto(dto);
+    expect(wholesaler.profitAndLoss).toHaveLength(1);
+    expect(wholesaler.profitAndLoss[0]?.salesPrice).toBe(3500000);
   });
 });
 

@@ -265,10 +265,15 @@ async function loadProjectInfo(
       },
       grossProfit: {
         select: {
+          salesPrice: true,
           purchaseTotal: true,
           dealerTotal: true,
           constructionFee: true,
           otherCost: true,
+          discount: true,
+          projectProfit: true,
+          wholesaleProfit: true,
+          profitRate: true,
           incentiveTargetProfit: true,
         },
       },
@@ -339,6 +344,8 @@ async function loadProjectInfo(
   // カテゴリ 5: 全 Construction 行を保持しつつ、契約ごとに代表 1 件を選定（§16.2）。
   const constructions: ProjectInfoDto["constructions"] = [];
   const contracts: ProjectInfoDto["contracts"] = [];
+  // 損益計算（GrossProfit 1:1）。未計算契約は配列に含めない（UI が空状態）。
+  const profitAndLoss: ProjectInfoDto["profitAndLoss"] = [];
 
   // 金額サマリ（contracts 全体の合計／代表値）。
   let purchaseTotal = 0;
@@ -401,12 +408,27 @@ async function loadProjectInfo(
     });
 
     if (c.grossProfit) {
-      purchaseTotal += decimalToNumber(c.grossProfit.purchaseTotal) ?? 0;
-      dealerTotal += decimalToNumber(c.grossProfit.dealerTotal) ?? 0;
-      constructionFee += decimalToNumber(c.grossProfit.constructionFee) ?? 0;
-      otherCost += decimalToNumber(c.grossProfit.otherCost) ?? 0;
-      const igp = decimalToNumber(c.grossProfit.incentiveTargetProfit);
+      const gp = c.grossProfit;
+      purchaseTotal += decimalToNumber(gp.purchaseTotal) ?? 0;
+      dealerTotal += decimalToNumber(gp.dealerTotal) ?? 0;
+      constructionFee += decimalToNumber(gp.constructionFee) ?? 0;
+      otherCost += decimalToNumber(gp.otherCost) ?? 0;
+      const igp = decimalToNumber(gp.incentiveTargetProfit);
       if (igp != null) incentiveGrossProfit = (incentiveGrossProfit ?? 0) + igp;
+
+      profitAndLoss.push({
+        contractId: c.id,
+        contractDate: isoOrNull(c.contractDate),
+        salesPrice: decimalToNumber(gp.salesPrice) ?? 0,
+        purchaseTotal: decimalToNumber(gp.purchaseTotal) ?? 0,
+        dealerTotal: decimalToNumber(gp.dealerTotal) ?? 0,
+        constructionFee: decimalToNumber(gp.constructionFee) ?? 0,
+        otherCost: decimalToNumber(gp.otherCost) ?? 0,
+        discount: decimalToNumber(gp.discount) ?? 0,
+        projectProfit: decimalToNumber(gp.projectProfit) ?? 0,
+        wholesaleProfit: decimalToNumber(gp.wholesaleProfit) ?? 0,
+        profitRate: decimalToNumber(gp.profitRate) ?? 0,
+      });
     }
     for (const inc of c.incentives) {
       const a = decimalToNumber(inc.amount);
@@ -474,6 +496,7 @@ async function loadProjectInfo(
       constructionFee,
       otherCost,
     },
+    profitAndLoss,
     // F-063 ヒアリング（住環境・家族）。家族年齢/分離電話は MaskingService 適用済。
     // 既設設備の詳細キーは二次店ロールで toProjectInfoDealerDto が物理除外する（§17.5）。
     hearing: {

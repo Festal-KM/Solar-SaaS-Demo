@@ -108,6 +108,23 @@ export interface ProjectActivityDto {
   body: string | null;
 }
 
+// 契約単位の損益（GrossProfit 1:1）。売上・各原価・粗利を機密財務として保持する。
+// セクション丸ごと二次店レスポンスから物理除外（toProjectInfoDealerDto / #4・#5）。
+// GrossProfit 未計算の契約は配列に含めない（UI 側で「未計算」空状態）。
+export interface ProjectProfitDto {
+  contractId: string;
+  contractDate: string | null;
+  salesPrice: number;
+  purchaseTotal: number;
+  dealerTotal: number;
+  constructionFee: number;
+  otherCost: number;
+  discount: number;
+  projectProfit: number;
+  wholesaleProfit: number;
+  profitRate: number; // 0..1（UI で % 表示）
+}
+
 export interface ProjectFinancialsDto {
   contractAmount: number | null;
   proposedAmount: number | null;
@@ -209,6 +226,9 @@ export interface ProjectInfoDto {
     maekakuStatus: string | null;
   };
   financials: ProjectFinancialsDto;
+  // 契約単位の損益計算（売上・原価・粗利）。機密財務のため二次店 DTO からは
+  // セクション丸ごと物理除外（ProjectInfoForDealerDto に当該キー無し／#4・#5）。
+  profitAndLoss: ProjectProfitDto[];
   // F-063 追加カテゴリ: ヒアリング（住環境・家族）。契約後設備 equipment（カテゴリ 7）とは別概念。
   hearing: ProjectHearingDto;
   // バッチ B: コール状況（完工/ローン完了コール・汎用希望時間帯・マエカク希望電話）。
@@ -296,11 +316,15 @@ export type ProjectHearingForDealerDto = Omit<ProjectHearingDto, "existingEquipm
 };
 
 export interface ProjectInfoForDealerDto
-  extends Omit<ProjectInfoDto, "contracts" | "constructions" | "financials" | "hearing"> {
+  extends Omit<
+    ProjectInfoDto,
+    "contracts" | "constructions" | "financials" | "hearing" | "profitAndLoss"
+  > {
   contracts: ProjectContractForDealerDto[];
   constructions: ProjectConstructionForDealerDto[];
   financials: ProjectFinancialsForDealerDto;
   hearing: ProjectHearingForDealerDto;
+  // profitAndLoss は二次店レスポンスから物理除外（Object.keys に出ない／#4・#5）。
 }
 
 /**
@@ -379,7 +403,11 @@ export function toProjectInfoDealerDto(dto: ProjectInfoDto): ProjectInfoForDeale
     existingEquipments: dto.hearing.existingEquipments.map(stripExistingEquipmentForDealer),
   };
 
-  return { ...dto, contracts, constructions, financials, hearing };
+  // 損益計算（売上・原価・粗利）はセクション丸ごと物理除外（profitAndLoss キーを
+  // Object.keys に一切出さない／#4・#5）。
+  const { profitAndLoss: _pnl, ...withoutProfit } = dto;
+
+  return { ...withoutProfit, contracts, constructions, financials, hearing };
 }
 
 /** Empty `EquipmentByCategory` builder for loaders. */
