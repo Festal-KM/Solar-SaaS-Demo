@@ -158,13 +158,16 @@ test.describe("バッチ A: 顧客ステータス値域の仕様準拠化", () =
     await signInAsDemo(page);
     await openContractedCustomer(page);
 
+    // 工事・完工（施工コスト）編集は専用「施工状況」タブの ProjectConstructionList へ集約済み。
+    await page.getByRole("tab", { name: "施工状況" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 
     // 契約済み顧客は seed で Construction 行を持つ（surveyStatus 含む）。施工情報が
     // 無い顧客では工事編集トリガーが出ないため、その場合はスキップ（値域検証は
     // 他テストの select option チェックで担保される）。
-    const hasConstruction = (await panel.getByText("施工情報がありません").count()) === 0;
+    const hasConstruction =
+      (await panel.getByText("施工コストを表示できる契約・施工がありません。").count()) === 0;
     test.skip(!hasConstruction, "対象顧客に施工情報が無いため現地調査編集を検証できない");
 
     await panel.getByRole("button", { name: "工事・完工を編集" }).first().click();

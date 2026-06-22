@@ -490,6 +490,115 @@ function LoanBlock({
   );
 }
 
+// 工事・完工 1 件分（Construction 行）の表示。施工コスト(fee)を含む全項目を表示し、
+// 編集トリガー（EditConstructionDialog, fee 含む）を見出し右に描画する。基本情報タブ
+// 非 embedded（旧）と専用「施工コスト」タブの両方から再利用する。fee は原価系のため
+// ProjectConstructionForDealerDto では存在せず（con.fee === undefined）、editable も
+// null のため二次店では値も編集トリガーも一切描画されない。
+function ConstructionBlock({
+  con,
+  customerId,
+  editConstruction,
+}: {
+  con: AnyConstruction;
+  customerId: string | null;
+  editConstruction?: ProjectConstructionEditable;
+}) {
+  const f = p.fields;
+  // fee キー自体が存在するのは wholesaler/saas のみ（二次店 DTO は物理除外）。
+  const showFee = "fee" in con;
+  return (
+    <div className="rounded-md border border-hairline-light p-4">
+      {customerId && editConstruction ? (
+        <div className="mb-1 flex justify-end">
+          <EditConstructionDialog customerId={customerId} initial={editConstruction} />
+        </div>
+      ) : null}
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+        <MetaItem
+          label={f.completionStatus}
+          value={p.constructionStatusLabels[con.status] ?? con.status}
+        />
+        <MetaItem
+          label={f.surveyStatus}
+          value={con.surveyStatus ? p.surveyStatusLabels[con.surveyStatus] ?? con.surveyStatus : null}
+        />
+        <MetaItem label={f.surveyAt} value={fmtDateTime(con.surveyDate)} />
+        <MetaItem label={f.startedDate} value={fmtDate(con.startedDate)} />
+        <MetaItem label={f.completedDate} value={fmtDate(con.completedDate)} />
+        <MetaItem label={f.powerSaleStartDate} value={fmtDate(con.powerSaleStartDate)} />
+        <MetaItem label={f.thankYouCallAt} value={fmtDateTime(con.thankYouCallAt)} />
+        <MetaItem
+          label={f.postCompletionStatus}
+          value={p.postCompletionStatusLabels[con.postCompletionStatus] ?? con.postCompletionStatus}
+        />
+        <MetaItem
+          label={f.defectStatus}
+          value={p.defectStatusLabels[con.defectStatus] ?? con.defectStatus}
+        />
+        <MetaItem label={f.defectDetail} value={con.defectDetail} />
+        <MetaItem label={f.vendorName} value={con.vendorName} />
+        {showFee ? <MetaItem label={f.constructionFee} value={fmtYen(con.fee ?? null)} /> : null}
+      </dl>
+    </div>
+  );
+}
+
+// 専用「施工コスト」タブ — 顧客に紐づく全契約の Construction を契約ごとに一覧表示し、
+// 施工コスト(fee)を含む工事・完工項目を表示・編集（EditConstructionDialog）する。
+// 契約/施工が無ければ空状態。二次店（editable=null・fee 物理除外）では編集も値も非表示。
+export function ProjectConstructionList({
+  data,
+  editable = null,
+}: {
+  data: CustomerProjectInfoData;
+  editable?: ProjectInfoEditable | null;
+}) {
+  const ct = labels.customer.detail.constructionTab;
+  const contracts = data.contracts as AnyContract[];
+  const constructions = data.constructions as AnyConstruction[];
+  const customerId = editable?.customerId ?? null;
+  const editConstructionById = new Map<string, ProjectConstructionEditable>(
+    (editable?.constructions ?? []).map((c) => [c.constructionId, c]),
+  );
+
+  const byContract = new Map<string, AnyConstruction[]>();
+  for (const con of constructions) {
+    const list = byContract.get(con.contractId) ?? [];
+    list.push(con);
+    byContract.set(con.contractId, list);
+  }
+  const withConstruction = contracts.filter((c) => (byContract.get(c.contractId) ?? []).length > 0);
+
+  if (withConstruction.length === 0) {
+    return (
+      <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+        {ct.empty}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {withConstruction.map((c, idx) => (
+        <div key={c.contractId} className="space-y-3 rounded-md border border-hairline-light p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+            {`${ct.contractHeading} #${idx + 1}`}
+          </h3>
+          {(byContract.get(c.contractId) ?? []).map((con) => (
+            <ConstructionBlock
+              key={con.constructionId}
+              con={con}
+              customerId={customerId}
+              editConstruction={editConstructionById.get(con.constructionId)}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // 専用「ローン情報」タブ — 顧客に紐づく全契約のローン・団信を契約ごとに一覧表示。
 // 契約が無ければ空状態。loanReviewStatus 含む編集は LoanBlock 内の EditContractDialog。
 export function ProjectLoanInfoList({
@@ -681,60 +790,30 @@ export function CustomerProjectInfo({
         })
       )}
 
-      {/* 工事・完工（全 Construction 行） */}
-      <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
-          {p.sections.construction}
-        </h3>
-        {constructions.length === 0 ? (
-          <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
-            {p.noConstruction}
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {constructions.map((con) => {
-              const ecn = editConstructionById.get(con.constructionId);
-              return (
-              <div
-                key={con.constructionId}
-                className="rounded-md border border-hairline-light p-4"
-              >
-                {customerId && ecn ? (
-                  <div className="mb-1 flex justify-end">
-                    <EditConstructionDialog customerId={customerId} initial={ecn} />
-                  </div>
-                ) : null}
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                  <MetaItem
-                    label={f.completionStatus}
-                    value={p.constructionStatusLabels[con.status] ?? con.status}
-                  />
-                  <MetaItem
-                    label={f.surveyStatus}
-                    value={con.surveyStatus ? p.surveyStatusLabels[con.surveyStatus] ?? con.surveyStatus : null}
-                  />
-                  <MetaItem label={f.surveyAt} value={fmtDateTime(con.surveyDate)} />
-                  <MetaItem label={f.startedDate} value={fmtDate(con.startedDate)} />
-                  <MetaItem label={f.completedDate} value={fmtDate(con.completedDate)} />
-                  <MetaItem label={f.powerSaleStartDate} value={fmtDate(con.powerSaleStartDate)} />
-                  <MetaItem label={f.thankYouCallAt} value={fmtDateTime(con.thankYouCallAt)} />
-                  <MetaItem
-                    label={f.postCompletionStatus}
-                    value={p.postCompletionStatusLabels[con.postCompletionStatus] ?? con.postCompletionStatus}
-                  />
-                  <MetaItem
-                    label={f.defectStatus}
-                    value={p.defectStatusLabels[con.defectStatus] ?? con.defectStatus}
-                  />
-                  <MetaItem label={f.defectDetail} value={con.defectDetail} />
-                  <MetaItem label={f.vendorName} value={con.vendorName} />
-                </dl>
-              </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      {/* 工事・完工（施工コスト含む。embedded 時は専用「施工コスト」タブに集約するため抑制） */}
+      {!embedded ? (
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
+            {p.sections.construction}
+          </h3>
+          {constructions.length === 0 ? (
+            <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+              {p.noConstruction}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {constructions.map((con) => (
+                <ConstructionBlock
+                  key={con.constructionId}
+                  con={con}
+                  customerId={customerId}
+                  editConstruction={editConstructionById.get(con.constructionId)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {/* 認定・設備 */}
       <section>

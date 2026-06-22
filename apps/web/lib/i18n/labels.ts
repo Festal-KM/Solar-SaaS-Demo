@@ -2011,6 +2011,7 @@ export const labels = {
           completedDate: "完工日",
           thankYouCallAt: "サンキューコール日時",
           completionStatus: "完工ステータス",
+          constructionFee: "施工コスト",
           postCompletionStatus: "完工後ステータス",
           defectStatus: "不備解消ステータス",
           defectDetail: "不備内容",
@@ -2245,6 +2246,11 @@ export const labels = {
       },
       loanTab: {
         empty: "ローン情報を表示できる契約がありません。",
+        contractHeading: "契約",
+      },
+      constructionTab: {
+        title: "施工コスト",
+        empty: "施工コストを表示できる契約・施工がありません。",
         contractHeading: "契約",
       },
       chat: {

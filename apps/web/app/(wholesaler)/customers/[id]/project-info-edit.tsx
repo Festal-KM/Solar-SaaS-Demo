@@ -867,6 +867,9 @@ export function EditConstructionDialog({
             <FormField label={f.vendorName} htmlFor="cn-vendor">
               <Input id="cn-vendor" value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
             </FormField>
+            <FormField label={f.constructionFee} htmlFor="cn-fee">
+              <Input id="cn-fee" type="number" inputMode="numeric" min={0} value={fee} onChange={(e) => setFee(e.target.value)} />
+            </FormField>
             <FormField label={f.surveyAt} htmlFor="cn-survey">
               <input id="cn-survey" type="datetime-local" className={FIELD} value={surveyDate} onChange={(e) => setSurveyDate(e.target.value)} />
             </FormField>

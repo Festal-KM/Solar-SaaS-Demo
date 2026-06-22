@@ -1307,6 +1307,7 @@ async function seedContractProjectData(
           surveyCandidates: [day(-9).toISOString(), day(-8).toISOString()],
           constructionCandidates: [day(-6).toISOString(), day(-5).toISOString()],
           vendorName: "サンプル施工 株式会社",
+          fee: 850000 + (seq % 4) * 50000,
         },
       });
     }

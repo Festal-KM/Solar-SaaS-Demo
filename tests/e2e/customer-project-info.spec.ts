@@ -38,8 +38,9 @@ async function signInAsDemo(page: Page): Promise<void> {
 }
 
 // 「基本情報」タブに統合された案件情報の案件固有カテゴリ見出し。
-// embedded で 基本情報・体制・備考 は抑制されるため、案件固有のみを検証する。
-const PROJECT_INFO_SECTION_HEADINGS = ["契約・金額", "工事・完工", "認定・設備", "概況"];
+// embedded で 基本情報・体制・備考 は抑制され、さらに「工事・完工」(施工コスト含む) は
+// 専用「施工状況」タブへ集約されたため embedded では出ない。残る案件固有のみを検証する。
+const PROJECT_INFO_SECTION_HEADINGS = ["契約・金額", "認定・設備", "概況"];
 
 test.describe("F-061 顧客詳細『案件情報』統合ビュー", () => {
   // dev サーバの cold-compile（/login → /customers → /customers/[id]）を吸収するため

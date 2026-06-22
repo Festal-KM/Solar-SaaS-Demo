@@ -2740,8 +2740,12 @@ model ContractPayment {
 > カテゴリ 4「ローン・団信」とコール状況（バッチ B）は **専用タブ**（「ローン情報」「コール状況」）へ分離集約する。
 > 「ローン情報」タブは顧客に紐づく全契約のローン・団信（`loanReviewStatus` 編集含む）を契約ごとに一覧（契約無しは空状態）。
 > 「コール状況」タブは `ProjectCallsDto`（顧客単位・単一）を表示・編集（`EditCallStatusDialog`）。
-> これら 2 セクションは案件情報統合ビュー（`CustomerProjectInfo` の embedded 表示）からは抑制し重複を排す。
-> 非 embedded（単体表示）では従来通り 9 カテゴリを全表示する。
+> カテゴリ 5「工事・完工」の **施工コスト（`Construction.fee`）** は「施工状況」タブ（S-046）の専用セクション
+> `ProjectConstructionList` で契約ごとに表示・編集（`EditConstructionDialog`。fee 含む工事項目一式を再利用、新規保存系を足さない）する。
+> 契約/施工が無ければ空状態。`fee` は原価系のため `ProjectConstructionForDealerDto` で物理除外され、`getCustomerProjectInfoEditable`
+> が二次店に `null` を返すため、二次店では値も編集トリガーも一切描画しない（CLAUDE.md #5）。
+> これら 3 セクション（ローン・団信／コール状況／工事・完工）は案件情報統合ビュー（`CustomerProjectInfo` の embedded 表示）からは
+> 抑制し重複を排す。非 embedded（単体表示）では従来通り 9 カテゴリを全表示する。
 
 ### 16.6 段階移行プラン
 

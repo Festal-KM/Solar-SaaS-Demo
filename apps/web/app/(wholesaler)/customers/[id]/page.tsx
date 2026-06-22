@@ -29,6 +29,7 @@ import { CustomerHistory } from "./customer-history";
 import {
   CustomerProjectInfo,
   ProjectCallStatusSection,
+  ProjectConstructionList,
   ProjectLoanInfoList,
 } from "./customer-project-info";
 import { CustomerTasks } from "./customer-tasks";
@@ -556,6 +557,14 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 vendor: detail.construction.vendor,
               }}
             />
+          </Card>
+          {/* 施工コスト — 顧客に紐づく全契約の Construction.fee を契約ごとに表示・編集。
+              fee は原価系のため二次店（editable=null・fee 物理除外）では非表示。 */}
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-semibold text-ink">
+              {d.constructionTab.title}
+            </h2>
+            <ProjectConstructionList data={projectInfo} editable={projectInfoEditable} />
           </Card>
           <Card className="p-5">
             <h2 className="mb-3 text-sm font-semibold text-ink">{d.pvDrawing.title}</h2>
