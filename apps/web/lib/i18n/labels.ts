@@ -1943,8 +1943,8 @@ export const labels = {
       // 基本情報タブの区分見出し（現状情報 / 契約予定情報）。
       currentInfoSection: "現状情報",
       currentInfoHint: "顧客の連絡先・既存設備・電気契約など現在の状況",
-      plannedInfoSection: "契約予定情報",
-      plannedInfoHint: "これから契約する案件のプラン・金額・予定日など",
+      plannedInfoSection: "契約情報",
+      plannedInfoHint: "契約・金額・設備・保証など（編集は契約状況タブ）",
       // 顧客情報カード内の現状（電気契約・設備）サブセクション見出し。
       electricSection: "電気契約・設備",
       existingEquipmentTitle: "既存設備",
