@@ -469,6 +469,143 @@ export function EditHearingDialog({
   );
 }
 
+/* ── ヒアリング（住環境・家族）のカード内インライン編集（F-063, Customer 列）。
+   既設設備はここでは触らない（empty array で no-op）。生値を初期値に dirty 追跡 +
+   Save/キャンセル。customer.update 権限保持者のみ呼び出される（呼び出し側でゲート）。 ── */
+export function HearingInlineEdit({
+  customerId,
+  initial,
+}: {
+  customerId: string;
+  initial: ProjectHearingEditable;
+}) {
+  const h = p.hearing;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [husbandAge, setHusbandAge] = useState(initial.husbandAge != null ? String(initial.husbandAge) : "");
+  const [wifeAge, setWifeAge] = useState(initial.wifeAge != null ? String(initial.wifeAge) : "");
+  const [childAge, setChildAge] = useState(initial.childAge != null ? String(initial.childAge) : "");
+  const [household, setHousehold] = useState(initial.household ?? "");
+  const [guideAttendee, setGuideAttendee] = useState(initial.guideAttendee ?? "");
+  const [faceToFace, setFaceToFace] = useState(boolToSelect(initial.faceToFace));
+  const [landlinePhone, setLandlinePhone] = useState(initial.landlinePhone ?? "");
+  const [mobilePhone, setMobilePhone] = useState(initial.mobilePhone ?? "");
+  const [proposedProduct, setProposedProduct] = useState(initial.proposedProduct ?? "");
+
+  const initFace = boolToSelect(initial.faceToFace);
+  const dirty =
+    husbandAge !== (initial.husbandAge != null ? String(initial.husbandAge) : "") ||
+    wifeAge !== (initial.wifeAge != null ? String(initial.wifeAge) : "") ||
+    childAge !== (initial.childAge != null ? String(initial.childAge) : "") ||
+    household !== (initial.household ?? "") ||
+    guideAttendee !== (initial.guideAttendee ?? "") ||
+    faceToFace !== initFace ||
+    landlinePhone !== (initial.landlinePhone ?? "") ||
+    mobilePhone !== (initial.mobilePhone ?? "") ||
+    proposedProduct !== (initial.proposedProduct ?? "");
+
+  function reset() {
+    setHusbandAge(initial.husbandAge != null ? String(initial.husbandAge) : "");
+    setWifeAge(initial.wifeAge != null ? String(initial.wifeAge) : "");
+    setChildAge(initial.childAge != null ? String(initial.childAge) : "");
+    setHousehold(initial.household ?? "");
+    setGuideAttendee(initial.guideAttendee ?? "");
+    setFaceToFace(initFace);
+    setLandlinePhone(initial.landlinePhone ?? "");
+    setMobilePhone(initial.mobilePhone ?? "");
+    setProposedProduct(initial.proposedProduct ?? "");
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveCustomerHearingAction({
+          customerId,
+          husbandAge: numOrNull(husbandAge),
+          wifeAge: numOrNull(wifeAge),
+          childAge: numOrNull(childAge),
+          household: strOrNull(household),
+          guideAttendee:
+            guideAttendee === "" ? null : (guideAttendee as "HUSBAND" | "WIFE" | "BOTH" | "OTHER"),
+          faceToFace: selectToBool(faceToFace),
+          landlinePhone: strOrNull(landlinePhone),
+          mobilePhone: strOrNull(mobilePhone),
+          proposedProduct: strOrNull(proposedProduct),
+          existingEquipments: [],
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+          {h.familyTitle}
+        </h4>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <FormField label={h.husbandAge} htmlFor="hr-husband">
+            <Input id="hr-husband" type="number" min={0} max={120} value={husbandAge} onChange={(e) => setHusbandAge(e.target.value)} />
+          </FormField>
+          <FormField label={h.wifeAge} htmlFor="hr-wife">
+            <Input id="hr-wife" type="number" min={0} max={120} value={wifeAge} onChange={(e) => setWifeAge(e.target.value)} />
+          </FormField>
+          <FormField label={h.childAge} htmlFor="hr-child">
+            <Input id="hr-child" type="number" min={0} max={120} value={childAge} onChange={(e) => setChildAge(e.target.value)} />
+          </FormField>
+          <FormField label={h.household} htmlFor="hr-household">
+            <Input id="hr-household" value={household} onChange={(e) => setHousehold(e.target.value)} />
+          </FormField>
+          <FormField label={h.guideAttendee} htmlFor="hr-guide">
+            <select id="hr-guide" className={FIELD} value={guideAttendee} onChange={(e) => setGuideAttendee(e.target.value)}>
+              <option value="">{ed.unset}</option>
+              <option value="HUSBAND">{h.guideAttendeeLabels.HUSBAND}</option>
+              <option value="WIFE">{h.guideAttendeeLabels.WIFE}</option>
+              <option value="BOTH">{h.guideAttendeeLabels.BOTH}</option>
+              <option value="OTHER">{h.guideAttendeeLabels.OTHER}</option>
+            </select>
+          </FormField>
+          <FormField label={h.faceToFace} htmlFor="hr-face">
+            <select id="hr-face" className={FIELD} value={faceToFace} onChange={(e) => setFaceToFace(e.target.value)}>
+              <option value={BOOL_UNSET}>{ed.unset}</option>
+              <option value="true">{ed.presence.true}</option>
+              <option value="false">{ed.presence.false}</option>
+            </select>
+          </FormField>
+        </div>
+      </div>
+      <div>
+        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+          {ed.contactTitle}
+        </h4>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <FormField label={h.landlinePhone} htmlFor="hr-landline">
+            <Input id="hr-landline" type="tel" value={landlinePhone} onChange={(e) => setLandlinePhone(e.target.value)} />
+          </FormField>
+          <FormField label={h.mobilePhone} htmlFor="hr-mobile">
+            <Input id="hr-mobile" type="tel" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
+          </FormField>
+          <FormField label={h.proposedProduct} htmlFor="hr-product">
+            <Input id="hr-product" value={proposedProduct} onChange={(e) => setProposedProduct(e.target.value)} />
+          </FormField>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={reset} disabled={pending || !dirty}>
+          {ed.cancel}
+        </Button>
+        <Button type="button" size="sm" onClick={onSave} disabled={pending || !dirty}>
+          {pending ? c.saving : ed.save}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /* ── 契約・金額・ローン（Contract + ContractPayment） ── */
 export function EditContractDialog({
   customerId,

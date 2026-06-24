@@ -14,8 +14,7 @@ import {
   EditConstructionDialog,
   EditContractDialog,
   EditEquipmentDialog,
-  EditHearingDialog,
-  EditOverviewDialog,
+  HearingInlineEdit,
 } from "./project-info-edit";
 
 import type {
@@ -339,10 +338,12 @@ export function ExistingEquipmentDisplay({
 
 function HearingSection({
   hearing,
-  editSlot,
+  editForm,
 }: {
   hearing: ProjectHearingDto | ProjectHearingForDealerDto;
-  editSlot?: React.ReactNode;
+  // 権限保持者には家族属性・連絡先のインライン編集フォームを渡す。null（読み取り専用/
+  // 二次店）のときはマスク済みの表示 dl を出す。
+  editForm?: React.ReactNode;
 }) {
   const badges = deriveCrossSellBadges(hearing.existingEquipments);
   const guide = hearing.guideAttendee ? h.guideAttendeeLabels[hearing.guideAttendee] ?? null : null;
@@ -351,7 +352,6 @@ function HearingSection({
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">{h.title}</h3>
-        {editSlot}
         {/* クロスセル候補バッジ（判定材料の可視化のみ・自動提案はしない） */}
         {badges.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -384,41 +384,48 @@ function HearingSection({
         )}
       </div>
 
-      {/* 家族属性（年齢は年代マスキング表示済み） */}
-      <div>
-        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-          {h.familyTitle}
-        </h4>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3">
-          <MetaItem label={h.husbandAge} value={hearing.husbandAge} />
-          <MetaItem label={h.wifeAge} value={hearing.wifeAge} />
-          <MetaItem label={h.childAge} value={hearing.childAge} />
-          <MetaItem label={h.household} value={hearing.household} />
-          <MetaItem label={h.guideAttendee} value={guide} />
-          <MetaItem label={h.faceToFace} value={fmtBool(hearing.faceToFace)} />
-        </dl>
-      </div>
+      {/* 家族属性・連絡先: 権限保持者はインライン編集フォーム、それ以外はマスク済み表示。 */}
+      {editForm ? (
+        editForm
+      ) : (
+        <>
+          {/* 家族属性（年齢は年代マスキング表示済み） */}
+          <div>
+            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+              {h.familyTitle}
+            </h4>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3">
+              <MetaItem label={h.husbandAge} value={hearing.husbandAge} />
+              <MetaItem label={h.wifeAge} value={hearing.wifeAge} />
+              <MetaItem label={h.childAge} value={hearing.childAge} />
+              <MetaItem label={h.household} value={hearing.household} />
+              <MetaItem label={h.guideAttendee} value={guide} />
+              <MetaItem label={h.faceToFace} value={fmtBool(hearing.faceToFace)} />
+            </dl>
+          </div>
 
-      {/* 連絡先（下4桁マスキング）。マエカク希望日時は基本情報ページでは非表示。 */}
-      <div>
-        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-          {h.contactTitle}
-        </h4>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3">
-          <MetaItem label={h.landlinePhone} value={hearing.landlinePhone} />
-          <MetaItem label={h.mobilePhone} value={hearing.mobilePhone} />
-          <MetaItem label={h.proposedProduct} value={hearing.proposedProduct} />
-          <MetaItem label={h.acquiredAt} value={fmtDate(hearing.acquiredAt)} />
-        </dl>
-      </div>
+          {/* 連絡先（下4桁マスキング）。マエカク希望日時は基本情報ページでは非表示。 */}
+          <div>
+            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+              {h.contactTitle}
+            </h4>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3">
+              <MetaItem label={h.landlinePhone} value={hearing.landlinePhone} />
+              <MetaItem label={h.mobilePhone} value={hearing.mobilePhone} />
+              <MetaItem label={h.proposedProduct} value={hearing.proposedProduct} />
+              <MetaItem label={h.acquiredAt} value={fmtDate(hearing.acquiredAt)} />
+            </dl>
+          </div>
+        </>
+      )}
     </section>
   );
 }
 
-// 現状情報（住環境ヒアリング + 概況）。基本情報タブの「現状情報」セクションから
-// 再利用する。ヒアリング(F-063: 既設設備/家族属性/連絡先) + 概況(電気代/世帯/住居種別/
-// 流入経路/マエカク状況)。いずれも「現状」の情報であり契約予定とは別概念。
-// editable 非 null（customer.update 権限）のとき各セクションに編集ダイアログを出す。
+// 現状情報（住環境ヒアリング）。基本情報タブの「現状情報」セクションから再利用する。
+// ヒアリング(F-063: 既設設備/家族属性/連絡先)。概況は不要のため表示しない。
+// editable 非 null（customer.update 権限）のとき家族属性・連絡先をカード内インライン編集
+// （HearingInlineEdit）。null（二次店・read-only）はマスク済み表示。
 export function ProjectCurrentStateInfo({
   data,
   editable = null,
@@ -426,33 +433,16 @@ export function ProjectCurrentStateInfo({
   data: CustomerProjectInfoData;
   editable?: ProjectInfoEditable | null;
 }) {
-  const f = p.fields;
   const customerId = editable?.customerId ?? null;
   return (
-    <div className="space-y-6">
-      <HearingSection
-        hearing={data.hearing}
-        editSlot={
-          customerId && editable ? (
-            <EditHearingDialog customerId={customerId} initial={editable.hearing} />
-          ) : null
-        }
-      />
-      <Section
-        title={p.sections.overview}
-        editSlot={
-          customerId && editable ? (
-            <EditOverviewDialog customerId={customerId} initial={editable.overview} />
-          ) : null
-        }
-      >
-        <MetaItem label={f.electricBill} value={data.overview.electricBill} />
-        <MetaItem label={f.household} value={data.overview.household} />
-        <MetaItem label={f.housingType} value={data.overview.housingType} />
-        <MetaItem label={f.inflowRoute} value={data.overview.inflowRoute} />
-        <MetaItem label={f.maekakuStatus} value={data.overview.maekakuStatus} />
-      </Section>
-    </div>
+    <HearingSection
+      hearing={data.hearing}
+      editForm={
+        customerId && editable ? (
+          <HearingInlineEdit customerId={customerId} initial={editable.hearing} />
+        ) : null
+      }
+    />
   );
 }
 
