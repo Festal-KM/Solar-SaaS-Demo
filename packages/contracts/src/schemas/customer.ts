@@ -437,6 +437,106 @@ export const ProjectEquipmentEditSchema = z.object({
 
 export type ProjectEquipmentEditInput = z.infer<typeof ProjectEquipmentEditSchema>;
 
+// 設備カテゴリ値域（ContractEquipment.category / EquipmentCategory enum と一致）。
+export const EQUIPMENT_CATEGORY_VALUES = [
+  "PV",
+  "BT",
+  "EQ",
+  "IH",
+  "AC",
+  "ACCESSORY",
+  "GIFT",
+] as const;
+
+export const EquipmentCategoryEnum = z.enum(EQUIPMENT_CATEGORY_VALUES);
+
+export type EquipmentCategoryValue = z.infer<typeof EquipmentCategoryEnum>;
+
+// 契約状況タブでの「設備の追加・編集」ペイロード（契約 find-or-create 方式）。
+//
+// contractId は任意: 未指定なら顧客に契約が無いとみなし、Server Action がデモ用の
+// 最小 Deal + Contract を find-or-create してから当該カテゴリの ContractEquipment を
+// upsert する（1 顧客 1 契約想定）。category は upsert キー（contractId × category の
+// 代表 1 行）。contractAmount は同時に Contract.contractAmount へ反映する任意項目。
+// 仕入値スナップショット（ContractItem.snapshot*）は扱わない（CLAUDE.md #4 / #5）。
+export const ProjectContractEquipmentUpsertSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1).nullable().optional(),
+  category: EquipmentCategoryEnum,
+  // Contract.contractAmount へ反映する任意の契約金額（円・整数・0 以上）。
+  contractAmount: z.number().int().nonnegative().nullable().optional(),
+  contracted: z.boolean().optional(),
+  manufacturer: z.string().max(255).nullable().optional(),
+  model: z.string().max(255).nullable().optional(),
+  capacity: z.string().max(100).nullable().optional(),
+  quantity: z.number().int().nonnegative().nullable().optional(),
+  installLocation: z.string().max(255).nullable().optional(),
+  introducedStatus: z.enum(["NONE", "EXISTING", "NEW"]).nullable().optional(),
+  warrantyStandard: z.boolean().nullable().optional(),
+  warrantyExtended: z.boolean().nullable().optional(),
+  warrantyDisaster: z.boolean().nullable().optional(),
+  detail: z.string().max(2000).nullable().optional(),
+  attributes: z.record(z.unknown()).nullable().optional(),
+});
+
+export type ProjectContractEquipmentUpsertInput = z.infer<
+  typeof ProjectContractEquipmentUpsertSchema
+>;
+
+// ---------------------------------------------------------------------------
+// デモ用 Deal + Contract 最小生成パラメータ（純関数）.
+//
+// 契約成立フロー（クロージング）が本来の責務だが、契約状況タブでの設備入力を
+// 成立させるためのデモ用途として、契約が無い顧客に最小 Deal + Contract を生成する。
+// GrossProfit / Incentive は生成しない（損益・インセンティブ集計を汚さない）。
+// contractDate = 今日、cancelDeadline = 今日 + 卸設定のキャンセル期限（既定 8 日）。
+// 純関数として日付計算とデフォルト値を組み立て、Server Action から DB 書き込みに渡す。
+// ---------------------------------------------------------------------------
+
+export interface DemoContractSeedInput {
+  /** Contract.contractAmount。未指定/null は 0 とする（後で編集可能）。 */
+  contractAmount?: number | null;
+  /** BT 設備が含まれるか（hasBattery 初期値）。 */
+  hasBattery?: boolean;
+  /** 卸の WholesalerSettings.cancelDeadlineDays（既定 8）。 */
+  cancelDeadlineDays?: number;
+  /** 基準日（既定 now）。テスト容易性のため注入可能。 */
+  now?: Date;
+}
+
+export interface DemoContractSeedValues {
+  contractDate: Date;
+  cancelDeadline: Date;
+  contractAmount: number;
+  hasBattery: boolean;
+  status: "CONTRACTED";
+  dealStatus: "CONTRACTED";
+}
+
+/**
+ * Builds the minimal Deal/Contract field values for a demo auto-created
+ * contract. Pure — no DB access, no GrossProfit/Incentive (those stay
+ * uncalculated by design). `cancelDeadline = contractDate + cancelDeadlineDays`.
+ */
+export function buildDemoContractSeed(input: DemoContractSeedInput = {}): DemoContractSeedValues {
+  const now = input.now ?? new Date();
+  const contractDate = new Date(now.getTime());
+  const days = input.cancelDeadlineDays != null && input.cancelDeadlineDays >= 0
+    ? input.cancelDeadlineDays
+    : 8;
+  const cancelDeadline = new Date(contractDate.getTime() + days * 24 * 60 * 60 * 1000);
+  const amount =
+    input.contractAmount != null && input.contractAmount >= 0 ? input.contractAmount : 0;
+  return {
+    contractDate,
+    cancelDeadline,
+    contractAmount: amount,
+    hasBattery: input.hasBattery ?? false,
+    status: "CONTRACTED",
+    dealStatus: "CONTRACTED",
+  };
+}
+
 // 工事・完工（Construction + 親 Contract の完工後/不備/サンキューコール列）。
 export const ProjectConstructionEditSchema = z.object({
   customerId: z.string().min(1),

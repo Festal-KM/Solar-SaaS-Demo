@@ -3002,6 +3002,33 @@ export function getProjectInfo(
 > エラー処理: `customerId` が現テナントスコープ外（RLS で 0 件）の場合は `NotFoundError`（§9 各層方針）を throw。
 > F-062 編集（P1）は本ローダを使わず各 source of truth へ書き戻し、F-061 ビューは再集計のみ。
 
+### 16.11 契約状況タブ: 設備の追加・編集（契約 find-or-create / デモ用最小生成）
+
+契約状況タブ（顧客詳細 `value="contract"`）で、契約が無い顧客でも PV/BT/付帯の設備・保証・
+契約金額を直接入力できるようにする。保存アクション `saveProjectContractEquipmentAction`
+（`apps/web/.../customers/actions.ts`）は **顧客の契約を find-or-create** する（1 顧客 1 契約想定）。
+
+- **find-or-create 順序**: `contractId` 指定時は当該 `customerId` 配下で検証して使用。未指定なら
+  `customerId` 配下の最古契約を探し、無ければデモ用の最小 Deal + Contract を生成する。
+- **デモ用最小生成（`buildDemoContractSeed` 純関数）**: `contractDate = 今日`、
+  `cancelDeadline = 今日 + WholesalerSettings.cancelDeadlineDays（既定 8 日・特商法準拠 §16.6 / CLAUDE.md #7）`、
+  `contractAmount = 入力値 or 0`、`status = CONTRACTED`、`hasBattery = (category === "BT")`、
+  `createdBy = ctx.actorUserId`。`Contract.dealId @unique` のため Deal も同時生成（`status = CONTRACTED`、
+  `ownerType` は登録主体・`ownerRelationshipId` は Customer 由来）。`wholesalerId` は Customer 由来＝ctx スコープ内。
+- **GrossProfit / Incentive は生成しない**（未計算のまま）。損益計算タブ（§16.10 の `profitAndLoss[]`）・
+  インセンティブ集計（SP-06）を汚さない。契約明細 `ContractItem`（snapshot 価格）も作らない（CLAUDE.md #4・#5）。
+- **設備 upsert**: `contractId × category` の代表 1 行を find-or-create（同カテゴリ複数行は MVP では作らない）。
+  PV=メーカー/型番/容量/枚数、BT=メーカー/型番/容量、付帯(EQ/IH/AC/ACCESSORY)=該当項目。保証は
+  `warrantyStandard`（PV/BT 総合）/ `warrantyExtended`（PV・BT 延長）/ `warrantyDisaster`（BT 自然災害）を編集可能。
+- **契約金額の正**: 契約金額は `Contract.contractAmount` を正とし、`getProjectInfo` の `financials.contractAmount`
+  サマリ（契約金額合計）に反映される。Customer 手動列 `Customer.contractAmount`（一覧バッジ用概況）とは別概念で併存。
+- **基本情報タブの「契約予定情報」は読み取り専用（`contractReadOnly`）**。編集トリガー（追加/編集）は出さず、
+  編集面は契約状況タブに集約する。二次店ロール（`editable=null`）では追加/編集導線を一切描画しない。
+
+> **設計上の位置づけ**: Contract/Deal の自動生成は本来 **クロージングフロー（SP-05）の責務** であり、
+> 本節の生成は契約状況タブでの設備入力を成立させるための **デモ用途の最小生成** である（コードにも明記）。
+> 正式なクロージングフロー実装時には、本節の find-or-create とクロージング側の生成を統合・整理する。
+
 ---
 
 ## 17. アポ取り顧客 住環境・家族属性ヒアリングデータモデル（F-063 拡張設計）

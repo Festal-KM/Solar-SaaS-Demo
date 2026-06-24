@@ -1364,6 +1364,18 @@ async function seedContractProjectData(
           },
         });
       }
+      // 付帯商材（EQ=エコキュート等）。PV/BT に加え付帯と保証が表示されることを確認できるよう投入。
+      await tx.contractEquipment.create({
+        data: {
+          contractId: c.id,
+          category: "EQ",
+          contracted: true,
+          manufacturer: ["三菱", "パナソニック", "ダイキン"][seq % 3],
+          model: `SRT-${300 + (seq % 60)}`,
+          introducedStatus: seq % 2 === 0 ? "NEW" : "EXISTING",
+          warrantyExtended: seq % 2 === 0,
+        },
+      });
     }
 
     // GrossProfit（1:1）— 損益計算タブの実データ化。未作成のときのみ（冪等）。

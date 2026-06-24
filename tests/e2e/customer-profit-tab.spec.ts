@@ -148,11 +148,20 @@ test.describe("顧客詳細『損益計算』タブ（F-061 / 卸業者）", () 
   }) => {
     await signInAsDemo(page);
 
-    // 商談中(未契約)で絞り込み → 契約=GrossProfit を持たない顧客行。
-    await page.goto("/customers?contractStatus=negotiating");
-    const firstRow = page.getByRole("button", { name: /様$/ }).first();
-    await expect(firstRow).toBeVisible();
-    await firstRow.click();
+    // 契約=GrossProfit を持たない顧客を確実に開く。商談中フィルタの先頭行はマスク名が
+    // 重複する別顧客（契約あり）に当たり得るため、契約 0 件で安定している「佐藤 一馬」を
+    // 一覧検索（DB raw name に contains マッチ）で引き当てる。
+    await page.goto("/customers");
+    const search = page.getByRole("searchbox").first();
+    await expect(search).toBeVisible();
+    await search.fill("佐藤 一馬");
+    await page.getByRole("button", { name: "検索" }).click();
+    // 検索が URL クエリに反映されてから、マスク名「佐藤様」の行を明示クリックする
+    // （検索適用前の先頭行＝別顧客の誤クリックを防ぐ）。
+    await page.waitForURL(/[?&]query=/, { timeout: 30_000 });
+    const targetRow = page.getByRole("button", { name: "佐藤様" });
+    await expect(targetRow).toBeVisible({ timeout: 30_000 });
+    await targetRow.click();
     await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
 
     // 基本情報タブが描画され（クラッシュしない）、損益計算タブのゲート挙動を確認する。

@@ -245,27 +245,42 @@ function emptyItem(): AnyEquipmentItem {
   };
 }
 
+// 契約 0 件の顧客の設備追加グリッド用の空カテゴリ集合（全カテゴリ空配列）。
+function emptyAnyEquipment(): AnyEquipment {
+  return { PV: [], BT: [], EQ: [], IH: [], AC: [], ACCESSORY: [], GIFT: [] };
+}
+
 function EquipmentGrid({
   equipment,
   editSlotFor,
 }: {
   equipment: AnyEquipment;
-  // 代表設備行（firstOrEmpty）に対する編集トリガー。id が空（未契約プレースホルダ）の
-  // ときは編集不可（null）。
-  editSlotFor?: (item: AnyEquipmentItem, title: string) => React.ReactNode;
+  // 代表設備行（firstOrEmpty）に対する追加/編集トリガー。category と代表行 item
+  // （空カテゴリは id=""）を受け取り、追加（item.id 無し）/ 編集（item.id 有り）を分岐する。
+  editSlotFor?: (category: EquipmentCategoryKey, item: AnyEquipmentItem, title: string) => React.ReactNode;
 }) {
-  const card = (title: string, item: AnyEquipmentItem, rows: { label: string; value: string }[]) => (
-    <EquipmentCard title={title} item={item} rows={rows} editSlot={editSlotFor?.(item, title)} />
+  const card = (
+    category: EquipmentCategoryKey,
+    title: string,
+    item: AnyEquipmentItem,
+    rows: { label: string; value: string }[],
+  ) => (
+    <EquipmentCard
+      title={title}
+      item={item}
+      rows={rows}
+      editSlot={editSlotFor?.(category, item, title)}
+    />
   );
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      {card(e.pv, firstOrEmpty(equipment.PV), pvRows(firstOrEmpty(equipment.PV)))}
-      {card(e.bt, firstOrEmpty(equipment.BT), btRows(firstOrEmpty(equipment.BT)))}
-      {card(e.eq, firstOrEmpty(equipment.EQ), eqRows(firstOrEmpty(equipment.EQ)))}
-      {card(e.ih, firstOrEmpty(equipment.IH), ihRows(firstOrEmpty(equipment.IH)))}
-      {card(e.ac, firstOrEmpty(equipment.AC), acRows(firstOrEmpty(equipment.AC)))}
-      {card(e.accessory, firstOrEmpty(equipment.ACCESSORY), accessoryRows(firstOrEmpty(equipment.ACCESSORY)))}
-      {card(e.gift, firstOrEmpty(equipment.GIFT), giftRows(firstOrEmpty(equipment.GIFT)))}
+      {card("PV", e.pv, firstOrEmpty(equipment.PV), pvRows(firstOrEmpty(equipment.PV)))}
+      {card("BT", e.bt, firstOrEmpty(equipment.BT), btRows(firstOrEmpty(equipment.BT)))}
+      {card("EQ", e.eq, firstOrEmpty(equipment.EQ), eqRows(firstOrEmpty(equipment.EQ)))}
+      {card("IH", e.ih, firstOrEmpty(equipment.IH), ihRows(firstOrEmpty(equipment.IH)))}
+      {card("AC", e.ac, firstOrEmpty(equipment.AC), acRows(firstOrEmpty(equipment.AC)))}
+      {card("ACCESSORY", e.accessory, firstOrEmpty(equipment.ACCESSORY), accessoryRows(firstOrEmpty(equipment.ACCESSORY)))}
+      {card("GIFT", e.gift, firstOrEmpty(equipment.GIFT), giftRows(firstOrEmpty(equipment.GIFT)))}
     </div>
   );
 }
@@ -889,6 +904,26 @@ export function ProjectContractList({
     if (readOnly || !editable) return null;
     return (editable.equipmentByContract[contractId] ?? []).find((e) => e.id === equipmentId) ?? null;
   }
+  // 設備カードの追加/編集トリガー（権限保持者のみ）。空カテゴリ（item.id 無し）は追加、
+  // 既存行は編集。contractId が null（契約 0 件）でも追加でき、保存時にサーバーが契約を生成する。
+  function equipmentEditSlot(
+    contractId: string | null,
+    category: EquipmentCategoryKey,
+    item: AnyEquipmentItem,
+    title: string,
+  ): React.ReactNode {
+    if (!customerId) return null;
+    const ee = item.id && contractId ? editEquipmentById(contractId, item.id) : null;
+    return (
+      <EditEquipmentDialog
+        customerId={customerId}
+        category={category}
+        contractId={contractId}
+        initial={ee}
+        title={title}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -898,11 +933,27 @@ export function ProjectContractList({
         <MetaItem label={f.contractAmount} value={fmtYen(data.financials.contractAmount)} />
       </Section>
 
-      {/* 契約（1:N。各契約に金額・支払・設備明細を展開） */}
+      {/* 契約（1:N。各契約に金額・支払・設備明細を展開）。契約 0 件でも、権限保持者には
+          設備の追加導線（空カテゴリの＋）を出し、保存時にサーバーが最小契約を生成する。 */}
       {contracts.length === 0 ? (
-        <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
-          {p.noContract}
-        </p>
+        customerId ? (
+          <div className="space-y-4 rounded-md border border-hairline-light p-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+                {p.sections.equipment}
+              </h3>
+              <span className="text-[11px] text-mute-light">{p.equipmentAddHint}</span>
+            </div>
+            <EquipmentGrid
+              equipment={emptyAnyEquipment()}
+              editSlotFor={(category, item, title) => equipmentEditSlot(null, category, item, title)}
+            />
+          </div>
+        ) : (
+          <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+            {p.noContract}
+          </p>
+        )
       ) : (
         contracts.map((c, idx) => {
           const ec = editContractById.get(c.contractId);
@@ -954,13 +1005,8 @@ export function ProjectContractList({
                   equipment={c.equipment}
                   editSlotFor={
                     customerId
-                      ? (item, title) => {
-                          if (!item.id) return null;
-                          const ee = editEquipmentById(c.contractId, item.id);
-                          return ee ? (
-                            <EditEquipmentDialog customerId={customerId} initial={ee} title={title} />
-                          ) : null;
-                        }
+                      ? (category, item, title) =>
+                          equipmentEditSlot(c.contractId, category, item, title)
                       : undefined
                   }
                 />

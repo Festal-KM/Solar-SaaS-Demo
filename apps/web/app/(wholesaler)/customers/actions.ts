@@ -19,6 +19,7 @@
 
 
 import {
+  buildDemoContractSeed,
   CustomerCreateSchema,
   CustomerHearingSchema,
   CustomerUpdateSchema,
@@ -26,7 +27,7 @@ import {
   ProjectConstructionEditSchema,
   ProjectCallStatusSchema,
   ProjectContractEditSchema,
-  ProjectEquipmentEditSchema,
+  ProjectContractEquipmentUpsertSchema,
   ProjectOverviewSchema,
 } from "@solar/contracts";
 import { Prisma } from "@solar/db";
@@ -43,7 +44,7 @@ import type {
   ProjectConstructionEditInput,
   ProjectCallStatusInput,
   ProjectContractEditInput,
-  ProjectEquipmentEditInput,
+  ProjectContractEquipmentUpsertInput,
   ProjectOverviewInput,
 } from "@solar/contracts";
 
@@ -542,25 +543,99 @@ export const saveProjectContractAction = withServerActionContext<
   },
 );
 
-// 設備明細（ContractEquipment の非価格フィールドのみ）。
-export const saveProjectEquipmentAction = withServerActionContext<
-  ProjectEquipmentEditInput,
-  SaveProjectSectionResult
+// ---------------------------------------------------------------------------
+// 契約状況タブ: 設備の追加・編集（契約 find-or-create 方式）.
+//
+// 契約が無い顧客でも PV/BT/付帯の設備・保証・契約金額を入力できるようにする。保存時に
+// 顧客の契約が無ければ **デモ用の最小 Deal + Contract** を生成して紐づける（1 顧客 1
+// 契約想定）。Contract/Deal の自動生成は本来クロージングフローの責務であり、ここでは
+// 設備入力を成立させるためのデモ用途の最小生成である。GrossProfit / Incentive は
+// 生成しない（損益・インセンティブ集計を汚さない）。仕入値スナップショット
+// （ContractItem.snapshot*）も作らない（CLAUDE.md #4 / #5）。
+//
+// テナント整合: wholesalerId は ctx 由来、customerId 配下の Deal/Contract のみ操作する。
+// 全クエリ withTenant + RLS の二重防御を通す。設備は contractId × category で代表 1 行を
+// find-or-create（同カテゴリ複数行は MVP では作らない）。
+// ---------------------------------------------------------------------------
+export const saveProjectContractEquipmentAction = withServerActionContext<
+  ProjectContractEquipmentUpsertInput,
+  SaveProjectSectionResult & { contractId: string }
 >(
   { action: "customer.update" },
-  async ({ tx, input }) => {
-    const parsed = ProjectEquipmentEditSchema.parse(input);
+  async ({ tx, ctx, input }) => {
+    const parsed = ProjectContractEquipmentUpsertSchema.parse(input);
 
-    // 設備が当該 contract（かつ当該 customer）配下であることを検証（越境防止）。
-    const eq = await tx.contractEquipment.findFirst({
-      where: {
-        id: parsed.equipmentId,
-        contractId: parsed.contractId,
-        contract: { customerId: parsed.customerId },
-      },
-      select: { id: true },
+    const customer = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true, wholesalerId: true, ownerRelationshipId: true },
     });
-    if (!eq) throw new NotFoundError("設備明細が見つかりません");
+    if (!customer) throw new NotFoundError("顧客が見つかりません");
+
+    // 契約 find-or-create。contractId 指定時はそれを当該 customer 配下で検証して使う。
+    let contractId: string | null = null;
+    if (parsed.contractId) {
+      const found = await tx.contract.findFirst({
+        where: { id: parsed.contractId, customerId: parsed.customerId },
+        select: { id: true },
+      });
+      if (!found) throw new NotFoundError("契約が見つかりません");
+      contractId = found.id;
+    } else {
+      const existing = await tx.contract.findFirst({
+        where: { customerId: parsed.customerId },
+        orderBy: { contractDate: "asc" },
+        select: { id: true },
+      });
+      contractId = existing?.id ?? null;
+    }
+
+    // 契約が無ければデモ用の最小 Deal + Contract を生成（GrossProfit/Incentive は作らない）。
+    if (!contractId) {
+      const settings = await tx.wholesalerSettings.findUnique({
+        where: { wholesalerId: customer.wholesalerId },
+        select: { cancelDeadlineDays: true },
+      });
+      const seed = buildDemoContractSeed({
+        contractAmount: parsed.contractAmount ?? null,
+        hasBattery: parsed.category === "BT",
+        cancelDeadlineDays: settings?.cancelDeadlineDays,
+      });
+      // ownerType は登録主体に合わせる（二次店配下なら DEALER）。
+      const ownerType = ctx.dealerId ? "DEALER" : "WHOLESALER";
+      const deal = await tx.deal.create({
+        data: {
+          customerId: parsed.customerId,
+          ownerType,
+          ownerUserId: ctx.actorUserId,
+          ownerRelationshipId: customer.ownerRelationshipId,
+          status: seed.dealStatus,
+        },
+        select: { id: true },
+      });
+      const contract = await tx.contract.create({
+        data: {
+          wholesalerId: customer.wholesalerId,
+          dealId: deal.id,
+          customerId: parsed.customerId,
+          ownerRelationshipId: customer.ownerRelationshipId,
+          contractDate: seed.contractDate,
+          contractAmount: seed.contractAmount,
+          cancelDeadline: seed.cancelDeadline,
+          hasBattery: seed.hasBattery,
+          status: seed.status,
+          createdBy: ctx.actorUserId,
+        },
+        select: { id: true },
+      });
+      contractId = contract.id;
+    } else if (parsed.contractAmount != null) {
+      // 既存契約に対して契約金額の指定があれば反映（Contract.contractAmount を正とする）。
+      await tx.contract.update({
+        where: { id: contractId },
+        data: { contractAmount: parsed.contractAmount },
+        select: { id: true },
+      });
+    }
 
     const attributes:
       | Prisma.InputJsonValue
@@ -572,39 +647,61 @@ export const saveProjectEquipmentAction = withServerActionContext<
           ? (parsed.attributes as Prisma.InputJsonValue)
           : Prisma.JsonNull;
 
-    await tx.contractEquipment.update({
-      where: { id: parsed.equipmentId },
-      data: {
-        ...(parsed.contracted !== undefined ? { contracted: parsed.contracted } : {}),
-        ...(parsed.manufacturer !== undefined
-          ? { manufacturer: parsed.manufacturer?.trim() || null }
-          : {}),
-        ...(parsed.model !== undefined ? { model: parsed.model?.trim() || null } : {}),
-        ...(parsed.capacity !== undefined ? { capacity: parsed.capacity?.trim() || null } : {}),
-        ...(parsed.quantity !== undefined ? { quantity: parsed.quantity } : {}),
-        ...(parsed.installLocation !== undefined
-          ? { installLocation: parsed.installLocation?.trim() || null }
-          : {}),
-        ...(parsed.introducedStatus !== undefined
-          ? { introducedStatus: parsed.introducedStatus }
-          : {}),
-        ...(parsed.warrantyStandard !== undefined
-          ? { warrantyStandard: parsed.warrantyStandard }
-          : {}),
-        ...(parsed.warrantyExtended !== undefined
-          ? { warrantyExtended: parsed.warrantyExtended }
-          : {}),
-        ...(parsed.warrantyDisaster !== undefined
-          ? { warrantyDisaster: parsed.warrantyDisaster }
-          : {}),
-        ...(parsed.detail !== undefined ? { detail: parsed.detail?.trim() || null } : {}),
-        ...(attributes !== undefined ? { attributes } : {}),
-      },
+    // 設備は contractId × category の代表 1 行を find-or-create（同カテゴリ複数は作らない）。
+    const existingEq = await tx.contractEquipment.findFirst({
+      where: { contractId, category: parsed.category },
+      orderBy: { createdAt: "asc" },
       select: { id: true },
     });
 
+    const writable = {
+      ...(parsed.contracted !== undefined ? { contracted: parsed.contracted } : {}),
+      ...(parsed.manufacturer !== undefined
+        ? { manufacturer: parsed.manufacturer?.trim() || null }
+        : {}),
+      ...(parsed.model !== undefined ? { model: parsed.model?.trim() || null } : {}),
+      ...(parsed.capacity !== undefined ? { capacity: parsed.capacity?.trim() || null } : {}),
+      ...(parsed.quantity !== undefined ? { quantity: parsed.quantity } : {}),
+      ...(parsed.installLocation !== undefined
+        ? { installLocation: parsed.installLocation?.trim() || null }
+        : {}),
+      ...(parsed.introducedStatus !== undefined
+        ? { introducedStatus: parsed.introducedStatus }
+        : {}),
+      ...(parsed.warrantyStandard !== undefined
+        ? { warrantyStandard: parsed.warrantyStandard }
+        : {}),
+      ...(parsed.warrantyExtended !== undefined
+        ? { warrantyExtended: parsed.warrantyExtended }
+        : {}),
+      ...(parsed.warrantyDisaster !== undefined
+        ? { warrantyDisaster: parsed.warrantyDisaster }
+        : {}),
+      ...(parsed.detail !== undefined ? { detail: parsed.detail?.trim() || null } : {}),
+      ...(attributes !== undefined ? { attributes } : {}),
+    };
+
+    if (existingEq) {
+      await tx.contractEquipment.update({
+        where: { id: existingEq.id },
+        data: writable,
+        select: { id: true },
+      });
+    } else {
+      await tx.contractEquipment.create({
+        data: {
+          contractId,
+          category: parsed.category,
+          // 新規追加時は明示指定が無ければ「契約あり」を既定とする（追加導線の意図）。
+          contracted: parsed.contracted ?? true,
+          ...writable,
+        },
+        select: { id: true },
+      });
+    }
+
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
-    return { customerId: parsed.customerId };
+    return { customerId: parsed.customerId, contractId };
   },
 );
 

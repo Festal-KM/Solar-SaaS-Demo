@@ -7,7 +7,7 @@
 // 編集対象は既存列のみ。仕入値スナップショット（ContractItem.snapshot*）は扱わない。
 
 import { LOAN_REVIEW_STATUS_VALUES } from "@solar/contracts";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -32,7 +32,7 @@ import {
   saveProjectCallStatusAction,
   saveProjectConstructionAction,
   saveProjectContractAction,
-  saveProjectEquipmentAction,
+  saveProjectContractEquipmentAction,
   saveProjectOverviewAction,
 } from "../actions";
 
@@ -45,7 +45,11 @@ import type {
   ProjectHearingEditable,
   ProjectOverviewEditable,
 } from "@/lib/customer/get-project-info-editable";
-import type { CallStatusValue, LoanReviewStatusValue } from "@solar/contracts";
+import type {
+  CallStatusValue,
+  EquipmentCategoryValue,
+  LoanReviewStatusValue,
+} from "@solar/contracts";
 
 const p = labels.customer.detail.projectInfo;
 const ed = p.edit;
@@ -94,7 +98,7 @@ function selectToBool(v: string): boolean | null {
   return v === "true";
 }
 
-function EditTrigger({ label }: { label: string }) {
+function EditTrigger({ label, mode = "edit" }: { label: string; mode?: "edit" | "add" }) {
   return (
     <DialogTrigger asChild>
       <Button
@@ -104,7 +108,7 @@ function EditTrigger({ label }: { label: string }) {
         className="size-7 text-mute-light hover:text-ink"
         aria-label={label}
       >
-        <Pencil className="size-4" />
+        {mode === "add" ? <Plus className="size-4" /> : <Pencil className="size-4" />}
       </Button>
     </DialogTrigger>
   );
@@ -760,43 +764,56 @@ export function EditContractDialog({
   );
 }
 
-/* ── 設備明細（ContractEquipment の非価格フィールドのみ） ── */
+/* ── 設備明細（ContractEquipment の非価格フィールドのみ。契約 find-or-create 方式） ──
+   契約状況タブで PV/BT/付帯の設備を追加・編集する。initial が null（空カテゴリ）の
+   ときは「追加」モード（＋アイコン）、既存行があれば「編集」モード（鉛筆）。保存は
+   saveProjectContractEquipmentAction（契約が無ければデモ用に最小 Deal+Contract を生成）。
+   contractId が null（契約 0 件）のときは契約金額も同時入力できる。 */
 export function EditEquipmentDialog({
   customerId,
-  initial,
+  category,
+  contractId,
+  initial = null,
   title,
 }: {
   customerId: string;
-  initial: ProjectEquipmentEditable;
+  category: EquipmentCategoryValue;
+  // 契約 0 件の顧客では null。設備保存時にサーバー側で最小契約を生成する。
+  contractId: string | null;
+  initial?: ProjectEquipmentEditable | null;
   title: string;
 }) {
   const e = p.equipment;
+  const isAdd = initial == null;
   const [open, setOpen] = useState(false);
-  const [contracted, setContracted] = useState(initial.contracted);
-  const [manufacturer, setManufacturer] = useState(initial.manufacturer ?? "");
-  const [model, setModel] = useState(initial.model ?? "");
-  const [capacity, setCapacity] = useState(initial.capacity ?? "");
-  const [quantity, setQuantity] = useState(initial.quantity != null ? String(initial.quantity) : "");
-  const [installLocation, setInstallLocation] = useState(initial.installLocation ?? "");
-  const [introducedStatus, setIntroducedStatus] = useState(initial.introducedStatus ?? "");
-  const [warrantyStandard, setWarrantyStandard] = useState(boolToSelect(initial.warrantyStandard));
-  const [warrantyExtended, setWarrantyExtended] = useState(boolToSelect(initial.warrantyExtended));
-  const [warrantyDisaster, setWarrantyDisaster] = useState(boolToSelect(initial.warrantyDisaster));
-  const [detail, setDetail] = useState(initial.detail ?? "");
+  const [contracted, setContracted] = useState(initial?.contracted ?? true);
+  const [manufacturer, setManufacturer] = useState(initial?.manufacturer ?? "");
+  const [model, setModel] = useState(initial?.model ?? "");
+  const [capacity, setCapacity] = useState(initial?.capacity ?? "");
+  const [quantity, setQuantity] = useState(initial?.quantity != null ? String(initial.quantity) : "");
+  const [installLocation, setInstallLocation] = useState(initial?.installLocation ?? "");
+  const [introducedStatus, setIntroducedStatus] = useState(initial?.introducedStatus ?? "");
+  const [warrantyStandard, setWarrantyStandard] = useState(boolToSelect(initial?.warrantyStandard ?? null));
+  const [warrantyExtended, setWarrantyExtended] = useState(boolToSelect(initial?.warrantyExtended ?? null));
+  const [warrantyDisaster, setWarrantyDisaster] = useState(boolToSelect(initial?.warrantyDisaster ?? null));
+  const [detail, setDetail] = useState(initial?.detail ?? "");
+  // 契約金額は契約 0 件の追加時のみ入力（既存契約があれば EditContractDialog 側で編集）。
+  const [contractAmount, setContractAmount] = useState("");
   const { pending, run } = useSaver(() => setOpen(false));
 
   function reset() {
-    setContracted(initial.contracted);
-    setManufacturer(initial.manufacturer ?? "");
-    setModel(initial.model ?? "");
-    setCapacity(initial.capacity ?? "");
-    setQuantity(initial.quantity != null ? String(initial.quantity) : "");
-    setInstallLocation(initial.installLocation ?? "");
-    setIntroducedStatus(initial.introducedStatus ?? "");
-    setWarrantyStandard(boolToSelect(initial.warrantyStandard));
-    setWarrantyExtended(boolToSelect(initial.warrantyExtended));
-    setWarrantyDisaster(boolToSelect(initial.warrantyDisaster));
-    setDetail(initial.detail ?? "");
+    setContracted(initial?.contracted ?? true);
+    setManufacturer(initial?.manufacturer ?? "");
+    setModel(initial?.model ?? "");
+    setCapacity(initial?.capacity ?? "");
+    setQuantity(initial?.quantity != null ? String(initial.quantity) : "");
+    setInstallLocation(initial?.installLocation ?? "");
+    setIntroducedStatus(initial?.introducedStatus ?? "");
+    setWarrantyStandard(boolToSelect(initial?.warrantyStandard ?? null));
+    setWarrantyExtended(boolToSelect(initial?.warrantyExtended ?? null));
+    setWarrantyDisaster(boolToSelect(initial?.warrantyDisaster ?? null));
+    setDetail(initial?.detail ?? "");
+    setContractAmount("");
   }
 
   function onOpenChange(next: boolean) {
@@ -806,10 +823,12 @@ export function EditEquipmentDialog({
 
   function save() {
     run(() =>
-      saveProjectEquipmentAction({
+      saveProjectContractEquipmentAction({
         customerId,
-        contractId: initial.contractId,
-        equipmentId: initial.id,
+        contractId: initial?.contractId ?? contractId,
+        category,
+        // 契約 0 件の追加時のみ契約金額を渡す（既存契約には触らない）。
+        contractAmount: contractId == null && isAdd ? numOrNull(contractAmount) : undefined,
         contracted,
         manufacturer: strOrNull(manufacturer),
         model: strOrNull(model),
@@ -826,16 +845,31 @@ export function EditEquipmentDialog({
     );
   }
 
+  const triggerLabel = isAdd ? `${title} ${ed.addEquipment}` : `${title} ${ed.editEquipment}`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <EditTrigger label={`${title} ${ed.editEquipment}`} />
+      <EditTrigger label={triggerLabel} mode={isAdd ? "add" : "edit"} />
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {title} — {ed.editEquipment}
+            {title} — {isAdd ? ed.addEquipment : ed.editEquipment}
           </DialogTitle>
         </DialogHeader>
         <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+          {contractId == null && isAdd ? (
+            <FormField label={f.contractAmount} htmlFor="eq-contract-amount">
+              <Input
+                id="eq-contract-amount"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={contractAmount}
+                onChange={(ev) => setContractAmount(ev.target.value)}
+                placeholder="0"
+              />
+            </FormField>
+          ) : null}
           <FormField label={p.contracted} htmlFor="eq-contracted">
             <select id="eq-contracted" className={FIELD} value={contracted ? "true" : "false"} onChange={(ev) => setContracted(ev.target.value === "true")}>
               <option value="true">{p.contracted}</option>
