@@ -892,12 +892,10 @@ export function ProjectContractList({
 
   return (
     <div className="space-y-6">
-      {/* 契約・金額（金額サマリ） */}
+      {/* 契約・金額（金額サマリ）。ご提案金額・インセンティブ額・粗利は契約内容には
+          表示しない（粗利は損益計算タブに集約）。 */}
       <Section title={p.sections.contract}>
         <MetaItem label={f.contractAmount} value={fmtYen(data.financials.contractAmount)} />
-        <MetaItem label={f.proposalAmount} value={fmtYen(data.financials.proposedAmount)} />
-        <MetaItem label={f.incentiveGrossProfit} value={fmtYen(data.financials.incentiveGrossProfit)} />
-        <MetaItem label={f.incentiveAmount} value={fmtYen(data.financials.incentiveAmount)} />
       </Section>
 
       {/* 契約（1:N。各契約に金額・支払・設備明細を展開） */}
@@ -918,7 +916,6 @@ export function ProjectContractList({
               </div>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
                 <MetaItem label={f.contractDate} value={fmtDate(c.contractDate)} />
-                <MetaItem label={f.proposalAmount} value={fmtYen(c.proposedAmount)} />
                 <MetaItem label={f.contractAmount} value={fmtYen(c.contractAmount)} />
                 <MetaItem label={f.paymentCount} value={c.paymentCount != null ? `${c.paymentCount} 回` : null} />
                 <MetaItem
