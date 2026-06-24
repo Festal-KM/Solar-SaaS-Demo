@@ -415,6 +415,47 @@ function HearingSection({
   );
 }
 
+// 現状情報（住環境ヒアリング + 概況）。基本情報タブの「現状情報」セクションから
+// 再利用する。ヒアリング(F-063: 既設設備/家族属性/連絡先) + 概況(電気代/世帯/住居種別/
+// 流入経路/マエカク状況)。いずれも「現状」の情報であり契約予定とは別概念。
+// editable 非 null（customer.update 権限）のとき各セクションに編集ダイアログを出す。
+export function ProjectCurrentStateInfo({
+  data,
+  editable = null,
+}: {
+  data: CustomerProjectInfoData;
+  editable?: ProjectInfoEditable | null;
+}) {
+  const f = p.fields;
+  const customerId = editable?.customerId ?? null;
+  return (
+    <div className="space-y-6">
+      <HearingSection
+        hearing={data.hearing}
+        editSlot={
+          customerId && editable ? (
+            <EditHearingDialog customerId={customerId} initial={editable.hearing} />
+          ) : null
+        }
+      />
+      <Section
+        title={p.sections.overview}
+        editSlot={
+          customerId && editable ? (
+            <EditOverviewDialog customerId={customerId} initial={editable.overview} />
+          ) : null
+        }
+      >
+        <MetaItem label={f.electricBill} value={data.overview.electricBill} />
+        <MetaItem label={f.household} value={data.overview.household} />
+        <MetaItem label={f.housingType} value={data.overview.housingType} />
+        <MetaItem label={f.inflowRoute} value={data.overview.inflowRoute} />
+        <MetaItem label={f.maekakuStatus} value={data.overview.maekakuStatus} />
+      </Section>
+    </div>
+  );
+}
+
 // コール状況 1 セクション（顧客単位・単一）。専用「コール状況」タブと、
 // 非 embedded の案件情報ビューの両方から再利用する（embedded では抑制）。
 export function ProjectCallStatusSection({
@@ -1085,31 +1126,10 @@ export function CustomerProjectInfo({
         </section>
       ) : null}
 
-      {/* ヒアリング（住環境・家族）— F-063。既設設備（現況）/ 家族属性 / 連絡先 / クロスセル候補 */}
-      <HearingSection
-        hearing={data.hearing}
-        editSlot={
-          customerId && editable ? (
-            <EditHearingDialog customerId={customerId} initial={editable.hearing} />
-          ) : null
-        }
-      />
-
-      {/* 概況 */}
-      <Section
-        title={p.sections.overview}
-        editSlot={
-          customerId && editable ? (
-            <EditOverviewDialog customerId={customerId} initial={editable.overview} />
-          ) : null
-        }
-      >
-        <MetaItem label={f.electricBill} value={data.overview.electricBill} />
-        <MetaItem label={f.household} value={data.overview.household} />
-        <MetaItem label={f.housingType} value={data.overview.housingType} />
-        <MetaItem label={f.inflowRoute} value={data.overview.inflowRoute} />
-        <MetaItem label={f.maekakuStatus} value={data.overview.maekakuStatus} />
-      </Section>
+      {/* ヒアリング（住環境・家族）+ 概況 — F-063。いずれも「現状情報」であり、
+          embedded（基本情報タブ）では現状情報セクションの ProjectCurrentStateInfo に
+          集約するため抑制する。非 embedded（フル表示）でのみ展開。 */}
+      {!embedded ? <ProjectCurrentStateInfo data={data} editable={editable} /> : null}
 
       {/* コール状況（embedded 時は専用「コール状況」タブに集約するため抑制） */}
       {!embedded ? <ProjectCallStatusSection data={data} editable={editable} /> : null}

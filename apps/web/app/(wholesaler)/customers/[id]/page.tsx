@@ -30,7 +30,7 @@ import { CustomerFiles } from "./customer-files";
 import { CustomerHistory } from "./customer-history";
 import {
   CustomerProjectInfo,
-  ExistingEquipmentDisplay,
+  ProjectCurrentStateInfo,
   ProjectCallStatusSection,
   ProjectConstructionList,
   ProjectContractList,
@@ -451,15 +451,10 @@ export default async function CustomerDetailPage({ params }: PageProps) {
             )}
           </Card>
 
-          {/* 既存設備（現況）— ヒアリング由来。表示のみ（編集はヒアリングタブ経路）。 */}
+          {/* 現状情報の詳細 — 住環境ヒアリング(既設設備/家族属性/連絡先) + 概況。
+              いずれも「現状」の情報。編集は権限保持者のみ各セクションのダイアログで。 */}
           <Card className="p-5">
-            <div className="mb-1 flex items-baseline gap-2">
-              <h2 className="text-sm font-semibold text-ink">{d.existingEquipmentTitle}</h2>
-              <span className="text-xs text-mute-light">{d.existingEquipmentHint}</span>
-            </div>
-            <div className="mt-3">
-              <ExistingEquipmentDisplay hearing={projectInfo.hearing} />
-            </div>
+            <ProjectCurrentStateInfo data={projectInfo} editable={projectInfoEditable} />
           </Card>
 
           <Card className="p-5">
