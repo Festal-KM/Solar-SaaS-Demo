@@ -33,6 +33,7 @@ import {
   ExistingEquipmentDisplay,
   ProjectCallStatusSection,
   ProjectConstructionList,
+  ProjectContractList,
   ProjectLoanInfoList,
   ProjectProfitList,
 } from "./customer-project-info";
@@ -304,7 +305,6 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         phone: editable.phone,
         email: editable.email,
         postalCode: editable.postalCode,
-        address: editable.address,
         area: editable.area,
         inflowRoute: editable.inflowRoute,
         prefecture: editable.prefecture,
@@ -437,7 +437,6 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 <InfoRow label={d.fields.city} value={detail.city} />
                 <InfoRow label={d.fields.addressLine} value={detail.addressLine} />
                 <InfoRow label={d.fields.area} value={detail.area} />
-                <InfoRow label={d.fields.address} value={detail.address} />
                 <InfoRow label={d.fields.phone} value={detail.phone} />
                 <InfoRow label={d.fields.email} value={detail.email} />
                 <InfoRow label={d.fields.buildYear} value={formatDay(detail.buildYear)} />
@@ -474,12 +473,18 @@ export default async function CustomerDetailPage({ params }: PageProps) {
             )}
           </Card>
 
-          {/* ── 契約予定情報 — これから契約する案件のプラン・金額・予定日など ── */}
-          {/* F-061 統合ビュー。重複する基本情報・体制・備考は embedded で抑制し、
-              案件固有のみ表示する。 */}
+          {/* ── 契約予定情報 — 契約状況タブの内容を読み取り専用で pull 表示 ──
+              契約・金額/契約明細/認定の編集面は契約状況タブに集約し、ここには
+              編集トリガーを出さない（contractReadOnly）。重複する基本情報・体制・
+              備考は embedded で抑制する。 */}
           <SectionHeading title={d.plannedInfoSection} hint={d.plannedInfoHint} />
           <Card className="p-5">
-            <CustomerProjectInfo data={projectInfo} embedded editable={projectInfoEditable} />
+            <CustomerProjectInfo
+              data={projectInfo}
+              embedded
+              editable={projectInfoEditable}
+              contractReadOnly
+            />
           </Card>
         </TabsContent>
 
@@ -556,18 +561,34 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </div>
         </TabsContent>
 
-        {/* 契約状況 — 契約プラン / 金額 / 契約予定日（インライン編集） */}
-        <TabsContent value="contract">
+        {/* 契約状況 — 契約予定情報の単一の表示・編集面。
+            概況（Customer 手動列: プラン/金額/予定日。一覧バッジ用）+ 案件詳細
+            （Contract モデル由来の per-contract 契約・金額/設備明細/認定）。 */}
+        <TabsContent value="contract" className="space-y-4">
           <Card className="p-5">
-            <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.contract}</h2>
-            <ContractStatusPanel
-              customerId={detail.id}
-              initial={{
-                plan: detail.contract.plan,
-                amount: detail.contract.amount,
-                expectedDate: detail.contract.expectedDate,
-              }}
-            />
+            <div className="mb-1 flex items-baseline gap-2">
+              <h2 className="text-sm font-semibold text-ink">{d.contractTab.summaryTitle}</h2>
+              <span className="text-xs text-mute-light">{d.contractTab.summaryHint}</span>
+            </div>
+            <div className="mt-3">
+              <ContractStatusPanel
+                customerId={detail.id}
+                initial={{
+                  plan: detail.contract.plan,
+                  amount: detail.contract.amount,
+                  expectedDate: detail.contract.expectedDate,
+                }}
+              />
+            </div>
+          </Card>
+          <Card className="p-5">
+            <div className="mb-1 flex items-baseline gap-2">
+              <h2 className="text-sm font-semibold text-ink">{d.contractTab.detailTitle}</h2>
+              <span className="text-xs text-mute-light">{d.contractTab.detailHint}</span>
+            </div>
+            <div className="mt-3">
+              <ProjectContractList data={projectInfo} editable={projectInfoEditable} />
+            </div>
           </Card>
         </TabsContent>
 

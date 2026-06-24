@@ -39,33 +39,62 @@ async function openContractedCustomer(page: Page): Promise<void> {
 test.describe("F-062 案件情報インライン編集（基本情報タブ統合ビュー）", () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test("卸業者: 概況/ヒアリング/契約/設備明細 に編集トリガーが出る（工事/認定は行があれば出る）", async ({
+  test("卸業者: 基本情報タブには概況/ヒアリングの編集トリガーが出る（契約系は契約状況タブへ集約され読み取り専用）", async ({
     page,
   }) => {
     await signInAsDemo(page);
     await openContractedCustomer(page);
 
+    // 既定の「基本情報」タブ。概況/ヒアリングは現状情報側に残るため編集トリガーが出る。
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 
-    // 契約済み顧客で必ず存在するセクションの編集トリガー（aria-label で識別）。
-    for (const label of ["概況を編集", "ヒアリングを編集", "契約・金額・ローンを編集"]) {
+    for (const label of ["概況を編集", "ヒアリングを編集"]) {
       await expect(
         panel.getByRole("button", { name: label }).first(),
-        `編集トリガー「${label}」が表示される`,
+        `基本情報タブの編集トリガー「${label}」が表示される`,
       ).toBeVisible();
     }
 
-    // 設備明細カードにも編集トリガーが出る（契約配下の設備行）。
+    // 契約・金額/契約明細/認定の編集面は契約状況タブへ集約された（contractReadOnly）。
+    // 基本情報タブの「契約予定情報」pull 表示には契約系の編集トリガーが一切出ない。
+    for (const label of [
+      "契約・金額・ローンを編集",
+      "認定・設備（申請）を編集",
+    ]) {
+      await expect(
+        panel.getByRole("button", { name: label }),
+        `基本情報タブの読み取り専用 pull に「${label}」が出ないこと`,
+      ).toHaveCount(0);
+    }
+    await expect(
+      panel.getByRole("button", { name: /設備明細を編集/ }),
+      "基本情報タブの読み取り専用 pull に設備明細編集トリガーが出ないこと",
+    ).toHaveCount(0);
+    // 工事・完工（施工コスト）編集は専用「施工状況」タブへ集約されたため基本情報タブには出ない。
+    await expect(panel.getByRole("button", { name: "工事・完工を編集" })).toHaveCount(0);
+  });
+
+  test("卸業者: 契約状況タブに 契約・金額/設備明細/認定 の編集トリガーが集約される", async ({
+    page,
+  }) => {
+    await signInAsDemo(page);
+    await openContractedCustomer(page);
+
+    // 契約系の編集面は契約状況タブに集約された。
+    await page.getByRole("tab", { name: "契約状況" }).click();
+    const panel = page.getByRole("tabpanel");
+    await expect(panel).toBeVisible();
+
+    // 契約・金額・ローン編集トリガー + 設備明細編集トリガーが描画される。
+    await expect(
+      panel.getByRole("button", { name: "契約・金額・ローンを編集" }).first(),
+      "契約状況タブの契約編集トリガー",
+    ).toBeVisible();
     await expect(
       panel.getByRole("button", { name: /設備明細を編集/ }).first(),
-      "設備明細の編集トリガー",
+      "契約状況タブの設備明細編集トリガー",
     ).toBeVisible();
-
-    // 工事・完工（施工コスト）編集は専用「施工状況」タブへ集約されたため、基本情報タブの
-    // embedded ビューには出ない（重複排除）。施工コスト編集トリガーの検証は
-    // customer-construction-cost.spec.ts が担当する。
-    await expect(panel.getByRole("button", { name: "工事・完工を編集" })).toHaveCount(0);
 
     // 認定・設備 は行があるときのみ編集トリガーが出る（行が無い顧客ではプレースホルダのみ）。
     const hasApplication = (await panel.getByText("認定・申請情報がありません").count()) === 0;

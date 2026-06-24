@@ -2755,6 +2755,15 @@ model ContractPayment {
 > 入力初期値はマスク前の生値（`getCustomerEditableValues`）、表示マスク（name/phone/address）は読み取り専用フォールバックにのみ適用する。
 > `customer.update` 権限が無い場合（二次店・閲覧のみ）はインライン編集を描画せず読み取り専用 `InfoRow`（マスク済み）を表示する。
 > 既存設備の編集は F-063 ヒアリング編集経路（`EditHearingDialog`）に集約し、基本情報タブの現状情報では表示のみとする。
+>
+> **契約予定情報の単一ソース化（追補）**: 契約予定情報（Contract モデル由来の契約・金額／設備明細／認定）は **契約状況タブ（S-044 相当）を単一の表示・編集面** とする。
+> 契約状況タブは「概況（`ContractStatusPanel`。`Customer` 手動列 plan/amount/expectedDate。顧客一覧バッジ用の概況）」＋「案件詳細（`ProjectContractList`。`Contract` 1:N の契約・金額／設備明細／認定を `EditContractDialog`/`EditEquipmentDialog`/`EditApplicationDialog` で編集）」の 2 カードで構成する。
+> `ProjectContractList` は `customer-project-info.tsx` から `export` 抽出した共有コンポーネントで、`getCustomerProjectInfo`（`ProjectInfoDto.contracts/applications/financials`）/ `getCustomerProjectInfoEditable` を再利用し別系統の保存ロジックを新設しない。
+> 基本情報タブの「契約予定情報」は同コンポーネントを **`readOnly`（pull 表示）** で再利用し、編集トリガー（鉛筆）を一切描画しない（編集は契約状況タブに集約・二重編集 UI を排す）。`CustomerProjectInfo` embedded は `contractReadOnly` プロップで契約系セクションのみ読み取り専用化し、ヒアリング／概況は従来通り。
+> 二次店・閲覧のみ（`editable=null`）では `readOnly` と同様に編集トリガーを描画しない。仕入値スナップショット（`ContractItem.snapshot*`）は読みも書きもしない（CLAUDE.md #4・#5）。
+>
+> **住所欄重複解消（追補・小）**: 顧客情報インライン編集（`BasicInfoInlineEdit`）は構造化住所（`postalCode`/`prefecture`/`city`/`addressLine`）入力を持つため、重複するフルテキスト `address` 入力欄を **編集 UI から除去**する（`page.tsx` の `basicInitial` と読み取り専用 `InfoRow` も同様）。
+> DB カラム `Customer.address` 自体は保持し、顧客一覧検索（`address` contains）には影響させない（編集ローダの select は残置可）。
 
 ### 16.6 段階移行プラン
 

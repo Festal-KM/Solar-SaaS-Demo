@@ -830,22 +830,178 @@ export function ProjectProfitList({ rows }: { rows: ProjectProfitDto[] }) {
   );
 }
 
+// 契約・金額（金額サマリ）+ 各契約（1:N）の契約日・金額・支払・設備明細 + 認定・設備を
+// 1 つの面に集約した、契約予定情報の単一ソース。契約状況タブ（editable・編集可）と
+// 基本情報タブの「契約予定情報」（readOnly・pull 表示）の両方から再利用する。readOnly の
+// ときは編集トリガー（鉛筆）を一切描画しない（編集面は契約状況タブに集約）。
+export function ProjectContractList({
+  data,
+  editable = null,
+  readOnly = false,
+}: {
+  data: CustomerProjectInfoData;
+  editable?: ProjectInfoEditable | null;
+  readOnly?: boolean;
+}) {
+  const f = p.fields;
+  const contracts = data.contracts as AnyContract[];
+  // readOnly では編集トリガーを描画しないため customerId/editable 引き当ては無効化する。
+  const customerId = readOnly ? null : editable?.customerId ?? null;
+
+  const editContractById = new Map<string, ProjectContractEditable>(
+    (readOnly ? [] : editable?.contracts ?? []).map((ec) => [ec.contractId, ec]),
+  );
+  const editApplicationById = new Map<string, ProjectApplicationEditable>(
+    (readOnly ? [] : editable?.applications ?? []).map((a) => [a.applicationId, a]),
+  );
+  function editEquipmentById(contractId: string, equipmentId: string): ProjectEquipmentEditable | null {
+    if (readOnly || !editable) return null;
+    return (editable.equipmentByContract[contractId] ?? []).find((e) => e.id === equipmentId) ?? null;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* 契約・金額（金額サマリ） */}
+      <Section title={p.sections.contract}>
+        <MetaItem label={f.contractAmount} value={fmtYen(data.financials.contractAmount)} />
+        <MetaItem label={f.proposalAmount} value={fmtYen(data.financials.proposedAmount)} />
+        <MetaItem label={f.incentiveGrossProfit} value={fmtYen(data.financials.incentiveGrossProfit)} />
+        <MetaItem label={f.incentiveAmount} value={fmtYen(data.financials.incentiveAmount)} />
+      </Section>
+
+      {/* 契約（1:N。各契約に金額・支払・設備明細を展開） */}
+      {contracts.length === 0 ? (
+        <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+          {p.noContract}
+        </p>
+      ) : (
+        contracts.map((c, idx) => {
+          const ec = editContractById.get(c.contractId);
+          return (
+            <div key={c.contractId} className="space-y-4 rounded-md border border-hairline-light p-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+                  {`${p.sections.contract} #${idx + 1}`}
+                </h3>
+                {customerId && ec ? <EditContractDialog customerId={customerId} initial={ec} /> : null}
+              </div>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                <MetaItem label={f.contractDate} value={fmtDate(c.contractDate)} />
+                <MetaItem label={f.proposalAmount} value={fmtYen(c.proposedAmount)} />
+                <MetaItem label={f.contractAmount} value={fmtYen(c.contractAmount)} />
+                <MetaItem label={f.paymentCount} value={c.paymentCount != null ? `${c.paymentCount} 回` : null} />
+                <MetaItem
+                  label={f.paymentStatus}
+                  value={c.paymentStatus ? p.paymentStatusLabels[c.paymentStatus] ?? c.paymentStatus : null}
+                />
+                <MetaItem label={f.depositDate} value={fmtDate(c.depositDate)} />
+                <MetaItem label={f.dealerPayoutDate} value={fmtDate(c.dealerPayoutDate)} />
+                <MetaItem label={f.equipmentId} value={c.equipmentSerialId} />
+                <div className="min-w-0">
+                  <dt className="text-[11px] text-mute-light">{f.contractDocsUrl}</dt>
+                  <dd className="mt-0.5 text-sm font-medium">
+                    {c.docsUrl ? (
+                      <a
+                        href={c.docsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+                      >
+                        {p.openDocs}
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                    ) : (
+                      <span className="text-ink">{EMPTY}</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+
+              {/* 設備明細 */}
+              <div>
+                <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+                  {p.sections.equipment}
+                </h4>
+                <EquipmentGrid
+                  equipment={c.equipment}
+                  editSlotFor={
+                    customerId
+                      ? (item, title) => {
+                          if (!item.id) return null;
+                          const ee = editEquipmentById(c.contractId, item.id);
+                          return ee ? (
+                            <EditEquipmentDialog customerId={customerId} initial={ee} title={title} />
+                          ) : null;
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            </div>
+          );
+        })
+      )}
+
+      {/* 認定・設備（申請） */}
+      <section>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
+          {p.sections.certification}
+        </h3>
+        {data.applications.length === 0 ? (
+          <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+            {p.noApplication}
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {data.applications.map((a) => {
+              const eap = editApplicationById.get(a.applicationId);
+              return (
+                <div key={a.applicationId} className="rounded-md border border-hairline-light p-4">
+                  {customerId && eap ? (
+                    <div className="mb-1 flex justify-end">
+                      <EditApplicationDialog customerId={customerId} initial={eap} />
+                    </div>
+                  ) : null}
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                    <MetaItem
+                      label={f.certApplicationStatus}
+                      value={p.applicationStatusLabels[a.status] ?? a.status}
+                    />
+                    <MetaItem label={f.applicationType} value={a.type} />
+                    <MetaItem label={f.submittedDate} value={fmtDate(a.submittedDate)} />
+                    <MetaItem label={f.approvedDate} value={fmtDate(a.approvedDate)} />
+                    <MetaItem label={f.grantedAmount} value={fmtYen(a.grantedAmount)} />
+                  </dl>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export function CustomerProjectInfo({
   data,
   embedded = false,
   editable = null,
+  contractReadOnly = false,
 }: {
   data: CustomerProjectInfoData;
   // 「基本情報」タブ内に埋め込むとき (embedded) は、上段の編集カード（担当者 /
   // 顧客基本情報 / メモ）と重複する 基本情報・体制・備考 セクションを抑制し、
-  // 案件固有（契約・金額 / 契約明細 / 工事・完工 / 認定・設備 / 概況）のみを表示する。
+  // 案件固有（ヒアリング / 概況 等）のみを表示する。契約・金額/契約明細/認定は
+  // ProjectContractList へ集約（契約状況タブが単一の編集面）。
   embedded?: boolean;
   // F-062 編集用の生値 + ID 一式。customer.update 権限保持者（卸業者/SaaS）のみ非 null。
   // null（二次店・read-only）では編集トリガーを一切描画しない。
   editable?: ProjectInfoEditable | null;
+  // 契約・金額/契約明細/認定を読み取り専用で表示する（基本情報タブの「契約予定情報」
+  // pull 表示。編集トリガーは契約状況タブに集約し、ここには出さない）。
+  contractReadOnly?: boolean;
 }) {
   const f = p.fields;
-  const contracts = data.contracts as AnyContract[];
   const constructions = data.constructions as AnyConstruction[];
   const customerId = editable?.customerId ?? null;
 
@@ -856,15 +1012,6 @@ export function CustomerProjectInfo({
   const editConstructionById = new Map<string, ProjectConstructionEditable>(
     (editable?.constructions ?? []).map((c) => [c.constructionId, c]),
   );
-  const editApplicationById = new Map<string, ProjectApplicationEditable>(
-    (editable?.applications ?? []).map((a) => [a.applicationId, a]),
-  );
-  function editEquipmentById(contractId: string, equipmentId: string): ProjectEquipmentEditable | null {
-    if (!editable) return null;
-    return (
-      (editable.equipmentByContract[contractId] ?? []).find((e) => e.id === equipmentId) ?? null
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -893,91 +1040,25 @@ export function CustomerProjectInfo({
         </Section>
       )}
 
-      {/* 契約・金額（金額サマリ） */}
-      <Section title={p.sections.contract}>
-        <MetaItem label={f.contractAmount} value={fmtYen(data.financials.contractAmount)} />
-        <MetaItem label={f.proposalAmount} value={fmtYen(data.financials.proposedAmount)} />
-        <MetaItem label={f.incentiveGrossProfit} value={fmtYen(data.financials.incentiveGrossProfit)} />
-        <MetaItem label={f.incentiveAmount} value={fmtYen(data.financials.incentiveAmount)} />
-      </Section>
+      {/* 契約・金額/契約明細/認定（単一ソース。embedded（基本情報）では readOnly で pull 表示）。
+          ローン・団信は embedded 時は専用「ローン情報」タブに集約するため非 embedded のみ展開。 */}
+      <ProjectContractList data={data} editable={editable} readOnly={contractReadOnly} />
 
-      {/* 契約タブ（1:N。各契約に金額・ローン・設備明細を展開） */}
-      {contracts.length === 0 ? (
-        <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
-          {p.noContract}
-        </p>
-      ) : (
-        contracts.map((c, idx) => {
-          const ec = editContractById.get(c.contractId);
-          return (
-          <div key={c.contractId} className="space-y-4 rounded-md border border-hairline-light p-4">
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
-                {`${p.sections.contract} #${idx + 1}`}
+      {/* 非 embedded（フル表示）でのみローン・団信を契約ごとに展開。 */}
+      {!embedded
+        ? (data.contracts as AnyContract[]).map((c, idx) => (
+            <div key={`loan-${c.contractId}`} className="rounded-md border border-hairline-light p-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
+                {`${p.sections.loan} #${idx + 1}`}
               </h3>
-              {customerId && ec ? <EditContractDialog customerId={customerId} initial={ec} /> : null}
-            </div>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-              <MetaItem label={f.contractDate} value={fmtDate(c.contractDate)} />
-              <MetaItem label={f.proposalAmount} value={fmtYen(c.proposedAmount)} />
-              <MetaItem label={f.contractAmount} value={fmtYen(c.contractAmount)} />
-              <MetaItem label={f.paymentCount} value={c.paymentCount != null ? `${c.paymentCount} 回` : null} />
-              <MetaItem
-                label={f.paymentStatus}
-                value={c.paymentStatus ? p.paymentStatusLabels[c.paymentStatus] ?? c.paymentStatus : null}
-              />
-              <MetaItem label={f.depositDate} value={fmtDate(c.depositDate)} />
-              <MetaItem label={f.dealerPayoutDate} value={fmtDate(c.dealerPayoutDate)} />
-              <MetaItem label={f.equipmentId} value={c.equipmentSerialId} />
-              <div className="min-w-0">
-                <dt className="text-[11px] text-mute-light">{f.contractDocsUrl}</dt>
-                <dd className="mt-0.5 text-sm font-medium">
-                  {c.docsUrl ? (
-                    <a
-                      href={c.docsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
-                    >
-                      {p.openDocs}
-                      <ExternalLink className="size-3.5" />
-                    </a>
-                  ) : (
-                    <span className="text-ink">{EMPTY}</span>
-                  )}
-                </dd>
-              </div>
-            </dl>
-
-            {/* ローン・団信（embedded 時は専用「ローン情報」タブに集約するため抑制） */}
-            {!embedded ? (
-              <LoanBlock contract={c} customerId={customerId} editContract={ec} />
-            ) : null}
-
-            {/* 設備明細 */}
-            <div>
-              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-                {p.sections.equipment}
-              </h4>
-              <EquipmentGrid
-                equipment={c.equipment}
-                editSlotFor={
-                  customerId
-                    ? (item, title) => {
-                        if (!item.id) return null;
-                        const ee = editEquipmentById(c.contractId, item.id);
-                        return ee ? (
-                          <EditEquipmentDialog customerId={customerId} initial={ee} title={title} />
-                        ) : null;
-                      }
-                    : undefined
-                }
+              <LoanBlock
+                contract={c}
+                customerId={customerId}
+                editContract={editContractById.get(c.contractId)}
               />
             </div>
-          </div>
-          );
-        })
-      )}
+          ))
+        : null}
 
       {/* 工事・完工（施工コスト含む。embedded 時は専用「施工コスト」タブに集約するため抑制） */}
       {!embedded ? (
@@ -1003,46 +1084,6 @@ export function CustomerProjectInfo({
           )}
         </section>
       ) : null}
-
-      {/* 認定・設備 */}
-      <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
-          {p.sections.certification}
-        </h3>
-        {data.applications.length === 0 ? (
-          <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
-            {p.noApplication}
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {data.applications.map((a) => {
-              const eap = editApplicationById.get(a.applicationId);
-              return (
-              <div
-                key={a.applicationId}
-                className="rounded-md border border-hairline-light p-4"
-              >
-                {customerId && eap ? (
-                  <div className="mb-1 flex justify-end">
-                    <EditApplicationDialog customerId={customerId} initial={eap} />
-                  </div>
-                ) : null}
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                  <MetaItem
-                    label={f.certApplicationStatus}
-                    value={p.applicationStatusLabels[a.status] ?? a.status}
-                  />
-                  <MetaItem label={f.applicationType} value={a.type} />
-                  <MetaItem label={f.submittedDate} value={fmtDate(a.submittedDate)} />
-                  <MetaItem label={f.approvedDate} value={fmtDate(a.approvedDate)} />
-                  <MetaItem label={f.grantedAmount} value={fmtYen(a.grantedAmount)} />
-                </dl>
-              </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
       {/* ヒアリング（住環境・家族）— F-063。既設設備（現況）/ 家族属性 / 連絡先 / クロスセル候補 */}
       <HearingSection

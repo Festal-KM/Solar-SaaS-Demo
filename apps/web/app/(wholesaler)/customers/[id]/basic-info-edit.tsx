@@ -25,7 +25,6 @@ export interface EditBasicInfoInitial {
   phone: string;
   email: string | null;
   postalCode: string | null;
-  address: string | null;
   area: string | null;
   inflowRoute: InflowRoute | null;
   prefecture: string | null;
@@ -126,7 +125,6 @@ export function BasicInfoInlineEdit({
   const [phone, setPhone] = useState(initial.phone);
   const [email, setEmail] = useState(initial.email ?? "");
   const [postalCode, setPostalCode] = useState(initial.postalCode ?? "");
-  const [address, setAddress] = useState(initial.address ?? "");
   const [area, setArea] = useState(initial.area ?? "");
   const [inflowRoute, setInflowRoute] = useState<string>(initial.inflowRoute ?? INFLOW_UNSET);
   const [prefecture, setPrefecture] = useState(initial.prefecture ?? "");
@@ -147,7 +145,6 @@ export function BasicInfoInlineEdit({
     setPhone(initial.phone);
     setEmail(initial.email ?? "");
     setPostalCode(initial.postalCode ?? "");
-    setAddress(initial.address ?? "");
     setArea(initial.area ?? "");
     setInflowRoute(initial.inflowRoute ?? INFLOW_UNSET);
     setPrefecture(initial.prefecture ?? "");
@@ -167,7 +164,6 @@ export function BasicInfoInlineEdit({
     phone !== initial.phone ||
     email !== (initial.email ?? "") ||
     postalCode !== (initial.postalCode ?? "") ||
-    address !== (initial.address ?? "") ||
     area !== (initial.area ?? "") ||
     inflowRoute !== (initial.inflowRoute ?? INFLOW_UNSET) ||
     prefecture !== (initial.prefecture ?? "") ||
@@ -191,7 +187,6 @@ export function BasicInfoInlineEdit({
           phone: phone.trim(),
           email: blank(email),
           postalCode: blank(postalCode),
-          address: blank(address),
           area: area.trim().length > 0 ? area.trim() : null,
           inflowRoute: inflowRoute === INFLOW_UNSET ? null : (inflowRoute as InflowRoute),
           prefecture: prefecture.trim() || null,
@@ -310,14 +305,6 @@ export function BasicInfoInlineEdit({
             id="basic-address-line"
             value={addressLine}
             onChange={(e) => setAddressLine(e.target.value)}
-          />
-        </EditField>
-        <EditField id="basic-address" label={f.address}>
-          <Input
-            id="basic-address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            autoComplete="street-address"
           />
         </EditField>
         <EditField id="basic-phone" label={f.phone}>

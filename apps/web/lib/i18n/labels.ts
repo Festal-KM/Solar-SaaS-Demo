@@ -2255,6 +2255,14 @@ export const labels = {
         todo: "ToDo",
         chat: "チャット",
       },
+      // 契約状況タブ — 契約予定情報の単一の表示・編集面。概況（Customer 手動列）+
+      // 案件詳細（Contract モデル由来 per-contract）。
+      contractTab: {
+        summaryTitle: "契約状況（概況）",
+        summaryHint: "一覧バッジ用の概況（契約プラン・金額・予定日）",
+        detailTitle: "契約予定情報（案件詳細）",
+        detailHint: "契約・金額・支払・設備明細・認定を契約ごとに編集",
+      },
       loanTab: {
         empty: "ローン情報を表示できる契約がありません。",
         contractHeading: "契約",
