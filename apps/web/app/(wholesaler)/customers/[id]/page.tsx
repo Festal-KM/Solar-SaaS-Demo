@@ -312,8 +312,6 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         addressLine: editable.addressLine,
         birthDate: editable.birthDate,
         buildYear: editable.buildYear,
-        tossDept: editable.tossDept,
-        belongDept: editable.belongDept,
         electricContractStatus: editable.electricContractStatus,
         electricAccountNo: editable.electricAccountNo,
         supplyPointNo: editable.supplyPointNo,
@@ -443,8 +441,6 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 <InfoRow label={d.fields.phone} value={detail.phone} />
                 <InfoRow label={d.fields.email} value={detail.email} />
                 <InfoRow label={d.fields.buildYear} value={formatDay(detail.buildYear)} />
-                <InfoRow label={d.fields.tossDept} value={detail.tossDept} />
-                <InfoRow label={d.fields.belongDept} value={detail.belongDept} />
                 <InfoRow
                   label={d.fields.electricContractStatus}
                   value={detail.electricContractStatus}

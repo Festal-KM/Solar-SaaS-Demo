@@ -33,8 +33,6 @@ export interface EditBasicInfoInitial {
   addressLine: string | null;
   birthDate: string | null; // ISO
   buildYear: string | null; // ISO
-  tossDept: string | null;
-  belongDept: string | null;
   electricContractStatus: string | null;
   electricAccountNo: string | null;
   supplyPointNo: string | null;
@@ -136,8 +134,6 @@ export function BasicInfoInlineEdit({
   const [addressLine, setAddressLine] = useState(initial.addressLine ?? "");
   const [birthDate, setBirthDate] = useState(toDateInput(initial.birthDate));
   const [buildYear, setBuildYear] = useState(toDateInput(initial.buildYear));
-  const [tossDept, setTossDept] = useState(initial.tossDept ?? "");
-  const [belongDept, setBelongDept] = useState(initial.belongDept ?? "");
   const [electricContractStatus, setElectricContractStatus] = useState(
     initial.electricContractStatus ?? "",
   );
@@ -159,8 +155,6 @@ export function BasicInfoInlineEdit({
     setAddressLine(initial.addressLine ?? "");
     setBirthDate(toDateInput(initial.birthDate));
     setBuildYear(toDateInput(initial.buildYear));
-    setTossDept(initial.tossDept ?? "");
-    setBelongDept(initial.belongDept ?? "");
     setElectricContractStatus(initial.electricContractStatus ?? "");
     setElectricAccountNo(initial.electricAccountNo ?? "");
     setSupplyPointNo(initial.supplyPointNo ?? "");
@@ -181,8 +175,6 @@ export function BasicInfoInlineEdit({
     addressLine !== (initial.addressLine ?? "") ||
     birthDate !== toDateInput(initial.birthDate) ||
     buildYear !== toDateInput(initial.buildYear) ||
-    tossDept !== (initial.tossDept ?? "") ||
-    belongDept !== (initial.belongDept ?? "") ||
     electricContractStatus !== (initial.electricContractStatus ?? "") ||
     electricAccountNo !== (initial.electricAccountNo ?? "") ||
     supplyPointNo !== (initial.supplyPointNo ?? "") ||
@@ -207,8 +199,6 @@ export function BasicInfoInlineEdit({
           addressLine: addressLine.trim() || null,
           birthDate: birthDate || null,
           buildYear: buildYear || null,
-          tossDept: tossDept.trim() || null,
-          belongDept: belongDept.trim() || null,
           electricContractStatus: electricContractStatus.trim() || null,
           electricAccountNo: electricAccountNo.trim() || null,
           supplyPointNo: supplyPointNo.trim() || null,
@@ -346,20 +336,6 @@ export function BasicInfoInlineEdit({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
-          />
-        </EditField>
-        <EditField id="basic-toss-dept" label={f.tossDept}>
-          <Input
-            id="basic-toss-dept"
-            value={tossDept}
-            onChange={(e) => setTossDept(e.target.value)}
-          />
-        </EditField>
-        <EditField id="basic-belong-dept" label={f.belongDept}>
-          <Input
-            id="basic-belong-dept"
-            value={belongDept}
-            onChange={(e) => setBelongDept(e.target.value)}
           />
         </EditField>
       </div>
