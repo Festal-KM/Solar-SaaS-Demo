@@ -2742,7 +2742,26 @@ model ContractPayment {
 > **顧客詳細タブ構成（追補）**: 顧客詳細（S-113）は業務フロー順（商談→契約→ローン→施工→申請→コール）でタブを並べる。
 > カテゴリ 4「ローン・団信」とコール状況（バッチ B）は **専用タブ**（「ローン情報」「コール状況」）へ分離集約する。
 > 「ローン情報」タブは顧客に紐づく全契約のローン・団信（`loanReviewStatus` 編集含む）を契約ごとに一覧（契約無しは空状態）。
-> 「コール状況」タブは `ProjectCallsDto`（顧客単位・単一）を表示・編集（`EditCallStatusDialog`）。
+> 「コール状況（コール）」タブは `ProjectCallsDto`（顧客単位・単一）を **4 セクション**（マエカクコール / サンキューコール /
+> ローン審査完了コール / 施工完了コール）に再構成し、各セクションを **インライン編集**（ポップアップ廃止。`MaekakuCallInlineEdit` /
+> `ThankYouCallInlineEdit` / `LoanCompletionCallInlineEdit` / `PostCompletionCallInlineEdit`）する。
+> 各セクションは「ステータス（select）/ 希望日時（datetime-local）/ メモ（textarea）」を持ち、dirty 判定 + 保存/キャンセル +
+> `saveProjectCallStatusAction` + `router.refresh()` + toast の既存インライン編集パターン（`HearingInlineEdit`）に倣う。
+> - **マエカクコール**: ステータス `Customer.maekakuStatus`（pending/done/unnecessary）/ 希望日時 `Customer.maekakuPreferredAt`
+>   （商談履歴タブと共用列・last-write-wins）/ 希望電話 `maekakuPreferredPhone`（PII・maskPhone）/ メモ **新規 `maekakuCallNote`**。
+>   加えて **過去コール履歴**（アポ事前確認コール）を read-only 一覧で併記する。`Appointment(customerId)→PreCall(appointmentId @unique)`
+>   を辿り、`ProjectPreCallHistoryDto[]`（calledAt / result(`PreCallResult`) / visitConfirmedAt / personConfirmed / 対象アポ日時 /
+>   note / nextAction）として `getProjectInfo` が calledAt 降順で供給。履歴が無ければ「履歴はありません」。
+> - **サンキューコール**: **新規 3 列** `thankYouCallStatus`（CALL_STATUS_VALUES）/ `thankYouCallPreferredAt` / `thankYouCallNote`。
+>   施工タブ `Construction.thankYouCallAt`（施工フロー上のサンキューコール日時）とは **別概念・別列**。
+> - **ローン審査完了コール**: ステータス `loanCompletionCallStatus` / 希望日時 `loanCompletionCallPreferredAt` + メモ **新規 `loanCompletionCallNote`**。
+> - **施工完了（完工）コール**: ステータス `postCompletionCallStatus` / 希望日時 `postCompletionCallPreferredAt` + メモ **新規 `postCompletionCallNote`**。
+> 新規 6 列（`maekakuCallNote` / `thankYouCallStatus` / `thankYouCallPreferredAt` / `thankYouCallNote` / `loanCompletionCallNote` /
+> `postCompletionCallNote`）は単一マイグレーション（`Customer` ADD COLUMN・非破壊）で追加。enum 追加不要（サンキューも String 列に
+> CALL_STATUS_VALUES の文字列を格納）。`saveProjectCallStatusAction` / `ProjectCallStatusSchema` を全 4 セクション項目を網羅するよう拡張
+> （マエカク系もこの action で一括保存。`updateCustomerAction` 側のマエカク保存は商談履歴タブ用に維持＝同一列 last-write-wins）。
+> PreCall は `Appointment.customerId` 経由でテナント相関（`withTenant` + RLS の親経由 EXISTS）。コール面は原価無関係のため二次店 DTO でも
+> calls は保持し、`maekakuPreferredPhone` のみ maskPhone を維持する。
 > カテゴリ 5「工事・完工」の **施工コスト（`Construction.fee`）** は「施工状況」タブ（S-046）の専用セクション
 > `ProjectConstructionList` で契約ごとに表示・編集（`EditConstructionDialog`。fee 含む工事項目一式を再利用、新規保存系を足さない）する。
 > 契約/施工が無ければ空状態。`fee` は原価系のため `ProjectConstructionForDealerDto` で物理除外され、`getCustomerProjectInfoEditable`

@@ -10,12 +10,15 @@ import { labels } from "@/lib/i18n/labels";
 
 import {
   EditApplicationDialog,
-  EditCallStatusDialog,
   EditConstructionDialog,
   EditContractDialog,
   EditEquipmentDialog,
   EquipmentInlineEdit,
   HearingInlineEdit,
+  LoanCompletionCallInlineEdit,
+  MaekakuCallInlineEdit,
+  PostCompletionCallInlineEdit,
+  ThankYouCallInlineEdit,
 } from "./project-info-edit";
 
 import type {
@@ -519,8 +522,72 @@ export function ProjectCurrentStateInfo({
   );
 }
 
-// コール状況 1 セクション（顧客単位・単一）。専用「コール状況」タブと、
-// 非 embedded の案件情報ビューの両方から再利用する（embedded では抑制）。
+// コールセクション共通カード。見出し + 子（read-only MetaItem 群 or インライン編集フォーム）。
+// editable が渡れば editForm をその場描画（ポップアップなし）、無ければ read-only 表示。
+function CallCard({
+  title,
+  children,
+  editForm,
+}: {
+  title: string;
+  children?: React.ReactNode;
+  editForm?: React.ReactNode;
+}) {
+  return (
+    <section>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">{title}</h3>
+      <div className="rounded-md border border-hairline-light p-4">
+        {editForm ?? <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">{children}</dl>}
+      </div>
+    </section>
+  );
+}
+
+function callPhaseLabel(code: string | null): string | null {
+  if (!code) return null;
+  return p.callPhaseStatusLabels[code] ?? code;
+}
+
+// マエカク過去コール履歴（read-only 一覧。Appointment→PreCall 由来）。
+function PreCallHistoryList({ data }: { data: CustomerProjectInfoData }) {
+  const s = p.callSections;
+  const history = data.calls.preCallHistory;
+  return (
+    <div className="mt-4">
+      <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+        {s.preCallHistoryTitle}
+      </h4>
+      {history.length === 0 ? (
+        <p className="text-sm text-mute-light">{s.preCallHistoryEmpty}</p>
+      ) : (
+        <ul className="space-y-2">
+          {history.map((h) => (
+            <li
+              key={h.preCallId}
+              className="rounded-md border border-hairline-light bg-surface-soft p-3"
+            >
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+                <MetaItem label={s.preCallCalledAt} value={fmtDateTime(h.calledAt)} />
+                <MetaItem
+                  label={s.preCallResult}
+                  value={h.result ? p.preCallResultLabels[h.result] ?? h.result : null}
+                />
+                <MetaItem label={s.preCallAppointmentAt} value={fmtDateTime(h.appointmentScheduledAt)} />
+                <MetaItem label={s.preCallVisitConfirmedAt} value={fmtDateTime(h.visitConfirmedAt)} />
+                <MetaItem label={s.preCallPersonConfirmed} value={fmtBool(h.personConfirmed)} />
+                <MetaItem label={s.preCallNote} value={h.note} />
+                <MetaItem label={s.preCallNextAction} value={h.nextAction} />
+              </dl>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// コールタブ 4 セクション（マエカク / サンキュー / ローン審査完了 / 施工完了）。
+// editable 非 null（customer.update 権限）のとき各セクションをインライン編集、null は read-only。
 export function ProjectCallStatusSection({
   data,
   editable = null,
@@ -529,53 +596,86 @@ export function ProjectCallStatusSection({
   editable?: ProjectInfoEditable | null;
 }) {
   const f = p.fields;
+  const s = p.callSections;
   const customerId = editable?.customerId ?? null;
+  const canEdit = customerId != null && editable != null;
+  const calls = data.calls;
+
   return (
-    <Section
-      title={p.sections.calls}
-      editSlot={
-        customerId && editable ? (
-          <EditCallStatusDialog customerId={customerId} initial={editable.calls} />
-        ) : null
-      }
-    >
-      <MetaItem
-        label={f.callMaekakuStatus}
-        value={
-          data.calls.maekakuStatus
-            ? p.maekakuStatusDisplayLabels[data.calls.maekakuStatus] ?? data.calls.maekakuStatus
-            : null
+    <div className="space-y-6">
+      {/* マエカクコール（編集 + 過去コール履歴） */}
+      <section>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
+          {s.maekakuCall}
+        </h3>
+        <div className="rounded-md border border-hairline-light p-4">
+          {canEdit ? (
+            <MaekakuCallInlineEdit customerId={customerId!} initial={editable!.calls} />
+          ) : (
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+              <MetaItem
+                label={f.callMaekakuStatus}
+                value={
+                  calls.maekakuStatus
+                    ? p.maekakuStatusDisplayLabels[calls.maekakuStatus] ?? calls.maekakuStatus
+                    : null
+                }
+              />
+              <MetaItem label={f.maekakuPreferredAt} value={fmtDateTime(calls.maekakuPreferredAt)} />
+              <MetaItem label={f.maekakuPreferredPhone} value={calls.maekakuPreferredPhone} />
+              <MetaItem label={f.maekakuCallNote} value={calls.maekakuCallNote} />
+            </dl>
+          )}
+          <PreCallHistoryList data={data} />
+        </div>
+      </section>
+
+      {/* サンキューコール */}
+      <CallCard
+        title={s.thankYouCall}
+        editForm={
+          canEdit ? <ThankYouCallInlineEdit customerId={customerId!} initial={editable!.calls} /> : undefined
         }
-      />
-      <MetaItem label={f.maekakuPreferredPhone} value={data.calls.maekakuPreferredPhone} />
-      <MetaItem
-        label={f.postCompletionCallStatus}
-        value={
-          data.calls.postCompletionCallStatus
-            ? p.callPhaseStatusLabels[data.calls.postCompletionCallStatus] ??
-              data.calls.postCompletionCallStatus
-            : null
+      >
+        <MetaItem label={f.thankYouCallStatus} value={callPhaseLabel(calls.thankYouCallStatus)} />
+        <MetaItem label={f.thankYouCallPreferredAt} value={fmtDateTime(calls.thankYouCallPreferredAt)} />
+        <MetaItem label={f.thankYouCallNote} value={calls.thankYouCallNote} />
+      </CallCard>
+
+      {/* ローン審査完了コール */}
+      <CallCard
+        title={s.loanCompletionCall}
+        editForm={
+          canEdit ? (
+            <LoanCompletionCallInlineEdit customerId={customerId!} initial={editable!.calls} />
+          ) : undefined
         }
-      />
-      <MetaItem
-        label={f.postCompletionCallPreferredAt}
-        value={fmtDateTime(data.calls.postCompletionCallPreferredAt)}
-      />
-      <MetaItem
-        label={f.loanCompletionCallStatus}
-        value={
-          data.calls.loanCompletionCallStatus
-            ? p.callPhaseStatusLabels[data.calls.loanCompletionCallStatus] ??
-              data.calls.loanCompletionCallStatus
-            : null
+      >
+        <MetaItem label={f.loanCompletionCallStatus} value={callPhaseLabel(calls.loanCompletionCallStatus)} />
+        <MetaItem
+          label={f.loanCompletionCallPreferredAt}
+          value={fmtDateTime(calls.loanCompletionCallPreferredAt)}
+        />
+        <MetaItem label={f.loanCompletionCallNote} value={calls.loanCompletionCallNote} />
+      </CallCard>
+
+      {/* 施工完了コール */}
+      <CallCard
+        title={s.postCompletionCall}
+        editForm={
+          canEdit ? (
+            <PostCompletionCallInlineEdit customerId={customerId!} initial={editable!.calls} />
+          ) : undefined
         }
-      />
-      <MetaItem
-        label={f.loanCompletionCallPreferredAt}
-        value={fmtDateTime(data.calls.loanCompletionCallPreferredAt)}
-      />
-      <MetaItem label={f.generalCallPreferredTime} value={data.calls.generalCallPreferredTime} />
-    </Section>
+      >
+        <MetaItem label={f.postCompletionCallStatus} value={callPhaseLabel(calls.postCompletionCallStatus)} />
+        <MetaItem
+          label={f.postCompletionCallPreferredAt}
+          value={fmtDateTime(calls.postCompletionCallPreferredAt)}
+        />
+        <MetaItem label={f.postCompletionCallNote} value={calls.postCompletionCallNote} />
+      </CallCard>
+    </div>
   );
 }
 

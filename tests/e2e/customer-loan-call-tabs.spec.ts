@@ -26,8 +26,6 @@ const SEEDED_CUSTOMER_QUERY = "佐藤 一馬";
 
 // ローン審査ステータスの 4 値ラベル（loanReviewStatusLabels）。
 const LOAN_REVIEW_LABELS = ["審査前", "審査中", "完了", "不備在り"] as const;
-// コール状況（完工/ローン完了）の 3 値ラベル（callPhaseStatusLabels）。
-const CALL_PHASE_LABELS = ["実施前", "実施済", "不要"] as const;
 
 async function signInAsDemo(page: Page): Promise<void> {
   await page.goto("/login", { timeout: 120_000 });
@@ -68,69 +66,10 @@ async function metaValue(
   return ((await dd.textContent()) ?? "").trim();
 }
 
-test.describe("コール状況タブ（専用タブ・Customer 列）", () => {
-  test.describe.configure({ timeout: 120_000 });
-
-  test("コール状況の各項目が表示され、完工コールステータスを変更保存 → 反映される", async ({
-    page,
-  }) => {
-    await signInAsDemo(page);
-    await openSeededCustomer(page);
-
-    // コール状況タブへ切り替え。
-    await page.getByRole("tab", { name: "コール" }).click();
-    const panel = page.getByRole("tabpanel");
-    await expect(panel).toBeVisible();
-
-    // 「コール状況」セクション見出し + 主要フィールドのラベルが描画される。
-    await expect(
-      panel.getByRole("heading", { name: "コール状況" }).first(),
-    ).toBeVisible();
-    for (const label of [
-      "マエカクステータス",
-      "マエカク希望電話",
-      "完工コールステータス",
-      "完工コール希望日時",
-      "ローン完了コールステータス",
-      "汎用コール希望時間帯",
-    ]) {
-      await expect(
-        panel.locator("dt", { hasText: label }).first(),
-        `コール状況フィールド「${label}」が表示される`,
-      ).toBeVisible();
-    }
-
-    // 完工コールステータスの初期表示値は 3 値ラベルのいずれか（seed は s%3 で確実に設定）。
-    const before = await metaValue(panel, "完工コールステータス");
-    expect(
-      before,
-      `完工コールステータス「${before}」が 3 値ラベルのいずれか`,
-    ).toMatch(/(実施前|実施済|不要)/);
-
-    // 反映を一意に検出するため、現在値と異なるラベルへ変更する。
-    const targetLabel = CALL_PHASE_LABELS.find((l) => l !== before) ?? "実施済";
-    const targetValue =
-      targetLabel === "実施前" ? "not_done" : targetLabel === "実施済" ? "done" : "unnecessary";
-
-    // 編集ダイアログを開く。
-    await panel.getByRole("button", { name: "コール状況を編集" }).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    // 完工コールステータス select を変更して保存。
-    const select = dialog.locator("#cl-post-status");
-    await expect(select).toBeVisible();
-    await select.selectOption(targetValue);
-    await dialog.getByRole("button", { name: "保存" }).click();
-    await expect(dialog).toBeHidden({ timeout: 30_000 });
-
-    // 再描画後、コール状況セクションに変更後ラベルが反映される。
-    await expect(async () => {
-      const after = await metaValue(panel, "完工コールステータス");
-      expect(after).toBe(targetLabel);
-    }).toPass({ timeout: 30_000 });
-  });
-});
+// コールタブ（4 セクション・インライン編集）の表面検証は専用 spec
+// tests/e2e/customer-call-tab.spec.ts（5/5 PASS）が網羅する。旧 EditCallStatusDialog
+// （`コール状況を編集` / `#cl-post-status` / 単一「コール状況」見出し）依存の describe は
+// 再設計で削除済みのため、本ファイルからは撤去した。
 
 test.describe("ローン情報タブ（専用タブ・契約 1:N）", () => {
   test.describe.configure({ timeout: 120_000 });

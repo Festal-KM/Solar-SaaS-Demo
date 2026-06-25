@@ -1448,11 +1448,17 @@ async function seedCustomerHearing(
         faceToFace: s % 2 === 0,
         proposedProduct: s % 3 === 0 ? "蓄電池 + V2H" : "太陽光 + 蓄電池",
         maekakuPreferredAt: day(2 + (s % 5)),
-        // コール状況（バッチ B）。not_done/done/unnecessary を巡回投入。
+        // コールタブ 4 セクション。not_done/done/unnecessary を巡回投入 + メモ・サンキュー。
         postCompletionCallStatus: ["not_done", "done", "unnecessary"][s % 3],
         postCompletionCallPreferredAt: s % 3 === 0 ? day(3 + (s % 4)) : null,
+        postCompletionCallNote: s % 4 === 0 ? "施工完了後フォロー予定" : null,
         loanCompletionCallStatus: ["done", "unnecessary", "not_done"][s % 3],
         loanCompletionCallPreferredAt: s % 2 === 0 ? day(1 + (s % 3)) : null,
+        loanCompletionCallNote: s % 5 === 0 ? "審査結果連絡待ち" : null,
+        thankYouCallStatus: ["done", "not_done", "unnecessary"][s % 3],
+        thankYouCallPreferredAt: s % 3 === 1 ? day(2 + (s % 4)) : null,
+        thankYouCallNote: s % 4 === 1 ? "ご契約御礼コール" : null,
+        maekakuCallNote: s % 3 === 0 ? "前確: 在宅時間 夜間希望" : null,
         generalCallPreferredTime: s % 2 === 0 ? "平日19:00以降" : "土日終日",
         maekakuPreferredPhone: `080-2${String(1000 + s).padStart(4, "0")}-${String(4000 + s).padStart(4, "0")}`,
       },

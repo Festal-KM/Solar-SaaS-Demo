@@ -115,6 +115,16 @@ export function NegotiationStatusPanel({
           </select>
         </div>
         <div className="space-y-1.5">
+          <Label htmlFor="neg-maekaku-preferred">{d.negotiation.maekakuPreferredAt}</Label>
+          <input
+            id="neg-maekaku-preferred"
+            type="datetime-local"
+            value={maekakuPreferredAt}
+            onChange={(e) => setMaekakuPreferredAt(e.target.value)}
+            className={selectClass}
+          />
+        </div>
+        <div className="space-y-1.5">
           <Label htmlFor="neg-status">{d.negotiation.dealStatus}</Label>
           <select
             id="neg-status"
@@ -136,16 +146,6 @@ export function NegotiationStatusPanel({
               type="date"
               value={nextAppointmentAt}
               onChange={(e) => setNextAppointmentAt(e.target.value)}
-              className={selectClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="neg-maekaku-preferred">{d.negotiation.maekakuPreferredAt}</Label>
-            <input
-              id="neg-maekaku-preferred"
-              type="datetime-local"
-              value={maekakuPreferredAt}
-              onChange={(e) => setMaekakuPreferredAt(e.target.value)}
               className={selectClass}
             />
           </div>

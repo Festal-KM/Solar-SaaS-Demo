@@ -192,17 +192,39 @@ export interface ProjectHearingDto {
 export type CustomerHearingDto = ProjectHearingDto;
 export type CustomerHearingForDealerDto = ProjectHearingForDealerDto;
 
-// コール状況（バッチ B）。完工コール / ローン完了コールのステータス + 希望日時、
-// 汎用コール希望時間帯、マエカク希望電話。ステータスは CallStatusEnum の CODE
-// （not_done/done/unnecessary）。マエカク希望電話は連絡先 PII のため maskPhone 相当
-// 適用後の文字列（ヒアリング連絡先と同方針）。マエカク「日時」は表示・保持しない。
+// マエカクコールの過去コール履歴 1 件（Appointment→PreCall・read-only）。
+// アポ獲得のたびに発生する事前確認コールの実績。result は PreCallResult の CODE。
+export interface ProjectPreCallHistoryDto {
+  preCallId: string;
+  calledAt: string;
+  result: string | null; // PreCallResult CODE（APPROVED/ABSENT/CALLBACK/CANCELLED/RESCHEDULED）
+  visitConfirmedAt: string | null;
+  personConfirmed: boolean;
+  appointmentScheduledAt: string | null;
+  note: string | null;
+  nextAction: string | null;
+}
+
+// コール状況（コールタブ 4 セクション）。各コール（マエカク / サンキュー / ローン審査完了 /
+// 施工完了）のステータス + 希望日時 + メモ。ステータス CODE: マエカクは pending/done/
+// unnecessary、その他は CALL_STATUS_VALUES（not_done/done/unnecessary）。マエカク希望電話は
+// 連絡先 PII のため maskPhone 相当適用後の文字列。マエカク希望日時は商談履歴タブと共用列。
+// preCallHistory はマエカクコールの過去コール履歴（read-only）。
 export interface ProjectCallsDto {
   maekakuStatus: string | null;
+  maekakuPreferredAt: string | null;
+  maekakuCallNote: string | null;
   maekakuPreferredPhone: string; // maskPhone 適用後（'未設定' / '***-****-XXXX' / 生番号）
-  postCompletionCallStatus: string | null;
-  postCompletionCallPreferredAt: string | null;
+  preCallHistory: ProjectPreCallHistoryDto[];
+  thankYouCallStatus: string | null;
+  thankYouCallPreferredAt: string | null;
+  thankYouCallNote: string | null;
   loanCompletionCallStatus: string | null;
   loanCompletionCallPreferredAt: string | null;
+  loanCompletionCallNote: string | null;
+  postCompletionCallStatus: string | null;
+  postCompletionCallPreferredAt: string | null;
+  postCompletionCallNote: string | null;
   generalCallPreferredTime: string | null;
 }
 

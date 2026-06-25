@@ -55,11 +55,18 @@ export interface ProjectHearingEditable {
 
 export interface ProjectCallsEditable {
   maekakuStatus: string | null;
+  maekakuPreferredAt: string | null;
+  maekakuCallNote: string | null;
   maekakuPreferredPhone: string | null;
-  postCompletionCallStatus: string | null;
-  postCompletionCallPreferredAt: string | null;
+  thankYouCallStatus: string | null;
+  thankYouCallPreferredAt: string | null;
+  thankYouCallNote: string | null;
   loanCompletionCallStatus: string | null;
   loanCompletionCallPreferredAt: string | null;
+  loanCompletionCallNote: string | null;
+  postCompletionCallStatus: string | null;
+  postCompletionCallPreferredAt: string | null;
+  postCompletionCallNote: string | null;
   generalCallPreferredTime: string | null;
 }
 
@@ -188,6 +195,8 @@ export async function getCustomerProjectInfoEditable(
         housingType: true,
         inflowRoute: true,
         maekakuStatus: true, // overview + calls 両セクションで参照
+        maekakuPreferredAt: true,
+        maekakuCallNote: true,
         husbandAge: true,
         wifeAge: true,
         childAge: true,
@@ -197,10 +206,15 @@ export async function getCustomerProjectInfoEditable(
         mobilePhone: true,
         proposedProduct: true,
         maekakuPreferredPhone: true,
+        thankYouCallStatus: true,
+        thankYouCallPreferredAt: true,
+        thankYouCallNote: true,
         postCompletionCallStatus: true,
         postCompletionCallPreferredAt: true,
+        postCompletionCallNote: true,
         loanCompletionCallStatus: true,
         loanCompletionCallPreferredAt: true,
+        loanCompletionCallNote: true,
         generalCallPreferredTime: true,
       },
     });
@@ -376,11 +390,18 @@ export async function getCustomerProjectInfoEditable(
       },
       calls: {
         maekakuStatus: customer.maekakuStatus,
+        maekakuPreferredAt: isoOrNull(customer.maekakuPreferredAt),
+        maekakuCallNote: customer.maekakuCallNote,
         maekakuPreferredPhone: customer.maekakuPreferredPhone,
-        postCompletionCallStatus: customer.postCompletionCallStatus,
-        postCompletionCallPreferredAt: isoOrNull(customer.postCompletionCallPreferredAt),
+        thankYouCallStatus: customer.thankYouCallStatus,
+        thankYouCallPreferredAt: isoOrNull(customer.thankYouCallPreferredAt),
+        thankYouCallNote: customer.thankYouCallNote,
         loanCompletionCallStatus: customer.loanCompletionCallStatus,
         loanCompletionCallPreferredAt: isoOrNull(customer.loanCompletionCallPreferredAt),
+        loanCompletionCallNote: customer.loanCompletionCallNote,
+        postCompletionCallStatus: customer.postCompletionCallStatus,
+        postCompletionCallPreferredAt: isoOrNull(customer.postCompletionCallPreferredAt),
+        postCompletionCallNote: customer.postCompletionCallNote,
         generalCallPreferredTime: customer.generalCallPreferredTime,
       },
       contracts,

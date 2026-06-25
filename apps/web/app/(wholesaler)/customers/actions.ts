@@ -419,8 +419,9 @@ export const saveProjectOverviewAction = withServerActionContext<
   },
 );
 
-// コール状況（バッチ B・Customer 列）。完工/ローン完了コールのステータス + 希望日時、
-// 汎用コール希望時間帯、マエカク希望電話。三段イディオム（auth→customer.update→withTenant）。
+// コール状況（コールタブ 4 セクション・Customer 列）。マエカク/サンキュー/ローン審査完了/
+// 施工完了コールのステータス + 希望日時 + メモ、汎用コール希望時間帯、マエカク希望電話。
+// マエカク希望日時は商談履歴タブと共用列（last-write-wins）。三段イディオム（auth→customer.update→withTenant）。
 export const saveProjectCallStatusAction = withServerActionContext<
   ProjectCallStatusInput,
   SaveProjectSectionResult
@@ -438,11 +439,24 @@ export const saveProjectCallStatusAction = withServerActionContext<
     await tx.customer.update({
       where: { id: parsed.customerId },
       data: {
-        ...(parsed.postCompletionCallStatus !== undefined
-          ? { postCompletionCallStatus: parsed.postCompletionCallStatus }
+        ...(parsed.maekakuStatus !== undefined ? { maekakuStatus: parsed.maekakuStatus } : {}),
+        ...(parsed.maekakuPreferredAt !== undefined
+          ? { maekakuPreferredAt: toDateOrNull(parsed.maekakuPreferredAt) }
           : {}),
-        ...(parsed.postCompletionCallPreferredAt !== undefined
-          ? { postCompletionCallPreferredAt: toDateOrNull(parsed.postCompletionCallPreferredAt) }
+        ...(parsed.maekakuCallNote !== undefined
+          ? { maekakuCallNote: parsed.maekakuCallNote?.trim() || null }
+          : {}),
+        ...(parsed.maekakuPreferredPhone !== undefined
+          ? { maekakuPreferredPhone: parsed.maekakuPreferredPhone?.trim() || null }
+          : {}),
+        ...(parsed.thankYouCallStatus !== undefined
+          ? { thankYouCallStatus: parsed.thankYouCallStatus }
+          : {}),
+        ...(parsed.thankYouCallPreferredAt !== undefined
+          ? { thankYouCallPreferredAt: toDateOrNull(parsed.thankYouCallPreferredAt) }
+          : {}),
+        ...(parsed.thankYouCallNote !== undefined
+          ? { thankYouCallNote: parsed.thankYouCallNote?.trim() || null }
           : {}),
         ...(parsed.loanCompletionCallStatus !== undefined
           ? { loanCompletionCallStatus: parsed.loanCompletionCallStatus }
@@ -450,11 +464,20 @@ export const saveProjectCallStatusAction = withServerActionContext<
         ...(parsed.loanCompletionCallPreferredAt !== undefined
           ? { loanCompletionCallPreferredAt: toDateOrNull(parsed.loanCompletionCallPreferredAt) }
           : {}),
+        ...(parsed.loanCompletionCallNote !== undefined
+          ? { loanCompletionCallNote: parsed.loanCompletionCallNote?.trim() || null }
+          : {}),
+        ...(parsed.postCompletionCallStatus !== undefined
+          ? { postCompletionCallStatus: parsed.postCompletionCallStatus }
+          : {}),
+        ...(parsed.postCompletionCallPreferredAt !== undefined
+          ? { postCompletionCallPreferredAt: toDateOrNull(parsed.postCompletionCallPreferredAt) }
+          : {}),
+        ...(parsed.postCompletionCallNote !== undefined
+          ? { postCompletionCallNote: parsed.postCompletionCallNote?.trim() || null }
+          : {}),
         ...(parsed.generalCallPreferredTime !== undefined
           ? { generalCallPreferredTime: parsed.generalCallPreferredTime?.trim() || null }
-          : {}),
-        ...(parsed.maekakuPreferredPhone !== undefined
-          ? { maekakuPreferredPhone: parsed.maekakuPreferredPhone?.trim() || null }
           : {}),
       },
       select: { id: true },

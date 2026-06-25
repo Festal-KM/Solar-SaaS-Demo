@@ -628,22 +628,37 @@ export const ProjectApplicationEditSchema = z.object({
 export type ProjectApplicationEditInput = z.infer<typeof ProjectApplicationEditSchema>;
 
 // ---------------------------------------------------------------------------
-// コール状況（バッチ B）（Customer 列）.
+// コール状況（コールタブ 4 セクション）（Customer 列）.
 //
-// 案件情報「コール状況」セクションのインライン編集ペイロード。完工コール /
-// ローン完了コールのステータス（CallStatusEnum）+ 希望日時、汎用コール希望時間帯
-// （自由記述）、マエカク希望時の電話番号（PII）。日時は YYYY-MM-DD or ISO 文字列で
-// 受け、Server Action 側で Date 化する。各 null でクリア可能、省略は無変更。
-// マエカク希望「日時」(maekakuPreferredAt) はこの面では扱わない（F-063 ヒアリング側）。
+// コールタブのインライン編集ペイロード。4 セクション（マエカクコール / サンキュー
+// コール / ローン審査完了コール / 施工完了コール）それぞれの「ステータス（CallStatusEnum）
+// + 希望日時 + メモ」を網羅する。マエカクはステータス（maekakuStatus: pending/done/
+// unnecessary）+ 希望日時（maekakuPreferredAt・商談履歴タブと共用列）+ メモ。
+// サンキューコール（thankYouCall*）は施工タブ Construction.thankYouCallAt とは別概念・別列。
+// 日時は YYYY-MM-DD or ISO 文字列で受け、Server Action 側で Date 化する。
+// 各 null でクリア可能、省略は無変更。汎用コール希望時間帯・マエカク希望電話は維持。
 // ---------------------------------------------------------------------------
 export const ProjectCallStatusSchema = z.object({
   customerId: z.string().min(1),
-  postCompletionCallStatus: CallStatusEnum.nullable().optional(),
-  postCompletionCallPreferredAt: z.string().nullable().optional(),
+  // マエカクコール（ステータスは maekakuStatus: pending/done/unnecessary、希望日時は共用列）。
+  maekakuStatus: z.enum(["pending", "done", "unnecessary"]).nullable().optional(),
+  maekakuPreferredAt: z.string().nullable().optional(),
+  maekakuCallNote: z.string().max(2000).nullable().optional(),
+  maekakuPreferredPhone: z.string().max(50).nullable().optional(),
+  // サンキューコール（CALL_STATUS_VALUES）。
+  thankYouCallStatus: CallStatusEnum.nullable().optional(),
+  thankYouCallPreferredAt: z.string().nullable().optional(),
+  thankYouCallNote: z.string().max(2000).nullable().optional(),
+  // ローン審査完了コール（CALL_STATUS_VALUES）。
   loanCompletionCallStatus: CallStatusEnum.nullable().optional(),
   loanCompletionCallPreferredAt: z.string().nullable().optional(),
+  loanCompletionCallNote: z.string().max(2000).nullable().optional(),
+  // 施工完了（完工）コール（CALL_STATUS_VALUES）。
+  postCompletionCallStatus: CallStatusEnum.nullable().optional(),
+  postCompletionCallPreferredAt: z.string().nullable().optional(),
+  postCompletionCallNote: z.string().max(2000).nullable().optional(),
+  // 汎用コール希望時間帯（自由記述）。
   generalCallPreferredTime: z.string().max(255).nullable().optional(),
-  maekakuPreferredPhone: z.string().max(50).nullable().optional(),
 });
 
 export type ProjectCallStatusInput = z.infer<typeof ProjectCallStatusSchema>;

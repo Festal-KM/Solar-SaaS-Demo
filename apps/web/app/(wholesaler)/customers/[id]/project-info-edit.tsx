@@ -253,105 +253,306 @@ export function EditOverviewDialog({
   );
 }
 
-/* ── コール状況（バッチ B・Customer 列）。マエカクステータスは概況側の所有のためここでは編集しない ── */
+/* ── コールタブ 4 セクション（Customer 列）。各セクションをカード内インライン編集。 ── */
 const CALL_STATUS_UNSET = "__unset__";
 
-export function EditCallStatusDialog({
+// 保存/キャンセルフッタ（インライン版・dirty 連動）。
+function InlineFooter({
+  onSave,
+  onCancel,
+  pending,
+  dirty,
+}: {
+  onSave: () => void;
+  onCancel: () => void;
+  pending: boolean;
+  dirty: boolean;
+}) {
+  return (
+    <div className="flex justify-end gap-2">
+      <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={pending || !dirty}>
+        {ed.cancel}
+      </Button>
+      <Button type="button" size="sm" onClick={onSave} disabled={pending || !dirty}>
+        {pending ? c.saving : ed.save}
+      </Button>
+    </div>
+  );
+}
+
+function callStatusOrNull(v: string): CallStatusValue | null {
+  return v === CALL_STATUS_UNSET ? null : (v as CallStatusValue);
+}
+
+// CALL_STATUS_VALUES の select（サンキュー/ローン審査完了/施工完了で共用）。
+function CallStatusSelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const cs = ed.callStatusLabels;
+  return (
+    <select id={id} className={FIELD} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value={CALL_STATUS_UNSET}>{ed.unset}</option>
+      <option value="not_done">{cs.not_done}</option>
+      <option value="done">{cs.done}</option>
+      <option value="unnecessary">{cs.unnecessary}</option>
+    </select>
+  );
+}
+
+/* マエカクコール（ステータス maekakuStatus + 希望日時 maekakuPreferredAt 共用列 + メモ + 希望電話） */
+export function MaekakuCallInlineEdit({
   customerId,
   initial,
 }: {
   customerId: string;
   initial: ProjectCallsEditable;
 }) {
-  const cs = ed.callStatusLabels;
-  const [open, setOpen] = useState(false);
-  const [maekakuPreferredPhone, setMaekakuPreferredPhone] = useState(initial.maekakuPreferredPhone ?? "");
-  const [postStatus, setPostStatus] = useState(initial.postCompletionCallStatus ?? CALL_STATUS_UNSET);
-  const [postAt, setPostAt] = useState(toDateTimeInput(initial.postCompletionCallPreferredAt));
-  const [loanStatus, setLoanStatus] = useState(initial.loanCompletionCallStatus ?? CALL_STATUS_UNSET);
-  const [loanAt, setLoanAt] = useState(toDateTimeInput(initial.loanCompletionCallPreferredAt));
-  const [generalTime, setGeneralTime] = useState(initial.generalCallPreferredTime ?? "");
-  const { pending, run } = useSaver(() => setOpen(false));
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [status, setStatus] = useState(initial.maekakuStatus ?? "");
+  const [preferredAt, setPreferredAt] = useState(toDateTimeInput(initial.maekakuPreferredAt));
+  const [phone, setPhone] = useState(initial.maekakuPreferredPhone ?? "");
+  const [note, setNote] = useState(initial.maekakuCallNote ?? "");
+
+  const initStatus = initial.maekakuStatus ?? "";
+  const initAt = toDateTimeInput(initial.maekakuPreferredAt);
+  const dirty =
+    status !== initStatus ||
+    preferredAt !== initAt ||
+    phone !== (initial.maekakuPreferredPhone ?? "") ||
+    note !== (initial.maekakuCallNote ?? "");
 
   function reset() {
-    setMaekakuPreferredPhone(initial.maekakuPreferredPhone ?? "");
-    setPostStatus(initial.postCompletionCallStatus ?? CALL_STATUS_UNSET);
-    setPostAt(toDateTimeInput(initial.postCompletionCallPreferredAt));
-    setLoanStatus(initial.loanCompletionCallStatus ?? CALL_STATUS_UNSET);
-    setLoanAt(toDateTimeInput(initial.loanCompletionCallPreferredAt));
-    setGeneralTime(initial.generalCallPreferredTime ?? "");
+    setStatus(initStatus);
+    setPreferredAt(initAt);
+    setPhone(initial.maekakuPreferredPhone ?? "");
+    setNote(initial.maekakuCallNote ?? "");
   }
 
-  function onOpenChange(next: boolean) {
-    if (next) reset();
-    setOpen(next);
-  }
-
-  function statusOrNull(v: string): CallStatusValue | null {
-    return v === CALL_STATUS_UNSET ? null : (v as CallStatusValue);
-  }
-
-  function save() {
-    run(() =>
-      saveProjectCallStatusAction({
-        customerId,
-        maekakuPreferredPhone: strOrNull(maekakuPreferredPhone),
-        postCompletionCallStatus: statusOrNull(postStatus),
-        postCompletionCallPreferredAt: postAt ? new Date(postAt).toISOString() : null,
-        loanCompletionCallStatus: statusOrNull(loanStatus),
-        loanCompletionCallPreferredAt: loanAt ? new Date(loanAt).toISOString() : null,
-        generalCallPreferredTime: strOrNull(generalTime),
-      }),
-    );
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectCallStatusAction({
+          customerId,
+          maekakuStatus: status === "" ? null : (status as "pending" | "done" | "unnecessary"),
+          maekakuPreferredAt: preferredAt ? new Date(preferredAt).toISOString() : null,
+          maekakuPreferredPhone: strOrNull(phone),
+          maekakuCallNote: strOrNull(note),
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <EditTrigger label={ed.editCallStatus} />
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{ed.editCallStatus}</DialogTitle>
-        </DialogHeader>
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-          <FormField label={f.maekakuPreferredPhone} htmlFor="cl-maekaku-phone">
-            <Input
-              id="cl-maekaku-phone"
-              type="tel"
-              value={maekakuPreferredPhone}
-              onChange={(e) => setMaekakuPreferredPhone(e.target.value)}
-            />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={f.postCompletionCallStatus} htmlFor="cl-post-status">
-              <select id="cl-post-status" className={FIELD} value={postStatus} onChange={(e) => setPostStatus(e.target.value)}>
-                <option value={CALL_STATUS_UNSET}>{ed.unset}</option>
-                <option value="not_done">{cs.not_done}</option>
-                <option value="done">{cs.done}</option>
-                <option value="unnecessary">{cs.unnecessary}</option>
-              </select>
-            </FormField>
-            <FormField label={f.postCompletionCallPreferredAt} htmlFor="cl-post-at">
-              <input id="cl-post-at" type="datetime-local" className={FIELD} value={postAt} onChange={(e) => setPostAt(e.target.value)} />
-            </FormField>
-            <FormField label={f.loanCompletionCallStatus} htmlFor="cl-loan-status">
-              <select id="cl-loan-status" className={FIELD} value={loanStatus} onChange={(e) => setLoanStatus(e.target.value)}>
-                <option value={CALL_STATUS_UNSET}>{ed.unset}</option>
-                <option value="not_done">{cs.not_done}</option>
-                <option value="done">{cs.done}</option>
-                <option value="unnecessary">{cs.unnecessary}</option>
-              </select>
-            </FormField>
-            <FormField label={f.loanCompletionCallPreferredAt} htmlFor="cl-loan-at">
-              <input id="cl-loan-at" type="datetime-local" className={FIELD} value={loanAt} onChange={(e) => setLoanAt(e.target.value)} />
-            </FormField>
-          </div>
-          <FormField label={f.generalCallPreferredTime} htmlFor="cl-general">
-            <Input id="cl-general" value={generalTime} onChange={(e) => setGeneralTime(e.target.value)} placeholder="例: 平日19:00以降" />
-          </FormField>
-        </div>
-        <Footer onSave={save} onCancel={() => setOpen(false)} pending={pending} />
-      </DialogContent>
-    </Dialog>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label={f.callMaekakuStatus} htmlFor="mk-status">
+          <select id="mk-status" className={FIELD} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">{ed.unset}</option>
+            <option value="pending">{ed.maekakuStatusLabels.pending}</option>
+            <option value="done">{ed.maekakuStatusLabels.done}</option>
+            <option value="unnecessary">{ed.maekakuStatusLabels.unnecessary}</option>
+          </select>
+        </FormField>
+        <FormField label={f.maekakuPreferredAt} htmlFor="mk-at">
+          <input id="mk-at" type="datetime-local" className={FIELD} value={preferredAt} onChange={(e) => setPreferredAt(e.target.value)} />
+        </FormField>
+        <FormField label={f.maekakuPreferredPhone} htmlFor="mk-phone">
+          <Input id="mk-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </FormField>
+      </div>
+      <FormField label={f.maekakuCallNote} htmlFor="mk-note">
+        <Textarea id="mk-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+      </FormField>
+      <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+    </div>
+  );
+}
+
+/* サンキューコール（新規 3 列） */
+export function ThankYouCallInlineEdit({
+  customerId,
+  initial,
+}: {
+  customerId: string;
+  initial: ProjectCallsEditable;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [status, setStatus] = useState(initial.thankYouCallStatus ?? CALL_STATUS_UNSET);
+  const [at, setAt] = useState(toDateTimeInput(initial.thankYouCallPreferredAt));
+  const [note, setNote] = useState(initial.thankYouCallNote ?? "");
+
+  const initStatus = initial.thankYouCallStatus ?? CALL_STATUS_UNSET;
+  const initAt = toDateTimeInput(initial.thankYouCallPreferredAt);
+  const dirty = status !== initStatus || at !== initAt || note !== (initial.thankYouCallNote ?? "");
+
+  function reset() {
+    setStatus(initStatus);
+    setAt(initAt);
+    setNote(initial.thankYouCallNote ?? "");
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectCallStatusAction({
+          customerId,
+          thankYouCallStatus: callStatusOrNull(status),
+          thankYouCallPreferredAt: at ? new Date(at).toISOString() : null,
+          thankYouCallNote: strOrNull(note),
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label={f.thankYouCallStatus} htmlFor="ty-status">
+          <CallStatusSelect id="ty-status" value={status} onChange={setStatus} />
+        </FormField>
+        <FormField label={f.thankYouCallPreferredAt} htmlFor="ty-at">
+          <input id="ty-at" type="datetime-local" className={FIELD} value={at} onChange={(e) => setAt(e.target.value)} />
+        </FormField>
+      </div>
+      <FormField label={f.thankYouCallNote} htmlFor="ty-note">
+        <Textarea id="ty-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+      </FormField>
+      <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+    </div>
+  );
+}
+
+/* ローン審査完了コール */
+export function LoanCompletionCallInlineEdit({
+  customerId,
+  initial,
+}: {
+  customerId: string;
+  initial: ProjectCallsEditable;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [status, setStatus] = useState(initial.loanCompletionCallStatus ?? CALL_STATUS_UNSET);
+  const [at, setAt] = useState(toDateTimeInput(initial.loanCompletionCallPreferredAt));
+  const [note, setNote] = useState(initial.loanCompletionCallNote ?? "");
+
+  const initStatus = initial.loanCompletionCallStatus ?? CALL_STATUS_UNSET;
+  const initAt = toDateTimeInput(initial.loanCompletionCallPreferredAt);
+  const dirty = status !== initStatus || at !== initAt || note !== (initial.loanCompletionCallNote ?? "");
+
+  function reset() {
+    setStatus(initStatus);
+    setAt(initAt);
+    setNote(initial.loanCompletionCallNote ?? "");
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectCallStatusAction({
+          customerId,
+          loanCompletionCallStatus: callStatusOrNull(status),
+          loanCompletionCallPreferredAt: at ? new Date(at).toISOString() : null,
+          loanCompletionCallNote: strOrNull(note),
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label={f.loanCompletionCallStatus} htmlFor="lc-status">
+          <CallStatusSelect id="lc-status" value={status} onChange={setStatus} />
+        </FormField>
+        <FormField label={f.loanCompletionCallPreferredAt} htmlFor="lc-at">
+          <input id="lc-at" type="datetime-local" className={FIELD} value={at} onChange={(e) => setAt(e.target.value)} />
+        </FormField>
+      </div>
+      <FormField label={f.loanCompletionCallNote} htmlFor="lc-note">
+        <Textarea id="lc-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+      </FormField>
+      <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+    </div>
+  );
+}
+
+/* 施工完了（完工）コール */
+export function PostCompletionCallInlineEdit({
+  customerId,
+  initial,
+}: {
+  customerId: string;
+  initial: ProjectCallsEditable;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [status, setStatus] = useState(initial.postCompletionCallStatus ?? CALL_STATUS_UNSET);
+  const [at, setAt] = useState(toDateTimeInput(initial.postCompletionCallPreferredAt));
+  const [note, setNote] = useState(initial.postCompletionCallNote ?? "");
+
+  const initStatus = initial.postCompletionCallStatus ?? CALL_STATUS_UNSET;
+  const initAt = toDateTimeInput(initial.postCompletionCallPreferredAt);
+  const dirty = status !== initStatus || at !== initAt || note !== (initial.postCompletionCallNote ?? "");
+
+  function reset() {
+    setStatus(initStatus);
+    setAt(initAt);
+    setNote(initial.postCompletionCallNote ?? "");
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectCallStatusAction({
+          customerId,
+          postCompletionCallStatus: callStatusOrNull(status),
+          postCompletionCallPreferredAt: at ? new Date(at).toISOString() : null,
+          postCompletionCallNote: strOrNull(note),
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label={f.postCompletionCallStatus} htmlFor="pc-status">
+          <CallStatusSelect id="pc-status" value={status} onChange={setStatus} />
+        </FormField>
+        <FormField label={f.postCompletionCallPreferredAt} htmlFor="pc-at">
+          <input id="pc-at" type="datetime-local" className={FIELD} value={at} onChange={(e) => setAt(e.target.value)} />
+        </FormField>
+      </div>
+      <FormField label={f.postCompletionCallNote} htmlFor="pc-note">
+        <Textarea id="pc-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+      </FormField>
+      <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+    </div>
   );
 }
 

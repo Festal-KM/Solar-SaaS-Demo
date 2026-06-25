@@ -1073,15 +1073,22 @@ model Customer {
   proposedProduct            String?            // ご提案商材（自由記述・トスアップ時）
   proposedProductId          String?            // ご提案商材（商品マスタ参照、任意）
   maekakuPreferredAt         DateTime?          // マエカク電話希望日時（maekakuStatus と併存）
-  // コール状況（バッチ B）。完工コール / ローン完了コールのステータス（CALL_STATUS_VALUES:
+  // コール状況（バッチ B）。施工完了コール / ローン審査完了コールのステータス（CALL_STATUS_VALUES:
   // not_done/done/unnecessary）+ 希望日時。汎用コール希望時間帯は自由記述。マエカク希望時の
   // 連絡先電話は既存 maekakuPreferredAt（日時）とは別概念の「電話番号」。PII（電話番号）。
-  postCompletionCallStatus      String?         // 完工コールステータス（not_done/done/unnecessary）
-  postCompletionCallPreferredAt DateTime?       // 完工コール希望日時
-  loanCompletionCallStatus      String?         // ローン完了コールステータス（not_done/done/unnecessary）
-  loanCompletionCallPreferredAt DateTime?       // ローン完了コール希望日時
+  postCompletionCallStatus      String?         // 施工完了コールステータス（not_done/done/unnecessary）
+  postCompletionCallPreferredAt DateTime?       // 施工完了コール希望日時
+  postCompletionCallNote        String?         // 施工完了コール メモ（自由記述）
+  loanCompletionCallStatus      String?         // ローン審査完了コールステータス（not_done/done/unnecessary）
+  loanCompletionCallPreferredAt DateTime?       // ローン審査完了コール希望日時
+  loanCompletionCallNote        String?         // ローン審査完了コール メモ（自由記述）
   generalCallPreferredTime      String?         // 汎用コール希望時間帯（自由記述、例「平日19:00以降」）
   maekakuPreferredPhone         String?         // マエカク希望時の電話番号（日時 maekakuPreferredAt とは別）
+  maekakuCallNote               String?         // マエカクコール メモ（自由記述。希望日時は maekakuPreferredAt 共用）
+  // サンキューコール（コールタブ・Customer 列）。施工タブ Construction.thankYouCallAt とは別概念・別列。
+  thankYouCallStatus            String?         // サンキューコールステータス（not_done/done/unnecessary）
+  thankYouCallPreferredAt       DateTime?       // サンキューコール希望日時
+  thankYouCallNote              String?         // サンキューコール メモ（自由記述）
   // 電気契約・設備（基本情報タブで手動編集する識別子・ステータス。全て自由記述・nullable）。
   // 注: equipmentId は Customer 列であり、契約の equipmentSerialId（projectInfo.fields.equipmentId）
   // とは別概念・別ラベル namespace（customer.detail.fields.equipmentId）。

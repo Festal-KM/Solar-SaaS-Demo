@@ -2045,15 +2045,46 @@ export const labels = {
           submittedDate: "申請日",
           approvedDate: "交付決定日",
           grantedAmount: "交付額",
-          // コール状況（バッチ B）。
+          // コールタブ 4 セクション。
           callMaekakuStatus: "マエカクステータス",
+          maekakuPreferredAt: "マエカク希望日時",
+          maekakuCallNote: "メモ",
           maekakuPreferredPhone: "マエカク希望電話",
-          postCompletionCallStatus: "完工コールステータス",
-          postCompletionCallPreferredAt: "完工コール希望日時",
-          loanCompletionCallStatus: "ローン完了コールステータス",
-          loanCompletionCallPreferredAt: "ローン完了コール希望日時",
+          thankYouCallStatus: "サンキューコールステータス",
+          thankYouCallPreferredAt: "サンキューコール希望日時",
+          thankYouCallNote: "メモ",
+          postCompletionCallStatus: "施工完了コールステータス",
+          postCompletionCallPreferredAt: "施工完了コール希望日時",
+          postCompletionCallNote: "メモ",
+          loanCompletionCallStatus: "ローン審査完了コールステータス",
+          loanCompletionCallPreferredAt: "ローン審査完了コール希望日時",
+          loanCompletionCallNote: "メモ",
           generalCallPreferredTime: "汎用コール希望時間帯",
         },
+        // コールタブの 4 セクション見出し + マエカク過去コール履歴。
+        callSections: {
+          maekakuCall: "マエカクコール",
+          thankYouCall: "サンキューコール",
+          loanCompletionCall: "ローン審査完了コール",
+          postCompletionCall: "施工完了コール",
+          preCallHistoryTitle: "過去コール履歴",
+          preCallHistoryEmpty: "履歴はありません",
+          preCallCalledAt: "架電日時",
+          preCallResult: "結果",
+          preCallVisitConfirmedAt: "訪問確定日時",
+          preCallPersonConfirmed: "本人確認",
+          preCallAppointmentAt: "対象アポ日時",
+          preCallNote: "メモ",
+          preCallNextAction: "次回アクション",
+        },
+        // PreCallResult CODE → 表示ラベル（マエカク過去コール履歴）。
+        preCallResultLabels: {
+          APPROVED: "承認",
+          ABSENT: "不在",
+          CALLBACK: "折返し",
+          CANCELLED: "キャンセル",
+          RESCHEDULED: "日程変更",
+        } as Record<string, string>,
         // DTO の enum CODE → 表示ラベル。
         callStatusLabels: {
           NONE: "未架電",
@@ -2222,7 +2253,6 @@ export const labels = {
           addEquipment: "設備を追加",
           editConstruction: "工事・完工を編集",
           editApplication: "認定・設備（申請）を編集",
-          editCallStatus: "コール状況を編集",
           // コール状況ステータス選択肢（CALL_STATUS_VALUES）。
           callStatusLabels: {
             not_done: "実施前",

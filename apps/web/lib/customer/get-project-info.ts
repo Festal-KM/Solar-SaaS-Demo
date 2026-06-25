@@ -135,11 +135,17 @@ async function loadProjectInfo(
       faceToFace: true,
       proposedProduct: true,
       maekakuPreferredAt: true,
-      // コール状況（バッチ B）。マエカク希望電話は maskPhone で DTO 整形時にマスク。
+      // コール状況（コールタブ 4 セクション）。マエカク希望電話は maskPhone で DTO 整形時にマスク。
+      maekakuCallNote: true,
+      thankYouCallStatus: true,
+      thankYouCallPreferredAt: true,
+      thankYouCallNote: true,
       postCompletionCallStatus: true,
       postCompletionCallPreferredAt: true,
+      postCompletionCallNote: true,
       loanCompletionCallStatus: true,
       loanCompletionCallPreferredAt: true,
+      loanCompletionCallNote: true,
       generalCallPreferredTime: true,
       maekakuPreferredPhone: true,
       existingEquipments: {
@@ -155,11 +161,24 @@ async function loadProjectInfo(
           attributes: true,
         },
       },
+      // マエカクコール過去履歴（Appointment→PreCall）。アポ獲得日も同源から導出。
       appointments: {
-        where: { acquiredAt: { not: null } },
-        orderBy: { acquiredAt: "desc" },
-        take: 1,
-        select: { acquiredAt: true },
+        orderBy: { scheduledAt: "desc" },
+        select: {
+          acquiredAt: true,
+          scheduledAt: true,
+          preCall: {
+            select: {
+              id: true,
+              calledAt: true,
+              result: true,
+              visitConfirmedAt: true,
+              personConfirmed: true,
+              note: true,
+              nextAction: true,
+            },
+          },
+        },
       },
     },
   });
@@ -512,7 +531,12 @@ async function loadProjectInfo(
       landlinePhone: maskLandlinePhone(customer.landlinePhone, viewer),
       mobilePhone: maskMobilePhone(customer.mobilePhone, viewer),
       maekakuPreferredAt: isoOrNull(customer.maekakuPreferredAt),
-      acquiredAt: isoOrNull(customer.appointments[0]?.acquiredAt ?? null),
+      acquiredAt: isoOrNull(
+        customer.appointments
+          .map((a) => a.acquiredAt)
+          .filter((d): d is Date => d != null)
+          .sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
+      ),
       existingEquipments: customer.existingEquipments.map((eq) => ({
         id: eq.id,
         category: eq.category,
@@ -524,15 +548,38 @@ async function loadProjectInfo(
         attributes: asRecord(eq.attributes),
       })),
     },
-    // バッチ B: コール状況。マエカク希望電話は連絡先 PII（maskMobilePhone で下4桁マスク）。
-    // マエカク「日時」(maekakuPreferredAt) は本セクションでは扱わない（ヒアリング側）。
+    // コールタブ 4 セクション。マエカク希望電話は連絡先 PII（maskMobilePhone で下4桁マスク）。
+    // マエカク希望日時は商談履歴タブと共用列。preCallHistory はアポ事前確認コールの実績（read-only）。
     calls: {
       maekakuStatus: customer.maekakuStatus,
+      maekakuPreferredAt: isoOrNull(customer.maekakuPreferredAt),
+      maekakuCallNote: customer.maekakuCallNote,
       maekakuPreferredPhone: maskMobilePhone(customer.maekakuPreferredPhone, viewer),
-      postCompletionCallStatus: customer.postCompletionCallStatus,
-      postCompletionCallPreferredAt: isoOrNull(customer.postCompletionCallPreferredAt),
+      preCallHistory: customer.appointments
+        .filter((a) => a.preCall != null)
+        .map((a) => {
+          const pc = a.preCall!;
+          return {
+            preCallId: pc.id,
+            calledAt: pc.calledAt.toISOString(),
+            result: pc.result,
+            visitConfirmedAt: isoOrNull(pc.visitConfirmedAt),
+            personConfirmed: pc.personConfirmed,
+            appointmentScheduledAt: isoOrNull(a.scheduledAt),
+            note: pc.note,
+            nextAction: pc.nextAction,
+          };
+        })
+        .sort((a, b) => new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime()),
+      thankYouCallStatus: customer.thankYouCallStatus,
+      thankYouCallPreferredAt: isoOrNull(customer.thankYouCallPreferredAt),
+      thankYouCallNote: customer.thankYouCallNote,
       loanCompletionCallStatus: customer.loanCompletionCallStatus,
       loanCompletionCallPreferredAt: isoOrNull(customer.loanCompletionCallPreferredAt),
+      loanCompletionCallNote: customer.loanCompletionCallNote,
+      postCompletionCallStatus: customer.postCompletionCallStatus,
+      postCompletionCallPreferredAt: isoOrNull(customer.postCompletionCallPreferredAt),
+      postCompletionCallNote: customer.postCompletionCallNote,
       generalCallPreferredTime: customer.generalCallPreferredTime,
     },
   };
