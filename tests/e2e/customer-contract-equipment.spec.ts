@@ -82,7 +82,7 @@ async function openNoContractCustomer(page: Page): Promise<void> {
 }
 
 async function openContractTab(page: Page): Promise<Locator> {
-  await page.getByRole("tab", { name: "契約状況" }).click();
+  await page.getByRole("tab", { name: "契約" }).click();
   const panel = page.getByRole("tabpanel");
   await expect(panel).toBeVisible();
   return panel;

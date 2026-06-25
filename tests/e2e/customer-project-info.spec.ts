@@ -332,7 +332,7 @@ test.describe("バッチ B コール状況（専用コール状況タブ）", ()
 
     // コール状況は基本情報タブの案件情報埋め込みビューから専用「コール状況」タブへ
     // 集約済み。当該タブへ切り替えてから検証する。
-    await page.getByRole("tab", { name: "コール状況" }).click();
+    await page.getByRole("tab", { name: "コール" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 

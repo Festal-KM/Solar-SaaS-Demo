@@ -78,7 +78,7 @@ test.describe("コール状況タブ（専用タブ・Customer 列）", () => {
     await openSeededCustomer(page);
 
     // コール状況タブへ切り替え。
-    await page.getByRole("tab", { name: "コール状況" }).click();
+    await page.getByRole("tab", { name: "コール" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 
@@ -142,7 +142,7 @@ test.describe("ローン情報タブ（専用タブ・契約 1:N）", () => {
     await openContractedCustomer(page);
 
     // ローン情報タブへ切り替え。
-    await page.getByRole("tab", { name: "ローン情報" }).click();
+    await page.getByRole("tab", { name: "ローン審査" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 
@@ -194,7 +194,7 @@ test.describe("ローン情報タブ（専用タブ・契約 1:N）", () => {
     await signInAsDemo(page);
     await openSeededCustomer(page);
 
-    await page.getByRole("tab", { name: "ローン情報" }).click();
+    await page.getByRole("tab", { name: "ローン審査" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 

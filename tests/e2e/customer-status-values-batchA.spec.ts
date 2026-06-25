@@ -159,7 +159,7 @@ test.describe("バッチ A: 顧客ステータス値域の仕様準拠化", () =
     await openContractedCustomer(page);
 
     // 工事・完工（施工コスト）編集は専用「施工状況」タブの ProjectConstructionList へ集約済み。
-    await page.getByRole("tab", { name: "施工状況" }).click();
+    await page.getByRole("tab", { name: "施工" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 

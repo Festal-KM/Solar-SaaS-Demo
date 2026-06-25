@@ -92,7 +92,7 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     await openContractedCustomer(page);
 
     // 施工状況タブへ切り替え。
-    await page.getByRole("tab", { name: "施工状況" }).click();
+    await page.getByRole("tab", { name: "施工" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 
@@ -132,7 +132,7 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     await signInAsDemo(page);
     await openContractedCustomer(page);
 
-    await page.getByRole("tab", { name: "施工状況" }).click();
+    await page.getByRole("tab", { name: "施工" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 
@@ -166,7 +166,7 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     await signInAsDemo(page);
     await openNoContractCustomer(page);
 
-    await page.getByRole("tab", { name: "施工状況" }).click();
+    await page.getByRole("tab", { name: "施工" }).click();
     const panel = page.getByRole("tabpanel");
     await expect(panel).toBeVisible();
 
