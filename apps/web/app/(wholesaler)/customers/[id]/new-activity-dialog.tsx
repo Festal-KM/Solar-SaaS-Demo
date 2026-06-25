@@ -34,10 +34,13 @@ interface UserChoice {
 
 interface NewActivityDialogProps {
   customerId: string;
-  users?: UserChoice[]; // 互換のため受け取るが現在は未使用
+  users?: UserChoice[]; // 担当者選択の候補（自社社員）
+  defaultAssigneeUserId?: string | null; // 既定の担当者（既定はこの顧客のクロージング担当）
   defaultCategory?: HistoryCategory; // 初期選択カテゴリ（見積セクションからは "quote"）
   triggerLabel?: string; // トリガーボタンの文言（既定は「新規記録」）
 }
+
+const ASSIGNEE_UNSET = "__unset__";
 
 // 種別の選択肢（見積提示はこの一覧には出さず、見積セクションから専用で記録する）。
 const CATEGORY_CODES: HistoryCategory[] = ["tossup", "appointment", "phone", "other"];
@@ -50,6 +53,8 @@ function todayLocal(): string {
 
 export function NewActivityDialog({
   customerId,
+  users = [],
+  defaultAssigneeUserId = null,
   defaultCategory = "tossup",
   triggerLabel,
 }: NewActivityDialogProps) {
@@ -61,17 +66,25 @@ export function NewActivityDialog({
 
   const isQuote = defaultCategory === "quote";
 
+  // 既定担当者はクロージング担当（候補一覧に存在する自社社員のときのみ採用）。
+  const initialAssignee =
+    defaultAssigneeUserId && users.some((u) => u.id === defaultAssigneeUserId)
+      ? defaultAssigneeUserId
+      : ASSIGNEE_UNSET;
+
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const [occurredAt, setOccurredAt] = useState(todayLocal());
   const [category, setCategory] = useState<HistoryCategory>(defaultCategory);
+  const [assigneeUserId, setAssigneeUserId] = useState<string>(initialAssignee);
   const [detail, setDetail] = useState("");
   const [amount, setAmount] = useState("");
 
   function resetForm() {
     setOccurredAt(todayLocal());
     setCategory(defaultCategory);
+    setAssigneeUserId(initialAssignee);
     setDetail("");
     setAmount("");
   }
@@ -98,6 +111,7 @@ export function NewActivityDialog({
             category === "quote" && amount.trim() && Number.isFinite(amountNum) && amountNum >= 0
               ? amountNum
               : null,
+          assigneeUserId: assigneeUserId === ASSIGNEE_UNSET ? null : assigneeUserId,
           tasks: [],
           files: [],
         });
@@ -154,6 +168,22 @@ export function NewActivityDialog({
                 </select>
               </div>
             ) : null}
+            <div className="space-y-1.5">
+              <Label htmlFor="activity-assignee">{na.assignee}</Label>
+              <select
+                id="activity-assignee"
+                value={assigneeUserId}
+                onChange={(e) => setAssigneeUserId(e.target.value)}
+                className={inputClass}
+              >
+                <option value={ASSIGNEE_UNSET}>{na.assigneeUnset}</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {isQuote ? (

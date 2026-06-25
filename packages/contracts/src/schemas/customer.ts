@@ -171,6 +171,8 @@ export const CustomerUpdateSchema = z.object({
   maekakuStatus: z.enum(["pending", "done", "unnecessary"]).nullable().optional(),
   nextAction: z.string().max(2000).nullable().optional(),
   nextAppointmentAt: z.string().nullable().optional(),
+  // マエカク電話希望日時（maekakuStatus と併存）。日付は YYYY-MM-DD or ISO 文字列、null でクリア。
+  maekakuPreferredAt: z.string().nullable().optional(),
   // 担当者変更（顧客の registeredByUserId = 登録者を更新）。
   registeredByUserId: z.string().min(1).optional(),
   // トスアップ担当 / クロージング担当。担当主体は自社社員(User) か二次店(Relationship)
@@ -225,6 +227,8 @@ export const CustomerActivityCreateSchema = z.object({
   detail: z.string().trim().min(1).max(4000),
   // 見積提示カテゴリのときの提示金額（円・整数・0 以上）。任意。
   amount: z.number().int().nonnegative().nullable().optional(),
+  // 記録の担当者（営業担当）。createdByUserId（作成者/監査）とは別概念。未設定は null。
+  assigneeUserId: z.string().min(1).nullable().optional(),
   tasks: z
     .array(
       z.object({
@@ -260,12 +264,14 @@ export const CustomerMessageCreateSchema = z.object({
 export type CustomerMessageCreateInput = z.infer<typeof CustomerMessageCreateSchema>;
 
 // 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
-// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット（バッチ C）、CONTRACT=契約状況タブの契約関連ファイル。
+// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット（バッチ C）、CONTRACT=契約状況タブの契約関連ファイル、
+// QUOTE=見積セクションの見積書ファイル（見積提示アクティビティに紐づく）。
 export const CustomerFileCategoryEnum = z.enum([
   "GENERAL",
   "APPLICATION",
   "PV_DRAWING",
   "CONTRACT",
+  "QUOTE",
 ]);
 
 export type CustomerFileCategory = z.infer<typeof CustomerFileCategoryEnum>;
@@ -281,6 +287,20 @@ export const CustomerFileRecordSchema = z.object({
 });
 
 export type CustomerFileRecordInput = z.infer<typeof CustomerFileRecordSchema>;
+
+// 既存アクティビティ（見積提示）に紐づくファイル記録。見積セクションの見積書アップロード用。
+// activityId は同一 customer の活動か Server Action 側で検証する。
+export const CustomerActivityFileRecordSchema = z.object({
+  customerId: z.string().min(1),
+  activityId: z.string().min(1),
+  fileKey: z.string().min(1),
+  fileName: z.string().min(1).max(255),
+  contentType: z.string().nullable().optional(),
+  size: z.number().int().nonnegative().nullable().optional(),
+  category: CustomerFileCategoryEnum.default("QUOTE"),
+});
+
+export type CustomerActivityFileRecordInput = z.infer<typeof CustomerActivityFileRecordSchema>;
 
 // ToDo 単体作成（ToDo タブの新規起票。activity に紐づかない）。
 export const CustomerTaskCreateSchema = z.object({

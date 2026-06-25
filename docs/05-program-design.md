@@ -2789,6 +2789,14 @@ model ContractPayment {
 - いずれも RLS は `Customer.wholesalerId` 経由の相関 EXISTS（本 §16.4 と同形）。§3.9 にこの「親経由 EXISTS」テンプレートを正式に追記する。
 - 廃止: `CustomerQuote`（見積は `CustomerActivity.category='quote'` + `amount` に統合済）。
 
+#### 16.7.1 商談履歴タブ 3 点改修（マエカク希望日時 / 記録の担当者 / 見積書ファイル）
+
+商談履歴タブの 3 改修。新規トップレベル概念は作らず、既存列・既存子テーブルへ非破壊追加する（#3）:
+
+- **マエカク希望日時**: 既存 `Customer.maekakuPreferredAt`（DateTime?）を商談履歴タブ（`NegotiationStatusPanel`）の `datetime-local` 入力で編集可能にする。保存は既存 `updateCustomerAction`（`CustomerUpdateSchema.maekakuPreferredAt`）。DDL 変更なし。マエカク「状況」(`maekakuStatus`) と「希望日時」(`maekakuPreferredAt`) は併存する別概念。
+- **記録の担当者**: `CustomerActivity.assigneeUserId String?` を追加（nullable・非破壊 ADD COLUMN、migration `20260614000000_activity_assignee`）。`NewActivityDialog` で担当者を選択でき、**既定値はその顧客のクロージング担当 (`closingUserId`)**（候補一覧に存在する自社社員のときのみ自動選択、二次店担当のときは未設定）。**`assigneeUserId`（営業担当）と `createdByUserId`（作成者・監査）は別概念**で混同しない。`assigneeUserId` は同テナント `User` か `withTenant` RLS スコープ内 `findUnique` で検証してから保存する。一覧表示は assignee 優先・無ければ作成者にフォールバック。
+- **見積書ファイル**: `CustomerFileCategory` に `QUOTE` を追加（`ALTER TYPE ADD VALUE`・単独 migration `20260614010000_customer_file_category_quote`。enum 追加と利用を同一 tx にしない）。見積セクションの各見積提示アクティビティ（`category='quote'`）に紐づくファイルを `CustomerFile.activityId` + `category='QUOTE'`（R2 prefix `quotes/`）でアップロード/一覧。新規 Server Action `createCustomerActivityFile` が `activityId` を**同一 customer の活動か検証**してから記録する。presign は 15 分・テナント/所有検証は既存 `presignCustomerFileUpload` に準拠。仕入値/原価の二次店物理除外・損益タブ非表示ゲートは不変。`GrossProfit`/`Incentive` は本改修で生成しない。
+
 ### 16.8 未確定事項（要確認）
 
 1. **1 顧客 : 契約数** — 増設・買い替えを別 `Contract` とするか（既存 `Deal:Contract = 1:1` の前提を複数契約に拡張するか）。

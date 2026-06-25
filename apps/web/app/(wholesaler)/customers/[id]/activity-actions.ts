@@ -13,12 +13,14 @@ import { revalidatePath } from "next/cache";
 
 import {
   CustomerActivityCreateSchema,
+  CustomerActivityFileRecordSchema,
   CustomerFileRecordSchema,
   CustomerTaskCreateSchema,
   PresignCustomerFileSchema,
 } from "@solar/contracts";
 import type {
   CustomerActivityCreateInput,
+  CustomerActivityFileRecordInput,
   CustomerFileRecordInput,
   CustomerTaskCreateInput,
   PresignCustomerFileInput,
@@ -64,7 +66,9 @@ export const presignCustomerFileUpload = withServerActionContext<
           ? "pv-drawings"
           : parsed.category === "CONTRACT"
             ? "contracts"
-            : "files";
+            : parsed.category === "QUOTE"
+              ? "quotes"
+              : "files";
     const key = `customers/${parsed.customerId}/${prefix}/${randomUUID()}-${sanitizeFileName(parsed.fileName)}`;
     const { putUrl, headers } = await presignUpload({
       key,
@@ -95,6 +99,19 @@ export const createCustomerActivity = withServerActionContext<
       throw new NotFoundError("顧客が見つかりません");
     }
 
+    // 担当者は同テナントの User か検証（RLS スコープ内で解決できなければ拒否）。
+    let assigneeUserId: string | null = null;
+    if (parsed.assigneeUserId) {
+      const assignee = await tx.user.findUnique({
+        where: { id: parsed.assigneeUserId },
+        select: { id: true },
+      });
+      if (!assignee) {
+        throw new NotFoundError("担当者が見つかりません");
+      }
+      assigneeUserId = assignee.id;
+    }
+
     const activity = await tx.customerActivity.create({
       data: {
         customerId: parsed.customerId,
@@ -102,6 +119,7 @@ export const createCustomerActivity = withServerActionContext<
         category: parsed.category,
         detail: parsed.detail,
         amount: parsed.category === "quote" ? (parsed.amount ?? null) : null,
+        assigneeUserId,
         createdByUserId: ctx.actorUserId,
       },
       select: { id: true },
@@ -156,6 +174,43 @@ export const createCustomerFile = withServerActionContext<CustomerFileRecordInpu
     const file = await tx.customerFile.create({
       data: {
         customerId: parsed.customerId,
+        fileKey: parsed.fileKey,
+        fileName: parsed.fileName,
+        contentType: parsed.contentType ?? null,
+        size: parsed.size ?? null,
+        category: parsed.category,
+        uploadedByUserId: ctx.actorUserId,
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(DETAIL_PATH(parsed.customerId));
+    return { id: file.id };
+  },
+);
+
+// 既存アクティビティ（見積提示）に紐づくファイルを 1 件記録する（見積書アップロード）。
+// activityId が同一 customer の活動か検証してから作成する。
+export const createCustomerActivityFile = withServerActionContext<
+  CustomerActivityFileRecordInput,
+  { id: string }
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = CustomerActivityFileRecordSchema.parse(input);
+
+    const activity = await tx.customerActivity.findUnique({
+      where: { id: parsed.activityId },
+      select: { id: true, customerId: true },
+    });
+    if (!activity || activity.customerId !== parsed.customerId) {
+      throw new NotFoundError("見積記録が見つかりません");
+    }
+
+    const file = await tx.customerFile.create({
+      data: {
+        customerId: parsed.customerId,
+        activityId: activity.id,
         fileKey: parsed.fileKey,
         fileName: parsed.fileName,
         contentType: parsed.contentType ?? null,

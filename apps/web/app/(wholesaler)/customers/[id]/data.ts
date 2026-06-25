@@ -41,9 +41,10 @@ export interface HistoryEntry {
   id: string;
   date: string; // ISO
   category: HistoryCategory; // CODE（UI が label / color を解決）
-  assignee: string;
+  assignee: string; // 記録の担当者（assigneeUserId 優先、無ければ作成者）。未解決は "—"
   body: string;
   amount: number | null; // 見積提示カテゴリのときの提示金額（円）。それ以外は null
+  files: RelatedFile[]; // 見積セクション: この記録に紐づくファイル（QUOTE）。他カテゴリは空配列
 }
 
 export interface ContractStatusCard {
@@ -122,6 +123,7 @@ export interface CustomerDetail {
   channel: AcquisitionChannel;
   inflowRoute: InflowRoute | null; // 流入経路（顧客情報で手動選択、未設定は null）
   maekakuStatus: "pending" | "done" | "unnecessary" | null; // マエカク状況（商談履歴タブで入力）
+  maekakuPreferredAt: string | null; // マエカク希望日時（ISO、商談履歴タブで入力）
   nextAction: string | null; // 次回アクション（商談履歴タブで入力）
   nextAppointmentAt: string | null; // 次回アポ日程（ISO、商談履歴タブで入力）
   assigneeName: string;
@@ -238,6 +240,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
         channel: true,
         inflowRoute: true,
         maekakuStatus: true,
+        maekakuPreferredAt: true,
         nextAction: true,
         nextAppointmentAt: true,
         registeredByUserId: true,
@@ -300,6 +303,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
           category: true,
           detail: true,
           amount: true,
+          assigneeUserId: true,
           createdByUserId: true,
         },
       }),
@@ -311,7 +315,14 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       tx.customerFile.findMany({
         where: { customerId: id },
         orderBy: { createdAt: "desc" },
-        select: { id: true, fileName: true, contentType: true, category: true, createdAt: true },
+        select: {
+          id: true,
+          fileName: true,
+          contentType: true,
+          category: true,
+          activityId: true,
+          createdAt: true,
+        },
       }),
       tx.customerMessage.findMany({
         where: { customerId: id },
@@ -326,6 +337,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       ...new Set(
         [
           ...activityRows.map((a) => a.createdByUserId),
+          ...activityRows.map((a) => a.assigneeUserId).filter((v): v is string => !!v),
           ...taskRows.map((t) => t.assigneeUserId).filter((v): v is string => !!v),
           ...messageRows.map((m) => m.authorUserId),
           customer.tossUpUserId,
@@ -371,13 +383,34 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       return null;
     }
 
+    const toRelatedFile = (f: (typeof fileRows)[number]): RelatedFile => ({
+      id: f.id,
+      name: f.fileName,
+      type: fileType(f.fileName, f.contentType),
+      date: formatDateTime(f.createdAt),
+    });
+
+    // 見積書ファイル（QUOTE）を紐づくアクティビティ ID 単位でまとめる。
+    const quoteFilesByActivityId = new Map<string, RelatedFile[]>();
+    for (const f of fileRows) {
+      if (f.category !== "QUOTE" || !f.activityId) continue;
+      const list = quoteFilesByActivityId.get(f.activityId) ?? [];
+      list.push(toRelatedFile(f));
+      quoteFilesByActivityId.set(f.activityId, list);
+    }
+
     const history: HistoryEntry[] = activityRows.map((a) => ({
       id: a.id,
       date: a.occurredAt.toISOString(),
       category: toHistoryCategory(a.category),
-      assignee: nameByUserId.get(a.createdByUserId) ?? "—",
+      // 記録の担当者を優先表示、未設定なら作成者にフォールバック。
+      assignee:
+        (a.assigneeUserId ? nameByUserId.get(a.assigneeUserId) : null) ??
+        nameByUserId.get(a.createdByUserId) ??
+        "—",
       body: a.detail,
       amount: a.amount ?? null,
+      files: quoteFilesByActivityId.get(a.id) ?? [],
     }));
 
     const tasks: CustomerTask[] = taskRows.map((t) => ({
@@ -388,12 +421,6 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       done: t.done,
     }));
 
-    const toRelatedFile = (f: (typeof fileRows)[number]): RelatedFile => ({
-      id: f.id,
-      name: f.fileName,
-      type: fileType(f.fileName, f.contentType),
-      date: formatDateTime(f.createdAt),
-    });
     // 関連ファイルタブは GENERAL のみ、設置申請タブは APPLICATION のみを表示。
     const files: RelatedFile[] = fileRows
       .filter((f) => f.category === "GENERAL")
@@ -439,6 +466,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       channel: customer.channel,
       inflowRoute: (customer.inflowRoute as InflowRoute | null) ?? null,
       maekakuStatus: (customer.maekakuStatus as "pending" | "done" | "unnecessary" | null) ?? null,
+      maekakuPreferredAt: isoOrNull(customer.maekakuPreferredAt),
       nextAction: customer.nextAction,
       nextAppointmentAt: isoOrNull(customer.nextAppointmentAt),
       assigneeName: assigneeDisplay,

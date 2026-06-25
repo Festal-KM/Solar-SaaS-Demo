@@ -15,6 +15,7 @@ import type * as DbModule from "@solar/db";
 const authMock = vi.fn();
 const relationshipFindManyMock = vi.fn();
 const customerFindUniqueMock = vi.fn();
+const userFindUniqueMock = vi.fn();
 const activityCreateMock = vi.fn();
 const taskCreateMock = vi.fn();
 const fileCreateMock = vi.fn();
@@ -38,6 +39,9 @@ vi.mock("@solar/db", async (orig) => {
   const tx = {
     customer: {
       findUnique: (...args: unknown[]) => customerFindUniqueMock(...args),
+    },
+    user: {
+      findUnique: (...args: unknown[]) => userFindUniqueMock(...args),
     },
     customerActivity: {
       create: (...args: unknown[]) => activityCreateMock(...args),
@@ -78,6 +82,7 @@ beforeEach(() => {
   authMock.mockReset();
   relationshipFindManyMock.mockReset();
   customerFindUniqueMock.mockReset();
+  userFindUniqueMock.mockReset();
   activityCreateMock.mockReset();
   taskCreateMock.mockReset();
   fileCreateMock.mockReset();
@@ -137,6 +142,48 @@ describe("createCustomerActivity", () => {
     expect(fileArgs.data.uploadedByUserId).toBe("u_ws_admin");
 
     expect(revalidatePathMock).toHaveBeenCalledWith("/customers/cust_1");
+    // 担当者未指定なら assigneeUserId は null、User 検証は走らない。
+    expect(userFindUniqueMock).not.toHaveBeenCalled();
+    expect(activityArgs.data).toMatchObject({ assigneeUserId: null });
+  });
+
+  it("validates and persists assigneeUserId when provided (in-tenant user)", async () => {
+    authMock.mockResolvedValue(WS_SESSION);
+    customerFindUniqueMock.mockResolvedValue({ id: "cust_1" });
+    userFindUniqueMock.mockResolvedValue({ id: "u_closer" });
+    activityCreateMock.mockResolvedValue({ id: "act_2" });
+
+    await createCustomerActivity({
+      customerId: "cust_1",
+      occurredAt: "2026-05-20",
+      category: "quote",
+      detail: "見積提示",
+      assigneeUserId: "u_closer",
+    });
+
+    expect(userFindUniqueMock).toHaveBeenCalledTimes(1);
+    const activityArgs = activityCreateMock.mock.calls[0]![0] as {
+      data: { assigneeUserId: string | null };
+    };
+    expect(activityArgs.data.assigneeUserId).toBe("u_closer");
+  });
+
+  it("rejects an out-of-tenant assigneeUserId (RLS lookup returns null)", async () => {
+    authMock.mockResolvedValue(WS_SESSION);
+    customerFindUniqueMock.mockResolvedValue({ id: "cust_1" });
+    userFindUniqueMock.mockResolvedValue(null);
+
+    await expect(
+      createCustomerActivity({
+        customerId: "cust_1",
+        occurredAt: "2026-05-20",
+        category: "phone",
+        detail: "x",
+        assigneeUserId: "u_other_tenant",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+
+    expect(activityCreateMock).not.toHaveBeenCalled();
   });
 
   it("forbids WHOLESALER_EVENT_TEAM (not in customer.update allow-list)", async () => {

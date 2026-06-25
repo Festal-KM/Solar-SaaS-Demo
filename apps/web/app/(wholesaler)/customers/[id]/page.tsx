@@ -42,6 +42,7 @@ import { getCustomerDetail } from "./data";
 import { EditAssigneeDialog } from "./edit-assignee-dialog";
 import { NegotiationStatusPanel } from "./negotiation-status-panel";
 import { NewActivityDialog } from "./new-activity-dialog";
+import { QuoteFiles } from "./quote-files";
 import {
   ConstructionStatusPanel,
   SubsidyStatusPanel,
@@ -501,6 +502,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
               initialContractStatus={detail.contract.status}
               initialNextAction={detail.nextAction}
               initialNextAppointmentAt={detail.nextAppointmentAt}
+              initialMaekakuPreferredAt={detail.maekakuPreferredAt}
             />
           </Card>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -508,7 +510,11 @@ export default async function CustomerDetailPage({ params }: PageProps) {
             <Card className="p-5">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-ink">{d.history.title}</h2>
-                <NewActivityDialog customerId={detail.id} users={users} />
+                <NewActivityDialog
+                  customerId={detail.id}
+                  users={users}
+                  defaultAssigneeUserId={editable.closingUserId}
+                />
               </div>
               <CustomerHistory entries={historyEntries} />
             </Card>
@@ -520,6 +526,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 <NewActivityDialog
                   customerId={detail.id}
                   users={users}
+                  defaultAssigneeUserId={editable.closingUserId}
                   defaultCategory="quote"
                   triggerLabel={d.quoteSection.record}
                 />
@@ -546,6 +553,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                         {q.body ? (
                           <p className="mt-1 whitespace-pre-wrap text-sm text-body-light">{q.body}</p>
                         ) : null}
+                        <QuoteFiles customerId={detail.id} activityId={q.id} files={q.files} />
                       </div>
                     </li>
                   ))}

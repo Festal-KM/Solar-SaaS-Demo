@@ -208,6 +208,9 @@ export const updateCustomerAction = withServerActionContext<
         ...(parsed.nextAppointmentAt !== undefined
           ? { nextAppointmentAt: parsed.nextAppointmentAt ? new Date(parsed.nextAppointmentAt) : null }
           : {}),
+        ...(parsed.maekakuPreferredAt !== undefined
+          ? { maekakuPreferredAt: parsed.maekakuPreferredAt ? new Date(parsed.maekakuPreferredAt) : null }
+          : {}),
         ...(parsed.contractStatus !== undefined ? { contractStatus: parsed.contractStatus } : {}),
         ...(parsed.contractPlan !== undefined
           ? { contractPlan: parsed.contractPlan?.trim() || null }

@@ -22,6 +22,7 @@ interface NegotiationStatusPanelProps {
   initialContractStatus: ContractStatusValue;
   initialNextAction: string | null;
   initialNextAppointmentAt: string | null; // ISO or null
+  initialMaekakuPreferredAt: string | null; // ISO or null
 }
 
 const MAEKAKU_UNSET = "__unset__";
@@ -34,12 +35,21 @@ function toDateInput(iso: string | null): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+// ISO 文字列 → <input type="datetime-local"> 用 YYYY-MM-DDTHH:mm（ローカル）。
+function toDateTimeInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export function NegotiationStatusPanel({
   customerId,
   initialMaekaku,
   initialContractStatus,
   initialNextAction,
   initialNextAppointmentAt,
+  initialMaekakuPreferredAt,
 }: NegotiationStatusPanelProps) {
   const t = labels.customer;
   const d = t.detail;
@@ -50,13 +60,17 @@ export function NegotiationStatusPanel({
   const [contractStatus, setContractStatus] = useState<ContractStatusValue>(initialContractStatus);
   const [nextAction, setNextAction] = useState(initialNextAction ?? "");
   const [nextAppointmentAt, setNextAppointmentAt] = useState(toDateInput(initialNextAppointmentAt));
+  const [maekakuPreferredAt, setMaekakuPreferredAt] = useState(
+    toDateTimeInput(initialMaekakuPreferredAt),
+  );
   const [isPending, startTransition] = useTransition();
 
   const dirty =
     maekaku !== (initialMaekaku ?? MAEKAKU_UNSET) ||
     contractStatus !== initialContractStatus ||
     nextAction !== (initialNextAction ?? "") ||
-    nextAppointmentAt !== toDateInput(initialNextAppointmentAt);
+    nextAppointmentAt !== toDateInput(initialNextAppointmentAt) ||
+    maekakuPreferredAt !== toDateTimeInput(initialMaekakuPreferredAt);
 
   function handleSave() {
     startTransition(async () => {
@@ -68,6 +82,7 @@ export function NegotiationStatusPanel({
           contractStatus,
           nextAction: nextAction.trim() ? nextAction.trim() : null,
           nextAppointmentAt: nextAppointmentAt || null,
+          maekakuPreferredAt: maekakuPreferredAt || null,
         });
         toast.success(c.saved);
         router.refresh();
@@ -84,7 +99,7 @@ export function NegotiationStatusPanel({
     <div className="space-y-4">
       {/* 上段サブパネル: マエカク / 商談ステータス / 次回アポ日程 を横並び */}
       <div className="border-hairline-light bg-surface-soft/40 rounded-lg border p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
             <Label htmlFor="neg-maekaku">{d.negotiation.maekaku}</Label>
           <select
@@ -121,6 +136,16 @@ export function NegotiationStatusPanel({
               type="date"
               value={nextAppointmentAt}
               onChange={(e) => setNextAppointmentAt(e.target.value)}
+              className={selectClass}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="neg-maekaku-preferred">{d.negotiation.maekakuPreferredAt}</Label>
+            <input
+              id="neg-maekaku-preferred"
+              type="datetime-local"
+              value={maekakuPreferredAt}
+              onChange={(e) => setMaekakuPreferredAt(e.target.value)}
               className={selectClass}
             />
           </div>

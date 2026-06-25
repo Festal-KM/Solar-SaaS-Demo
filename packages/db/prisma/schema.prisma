@@ -1167,6 +1167,8 @@ model CustomerActivity {
   detail          String
   // 見積提示カテゴリ（category = "quote"）のときの提示金額（円）。それ以外は null。
   amount          Int?
+  // 記録の担当者（営業担当。createdByUserId = 作成者/監査 とは別概念）。未設定は null。
+  assigneeUserId  String?
   createdByUserId String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1199,12 +1201,14 @@ model CustomerTask {
 }
 
 // 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
-// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット、CONTRACT=契約状況タブの契約関連ファイル。
+// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット、CONTRACT=契約状況タブの契約関連ファイル、
+// QUOTE=見積セクションの見積書ファイル（見積提示アクティビティに紐づく）。
 enum CustomerFileCategory {
   GENERAL
   APPLICATION
   PV_DRAWING
   CONTRACT
+  QUOTE
 }
 
 // 関連ファイル（R2 にアップロードした添付）。fileKey は R2 オブジェクトキー。
