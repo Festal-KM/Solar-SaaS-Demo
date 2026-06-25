@@ -24,6 +24,7 @@ function baseEquipmentItem(over: Partial<EquipmentItemDto> = {}): EquipmentItemD
   return {
     id: "eq1",
     contracted: true,
+    amount: null,
     manufacturer: null,
     model: null,
     capacity: null,

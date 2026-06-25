@@ -106,6 +106,8 @@ async function seedContractProjectData(
           contractId: c.id,
           category: "PV",
           contracted: true,
+          // 商材ごとの契約金額（顧客向け・原価ではない）。
+          amount: (2200000 + (seq % 5) * 100000).toString(),
           manufacturer: ["長州産業", "カナディアンソーラー", "Qセルズ"][seq % 3],
           model: `CS-${400 + (seq % 60)}MB`,
           capacity: `${(3.5 + (seq % 4)).toFixed(1)} kW`,
@@ -123,6 +125,7 @@ async function seedContractProjectData(
             contractId: c.id,
             category: "BT",
             contracted: true,
+            amount: (1100000 + (seq % 4) * 80000).toString(),
             manufacturer: ["長州産業", "ニチコン", "オムロン"][seq % 3],
             model: `ET-${40 + (seq % 60)}B3`,
             capacity: `${(6.5 + (seq % 10)).toFixed(1)} kWh`,
@@ -139,10 +142,48 @@ async function seedContractProjectData(
           contractId: c.id,
           category: "EQ",
           contracted: true,
+          amount: (450000 + (seq % 3) * 50000).toString(),
           manufacturer: ["三菱", "パナソニック", "ダイキン"][seq % 3],
           model: `SRT-${300 + (seq % 60)}`,
           introducedStatus: seq % 2 === 0 ? "NEW" : "EXISTING",
           warrantyExtended: seq % 2 === 0,
+        },
+      });
+      equipment += 1;
+    }
+
+    // 商材ごとの金額を冪等投入（amount 未設定の既存設備行に backfill）。再 seed でも
+    // 既に値があれば上書きしない（updateMany で amount == null のみ対象）。
+    await tx.contractEquipment.updateMany({
+      where: { contractId: c.id, category: "PV", amount: null },
+      data: { amount: (2200000 + (seq % 5) * 100000).toString() },
+    });
+    await tx.contractEquipment.updateMany({
+      where: { contractId: c.id, category: "BT", amount: null },
+      data: { amount: (1100000 + (seq % 4) * 80000).toString() },
+    });
+    await tx.contractEquipment.updateMany({
+      where: { contractId: c.id, category: "EQ", amount: null },
+      data: { amount: (450000 + (seq % 3) * 50000).toString() },
+    });
+
+    // 施工商材ライン（CONSTRUCTION）— 契約上の施工金額・業者・内容。施工状況タブの
+    // Construction（工事進捗・fee 原価）とは別概念。contractId × category で 1 行のみ
+    // 冪等投入（既存があれば skip。re-seed で重複させない）。
+    const existingConstructionLine = await tx.contractEquipment.findFirst({
+      where: { contractId: c.id, category: "CONSTRUCTION" },
+      select: { id: true },
+    });
+    if (!existingConstructionLine) {
+      await tx.contractEquipment.create({
+        data: {
+          contractId: c.id,
+          category: "CONSTRUCTION",
+          contracted: true,
+          amount: (800000 + (seq % 4) * 50000).toString(),
+          manufacturer: "サンプル施工 株式会社",
+          model: ["標準工事", "荷揚げ込み工事", "電気工事一式"][seq % 3],
+          detail: "屋根架台設置・配線・パワコン取付を含む標準施工一式。",
         },
       });
       equipment += 1;

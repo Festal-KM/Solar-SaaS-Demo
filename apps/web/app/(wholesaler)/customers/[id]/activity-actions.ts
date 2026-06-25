@@ -62,7 +62,9 @@ export const presignCustomerFileUpload = withServerActionContext<
         ? "applications"
         : parsed.category === "PV_DRAWING"
           ? "pv-drawings"
-          : "files";
+          : parsed.category === "CONTRACT"
+            ? "contracts"
+            : "files";
     const key = `customers/${parsed.customerId}/${prefix}/${randomUUID()}-${sanitizeFileName(parsed.fileName)}`;
     const { putUrl, headers } = await presignUpload({
       key,

@@ -934,6 +934,184 @@ export function EditEquipmentDialog({
   );
 }
 
+/* ── 商材ライン（ContractEquipment）のカード内インライン編集（契約状況タブ専用）。
+   ポップアップ廃止 → カード内で金額・業者・内容を直接編集。dirty 追跡 + Save/キャンセル
+   + saveProjectContractEquipmentAction（契約 find-or-create 維持）+ router.refresh。
+   category により表示するフィールドを切り替える（施工=CONSTRUCTION は業者・内容のみ）。
+   customer.update 権限保持者のみ呼び出される（呼び出し側でゲート）。 ── */
+export function EquipmentInlineEdit({
+  customerId,
+  category,
+  contractId,
+  initial = null,
+  title,
+}: {
+  customerId: string;
+  category: EquipmentCategoryValue;
+  // 契約 0 件の顧客では null。設備保存時にサーバー側で最小契約を生成する。
+  contractId: string | null;
+  initial?: ProjectEquipmentEditable | null;
+  title: string;
+}) {
+  const e = p.equipment;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const isConstruction = category === "CONSTRUCTION";
+
+  const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : "");
+  const [manufacturer, setManufacturer] = useState(initial?.manufacturer ?? "");
+  const [model, setModel] = useState(initial?.model ?? "");
+  const [capacity, setCapacity] = useState(initial?.capacity ?? "");
+  const [quantity, setQuantity] = useState(initial?.quantity != null ? String(initial.quantity) : "");
+  const [installLocation, setInstallLocation] = useState(initial?.installLocation ?? "");
+  const [detail, setDetail] = useState(initial?.detail ?? "");
+  const [warrantyStandard, setWarrantyStandard] = useState(boolToSelect(initial?.warrantyStandard ?? null));
+  const [warrantyExtended, setWarrantyExtended] = useState(boolToSelect(initial?.warrantyExtended ?? null));
+  const [warrantyDisaster, setWarrantyDisaster] = useState(boolToSelect(initial?.warrantyDisaster ?? null));
+
+  const initAmount = initial?.amount != null ? String(initial.amount) : "";
+  const initQty = initial?.quantity != null ? String(initial.quantity) : "";
+  const initWStd = boolToSelect(initial?.warrantyStandard ?? null);
+  const initWExt = boolToSelect(initial?.warrantyExtended ?? null);
+  const initWDis = boolToSelect(initial?.warrantyDisaster ?? null);
+
+  const dirty =
+    amount !== initAmount ||
+    manufacturer !== (initial?.manufacturer ?? "") ||
+    model !== (initial?.model ?? "") ||
+    capacity !== (initial?.capacity ?? "") ||
+    quantity !== initQty ||
+    installLocation !== (initial?.installLocation ?? "") ||
+    detail !== (initial?.detail ?? "") ||
+    warrantyStandard !== initWStd ||
+    warrantyExtended !== initWExt ||
+    warrantyDisaster !== initWDis;
+
+  function reset() {
+    setAmount(initAmount);
+    setManufacturer(initial?.manufacturer ?? "");
+    setModel(initial?.model ?? "");
+    setCapacity(initial?.capacity ?? "");
+    setQuantity(initQty);
+    setInstallLocation(initial?.installLocation ?? "");
+    setDetail(initial?.detail ?? "");
+    setWarrantyStandard(initWStd);
+    setWarrantyExtended(initWExt);
+    setWarrantyDisaster(initWDis);
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectContractEquipmentAction({
+          customerId,
+          contractId: initial?.contractId ?? contractId,
+          category,
+          amount: numOrNull(amount),
+          // 商材金額の入力があれば「契約あり」とみなす（追加導線の意図）。
+          contracted: true,
+          manufacturer: strOrNull(manufacturer),
+          model: strOrNull(model),
+          capacity: isConstruction ? null : strOrNull(capacity),
+          quantity: isConstruction ? null : numOrNull(quantity),
+          installLocation: isConstruction ? null : strOrNull(installLocation),
+          warrantyStandard: isConstruction ? null : selectToBool(warrantyStandard),
+          warrantyExtended: isConstruction ? null : selectToBool(warrantyExtended),
+          warrantyDisaster: isConstruction ? null : selectToBool(warrantyDisaster),
+          detail: strOrNull(detail),
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-hairline-light p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-ink">{title}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <FormField label={e.amount} htmlFor={`eq-amount-${category}`}>
+          <Input
+            id={`eq-amount-${category}`}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={amount}
+            onChange={(ev) => setAmount(ev.target.value)}
+            placeholder="0"
+            className="text-right tabular-nums"
+          />
+        </FormField>
+        {isConstruction ? (
+          <FormField label={e.vendor} htmlFor={`eq-vendor-${category}`}>
+            <Input id={`eq-vendor-${category}`} value={manufacturer} onChange={(ev) => setManufacturer(ev.target.value)} />
+          </FormField>
+        ) : (
+          <FormField label={e.maker} htmlFor={`eq-maker-${category}`}>
+            <Input id={`eq-maker-${category}`} value={manufacturer} onChange={(ev) => setManufacturer(ev.target.value)} />
+          </FormField>
+        )}
+        <FormField label={e.modelNo} htmlFor={`eq-model-${category}`}>
+          <Input id={`eq-model-${category}`} value={model} onChange={(ev) => setModel(ev.target.value)} />
+        </FormField>
+        {!isConstruction ? (
+          <>
+            <FormField label={e.capacity} htmlFor={`eq-capacity-${category}`}>
+              <Input id={`eq-capacity-${category}`} value={capacity} onChange={(ev) => setCapacity(ev.target.value)} />
+            </FormField>
+            <FormField label={e.count} htmlFor={`eq-qty-${category}`}>
+              <Input id={`eq-qty-${category}`} type="number" min={0} value={quantity} onChange={(ev) => setQuantity(ev.target.value)} />
+            </FormField>
+            <FormField label={e.location} htmlFor={`eq-loc-${category}`}>
+              <Input id={`eq-loc-${category}`} value={installLocation} onChange={(ev) => setInstallLocation(ev.target.value)} />
+            </FormField>
+          </>
+        ) : null}
+      </div>
+      {!isConstruction ? (
+        <div className="grid grid-cols-3 gap-3">
+          <FormField label={e.totalWarranty} htmlFor={`eq-wstd-${category}`}>
+            <select id={`eq-wstd-${category}`} className={FIELD} value={warrantyStandard} onChange={(ev) => setWarrantyStandard(ev.target.value)}>
+              <option value={BOOL_UNSET}>{ed.unset}</option>
+              <option value="true">{ed.presence.true}</option>
+              <option value="false">{ed.presence.false}</option>
+            </select>
+          </FormField>
+          <FormField label={e.extWarranty} htmlFor={`eq-wext-${category}`}>
+            <select id={`eq-wext-${category}`} className={FIELD} value={warrantyExtended} onChange={(ev) => setWarrantyExtended(ev.target.value)}>
+              <option value={BOOL_UNSET}>{ed.unset}</option>
+              <option value="true">{ed.presence.true}</option>
+              <option value="false">{ed.presence.false}</option>
+            </select>
+          </FormField>
+          <FormField label={e.disasterWarranty} htmlFor={`eq-wdis-${category}`}>
+            <select id={`eq-wdis-${category}`} className={FIELD} value={warrantyDisaster} onChange={(ev) => setWarrantyDisaster(ev.target.value)}>
+              <option value={BOOL_UNSET}>{ed.unset}</option>
+              <option value="true">{ed.presence.true}</option>
+              <option value="false">{ed.presence.false}</option>
+            </select>
+          </FormField>
+        </div>
+      ) : null}
+      <FormField label={e.detail} htmlFor={`eq-detail-${category}`}>
+        <Textarea id={`eq-detail-${category}`} rows={2} value={detail} onChange={(ev) => setDetail(ev.target.value)} />
+      </FormField>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={reset} disabled={pending || !dirty}>
+          {ed.cancel}
+        </Button>
+        <Button type="button" size="sm" onClick={onSave} disabled={pending || !dirty}>
+          {pending ? c.saving : ed.save}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /* ── 工事・完工（Construction + 親 Contract 列） ── */
 export function EditConstructionDialog({
   customerId,

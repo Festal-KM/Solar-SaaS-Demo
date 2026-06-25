@@ -2638,7 +2638,9 @@ model Construction {
 }
 
 // ── 新規 1: 設備スペック明細（PV/BT/EQ/IH/AC/付帯/プレゼント） ──
-enum EquipmentCategory { PV BT EQ IH AC ACCESSORY GIFT }
+enum EquipmentCategory { PV BT EQ IH AC ACCESSORY GIFT CONSTRUCTION }
+// CONSTRUCTION = 契約商材ラインとしての施工（金額・業者・内容を ContractEquipment 行で保持）。
+// 施工状況タブの Construction（工事進捗・fee 原価）とは別概念（後述 §16-契約状況タブ再設計）。
 // 設備導入状況（EQ/IH 等）: 未導入 / 既設 / 新規導入
 enum EquipmentIntroStatus { NONE EXISTING NEW }   // introducedStatus に文字列として格納（または enum 化、§16.8-3）
 
@@ -2648,7 +2650,8 @@ model ContractEquipment {
   contractItemId  String?                  // 価格明細(ContractItem)への任意リンク
   category        EquipmentCategory
   contracted      Boolean  @default(false) // 契約有無
-  manufacturer    String?                  // メーカー
+  amount          Decimal? @db.Decimal(14,2) // 商材ごとの契約金額（顧客向け・原価ではない）。二次店表示可
+  manufacturer    String?                  // メーカー（CONSTRUCTION では施工業者）
   model           String?                  // 型番①
   capacity        String?                  // 容量
   quantity        Int?                     // 枚数 / 個数
@@ -2757,7 +2760,7 @@ model ContractPayment {
 > 既存設備の編集は F-063 ヒアリング編集経路（`EditHearingDialog`）に集約し、基本情報タブの現状情報では表示のみとする。
 >
 > **契約予定情報の単一ソース化（追補）**: 契約予定情報（Contract モデル由来の契約・金額／設備明細／認定）は **契約状況タブ（S-044 相当）を単一の表示・編集面** とする。
-> 契約状況タブは「概況（`ContractStatusPanel`。`Customer` 手動列 plan/amount/expectedDate。顧客一覧バッジ用の概況）」＋「案件詳細（`ProjectContractList`。`Contract` 1:N の契約・金額／設備明細／認定を `EditContractDialog`/`EditEquipmentDialog`/`EditApplicationDialog` で編集）」の 2 カードで構成する。
+> 契約状況タブは「案件詳細（`ProjectContractList inlineEquipment`。`Contract` 1:N の契約・金額／**商材ライン**／認定）」＋「契約関連ファイル（`CustomerFiles category="CONTRACT"`）」の 2 カードで構成する（**契約状況タブ再設計**: 概況 `ContractStatusPanel` は廃止。後述 §16.12）。商材ライン（PV/BT/付帯/施工）は **ポップアップを廃止しカード内インライン編集**（`EquipmentInlineEdit`：dirty 追跡 + Save/キャンセル + `router.refresh`）。`Customer` 手動列 plan/amount/expectedDate は顧客一覧バッジ用に残置（タブの概況 UI のみ削除）。
 > `ProjectContractList` は `customer-project-info.tsx` から `export` 抽出した共有コンポーネントで、`getCustomerProjectInfo`（`ProjectInfoDto.contracts/applications/financials`）/ `getCustomerProjectInfoEditable` を再利用し別系統の保存ロジックを新設しない。
 > 基本情報タブの「契約予定情報」は同コンポーネントを **`readOnly`（pull 表示）** で再利用し、編集トリガー（鉛筆）を一切描画しない（編集は契約状況タブに集約・二重編集 UI を排す）。`CustomerProjectInfo` embedded は `contractReadOnly` プロップで契約系セクションのみ読み取り専用化し、ヒアリング／概況は従来通り。
 > 二次店・閲覧のみ（`editable=null`）では `readOnly` と同様に編集トリガーを描画しない。仕入値スナップショット（`ContractItem.snapshot*`）は読みも書きもしない（CLAUDE.md #4・#5）。
@@ -3028,6 +3031,18 @@ export function getProjectInfo(
 > **設計上の位置づけ**: Contract/Deal の自動生成は本来 **クロージングフロー（SP-05）の責務** であり、
 > 本節の生成は契約状況タブでの設備入力を成立させるための **デモ用途の最小生成** である（コードにも明記）。
 > 正式なクロージングフロー実装時には、本節の find-or-create とクロージング側の生成を統合・整理する。
+
+### 16.12 契約状況タブ再設計（商材ライン / 商材ごと金額 / 施工商材ライン / 契約関連ファイル）
+
+契約状況タブを「商材ライン中心のインライン入力面」へ再設計する。基本情報タブの「契約予定情報」は引き続き読み取り表示（`contractReadOnly`）。
+
+- **概況（`ContractStatusPanel`）の削除**: 契約状況タブから概況カード（`Customer` 手動列 plan/amount/expectedDate）を除去。`Customer` の手動列・ローダ・顧客一覧 `contractStatus` バッジは残置（タブの概況 UI のみ削除）。
+- **インライン入力**: 商材（PV/BT/付帯/施工）をポップアップ（`EditEquipmentDialog`）ではなく **カード内インライン編集**（`EquipmentInlineEdit`）に変更。`basic-info-edit.tsx` の `BasicInfoInlineEdit` / `HearingInlineEdit` と同 idiom（生値を初期値に dirty 追跡 + Save/キャンセル + `saveProjectContractEquipmentAction`（契約 find-or-create 維持）+ `router.refresh`）。基本情報タブ（`contractReadOnly`）は読み取り専用のまま。
+- **商材ごと金額**: `ContractEquipment.amount Decimal? @db.Decimal(14,2)`（円・整数）を追加。各商材（PV/BT/付帯/施工）に金額欄を持つ。**顧客向け商材金額であり原価ではない**（仕入値スナップショット `ContractItem.snapshot*` とは無関係・二次店にも表示してよい）。契約合計 `Contract.contractAmount` は、明示指定が無いとき各商材 `amount` の合計（`sumEquipmentAmounts` 純関数）を保存時に反映する（UI 整合）。
+- **施工商材ライン（`EquipmentCategory.CONSTRUCTION`）**: 契約上の施工金額・業者（`manufacturer`）・内容（`model`/`detail`）を `ContractEquipment` 1 行として入力。**施工状況タブの `Construction`（工事進捗ステータス・`fee` 原価）とは別概念**。`EquipmentByCategory`/`EquipmentItemDto`/DTO/`get-project-info` の category 列挙に `CONSTRUCTION` を反映。
+- **契約関連ファイル**: `CustomerFileCategory.CONTRACT` を追加。契約状況タブに `CustomerFiles category="CONTRACT"` のアップロード + 一覧を併設。`PresignCustomerFileSchema`/`CustomerFileRecordSchema` の category 拡張、`[id]/data.ts` の `contractFiles` 分離、`activity-actions.ts` presign が CONTRACT を受理（R2 prefix `contracts/`）。APPLICATION/PV_DRAWING 実装に倣う。15 分 pre-signed URL・テナント検証は据え置き。
+- **マイグレーション分割**: Postgres の `ALTER TYPE ... ADD VALUE` は同一トランザクション内で新値を使用できないため、enum 追加（`EquipmentCategory.CONSTRUCTION` / `CustomerFileCategory.CONTRACT`）は各々独立したマイグレーションファイル、`ContractEquipment.amount` 列追加は別ファイルとする（enum 各単独 → 列追加の順）。
+- **セキュリティ不変条件**: 仕入値・原価（`snapshotPurchasePrice`/`fee` 等）の二次店物理除外・損益タブ非表示ゲート・契約明細スナップショット不変条件（CLAUDE.md #4・#5）は維持。`amount` は顧客向け金額のため二次店表示可。`GrossProfit`/`Incentive` は自動生成しない（§16.11 と同方針）。
 
 ---
 

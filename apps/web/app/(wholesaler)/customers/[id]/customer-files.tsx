@@ -23,8 +23,8 @@ interface CustomerFilesProps {
   customerId: string;
   files: RelatedFile[];
   // GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
-  // PV_DRAWING=施工状況タブの PV設置図面。
-  category?: "GENERAL" | "APPLICATION" | "PV_DRAWING";
+  // PV_DRAWING=施工状況タブの PV設置図面、CONTRACT=契約状況タブの契約関連ファイル。
+  category?: "GENERAL" | "APPLICATION" | "PV_DRAWING" | "CONTRACT";
 }
 
 export function CustomerFiles({ customerId, files, category = "GENERAL" }: CustomerFilesProps) {
@@ -110,7 +110,9 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
             ? d.applicationFiles.empty
             : category === "PV_DRAWING"
               ? d.pvDrawing.empty
-              : d.files.empty}
+              : category === "CONTRACT"
+                ? d.contractFiles.empty
+                : d.files.empty}
         </p>
       ) : (
         <ul className="divide-y divide-hairline-light">

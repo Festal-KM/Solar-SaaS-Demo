@@ -25,11 +25,23 @@ export const DEALER_OMITTED_EXISTING_EQUIPMENT_KEYS = [
   "attributes",
 ] as const;
 
-export type EquipmentCategoryKey = "PV" | "BT" | "EQ" | "IH" | "AC" | "ACCESSORY" | "GIFT";
+// CONSTRUCTION = 契約商材ラインとしての施工（金額・業者・内容）。施工状況タブの
+// Construction（工事進捗・fee 原価）とは別概念。
+export type EquipmentCategoryKey =
+  | "PV"
+  | "BT"
+  | "EQ"
+  | "IH"
+  | "AC"
+  | "ACCESSORY"
+  | "GIFT"
+  | "CONSTRUCTION";
 
 export interface EquipmentItemDto {
   id: string;
   contracted: boolean;
+  // 商材ごとの契約金額（顧客向け・原価ではない）。二次店にも表示してよい。
+  amount: number | null;
   manufacturer: string | null;
   model: string | null;
   capacity: string | null;
@@ -354,6 +366,7 @@ const EQUIPMENT_CATEGORY_KEYS: EquipmentCategoryKey[] = [
   "AC",
   "ACCESSORY",
   "GIFT",
+  "CONSTRUCTION",
 ];
 
 function stripEquipmentItem(item: EquipmentItemDto): EquipmentItemForDealerDto {
@@ -420,5 +433,6 @@ export function emptyEquipmentByCategory(): EquipmentByCategory {
     AC: [],
     ACCESSORY: [],
     GIFT: [],
+    CONSTRUCTION: [],
   };
 }

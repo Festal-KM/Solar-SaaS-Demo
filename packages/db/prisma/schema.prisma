@@ -1199,11 +1199,12 @@ model CustomerTask {
 }
 
 // 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
-// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット。
+// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット、CONTRACT=契約状況タブの契約関連ファイル。
 enum CustomerFileCategory {
   GENERAL
   APPLICATION
   PV_DRAWING
+  CONTRACT
 }
 
 // 関連ファイル（R2 にアップロードした添付）。fileKey は R2 オブジェクトキー。
@@ -1384,7 +1385,9 @@ enum PostCompletionStatus {
   DONE
 }
 
-// 設備カテゴリ判別子（PV/BT/EQ/IH/AC/付帯/プレゼント）
+// 設備カテゴリ判別子（PV/BT/EQ/IH/AC/付帯/プレゼント/施工）
+// CONSTRUCTION = 契約商材ラインとしての施工（金額・業者・内容を ContractEquipment 行で保持）。
+// 施工状況タブの Construction（工事進捗・fee 原価）とは別概念。
 enum EquipmentCategory {
   PV
   BT
@@ -1393,6 +1396,7 @@ enum EquipmentCategory {
   AC
   ACCESSORY
   GIFT
+  CONSTRUCTION
 }
 
 // 支払いステータス: 未入金 / 一部入金 / 入金済み
@@ -1645,6 +1649,9 @@ model ContractEquipment {
   contractItemId   String? // 価格明細(ContractItem)への任意リンク
   category         EquipmentCategory
   contracted       Boolean           @default(false)
+  // 商材ごとの契約金額（顧客向け・原価ではない）。仕入値スナップショットとは無関係で
+  // 二次店にも表示してよい。契約合計 Contract.contractAmount は各商材 amount の合計を反映。
+  amount           Decimal?          @db.Decimal(14, 2)
   manufacturer     String?
   model            String? // 型番①
   capacity         String?

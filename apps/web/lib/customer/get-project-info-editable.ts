@@ -86,6 +86,7 @@ export interface ProjectEquipmentEditable {
   contractId: string;
   category: string;
   contracted: boolean;
+  amount: number | null;
   manufacturer: string | null;
   model: string | null;
   capacity: string | null;
@@ -238,6 +239,7 @@ export async function getCustomerProjectInfoEditable(
             id: true,
             category: true,
             contracted: true,
+            amount: true,
             manufacturer: true,
             model: true,
             capacity: true,
@@ -306,6 +308,7 @@ export async function getCustomerProjectInfoEditable(
         contractId: c.id,
         category: e.category,
         contracted: e.contracted,
+        amount: decimalToNumber(e.amount),
         manufacturer: e.manufacturer,
         model: e.model,
         capacity: e.capacity,

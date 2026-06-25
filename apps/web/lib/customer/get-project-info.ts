@@ -220,6 +220,7 @@ async function loadProjectInfo(
           id: true,
           category: true,
           contracted: true,
+          amount: true,
           manufacturer: true,
           model: true,
           capacity: true,
@@ -323,6 +324,7 @@ async function loadProjectInfo(
       const item: EquipmentItemDto = {
         id: e.id,
         contracted: e.contracted,
+        amount: decimalToNumber(e.amount),
         manufacturer: e.manufacturer,
         model: e.model,
         capacity: e.capacity,

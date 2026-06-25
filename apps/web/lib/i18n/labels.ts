@@ -2124,6 +2124,11 @@ export const labels = {
           ac: "AC（エアコン）",
           accessory: "付帯商材",
           gift: "プレゼント品",
+          // 契約商材ラインとしての施工（施工状況タブの工事進捗・原価とは別概念）。
+          construction: "施工",
+          // 各商材ごとの契約金額（顧客向け・原価ではない）。
+          amount: "金額（税込）",
+          vendor: "施工業者",
           // 各設備の項目
           totalWarranty: "総合保証・発電量保証",
           extWarranty: "延長保証",
@@ -2257,13 +2262,13 @@ export const labels = {
         todo: "ToDo",
         chat: "チャット",
       },
-      // 契約状況タブ — 契約予定情報の単一の表示・編集面。概況（Customer 手動列）+
-      // 案件詳細（Contract モデル由来 per-contract）。
+      // 契約状況タブ — 契約予定情報の単一の表示・編集面（Contract モデル由来 per-contract）。
+      // 商材ライン（PV/BT/付帯/施工）をカード内インラインで入力する（概況は廃止）。
       contractTab: {
-        summaryTitle: "契約状況（概況）",
-        summaryHint: "一覧バッジ用の概況（契約プラン・金額・予定日）",
         detailTitle: "契約予定情報（案件詳細）",
-        detailHint: "契約・金額・支払・設備明細・認定を契約ごとに編集",
+        detailHint: "契約・金額・支払・商材ライン・認定を契約ごとに編集",
+        equipmentTitle: "商材ライン",
+        equipmentHint: "PV/BT/付帯/施工の各商材の金額・内容を入力",
       },
       loanTab: {
         empty: "ローン情報を表示できる契約がありません。",
@@ -2429,6 +2434,10 @@ export const labels = {
       pvDrawing: {
         title: "PV設置図面",
         empty: "PV設置図面はありません",
+      },
+      contractFiles: {
+        title: "契約関連ファイル",
+        empty: "契約関連ファイルはありません",
       },
       tasks: {
         title: "タスク / ToDo",

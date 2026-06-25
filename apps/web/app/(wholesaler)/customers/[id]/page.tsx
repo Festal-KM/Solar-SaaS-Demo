@@ -43,7 +43,6 @@ import { EditAssigneeDialog } from "./edit-assignee-dialog";
 import { NegotiationStatusPanel } from "./negotiation-status-panel";
 import { NewActivityDialog } from "./new-activity-dialog";
 import {
-  ContractStatusPanel,
   ConstructionStatusPanel,
   SubsidyStatusPanel,
 } from "./status-panels";
@@ -556,34 +555,30 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </div>
         </TabsContent>
 
-        {/* 契約状況 — 契約予定情報の単一の表示・編集面。
-            概況（Customer 手動列: プラン/金額/予定日。一覧バッジ用）+ 案件詳細
-            （Contract モデル由来の per-contract 契約・金額/設備明細/認定）。 */}
+        {/* 契約状況 — 契約予定情報の単一の表示・編集面（Contract モデル由来 per-contract）。
+            商材ライン（PV/BT/付帯/施工）はカード内インライン編集。概況（Customer 手動列）は
+            廃止。契約関連ファイル（CONTRACT）のアップロードを併設する。 */}
         <TabsContent value="contract" className="space-y-4">
-          <Card className="p-5">
-            <div className="mb-1 flex items-baseline gap-2">
-              <h2 className="text-sm font-semibold text-ink">{d.contractTab.summaryTitle}</h2>
-              <span className="text-xs text-mute-light">{d.contractTab.summaryHint}</span>
-            </div>
-            <div className="mt-3">
-              <ContractStatusPanel
-                customerId={detail.id}
-                initial={{
-                  plan: detail.contract.plan,
-                  amount: detail.contract.amount,
-                  expectedDate: detail.contract.expectedDate,
-                }}
-              />
-            </div>
-          </Card>
           <Card className="p-5">
             <div className="mb-1 flex items-baseline gap-2">
               <h2 className="text-sm font-semibold text-ink">{d.contractTab.detailTitle}</h2>
               <span className="text-xs text-mute-light">{d.contractTab.detailHint}</span>
             </div>
             <div className="mt-3">
-              <ProjectContractList data={projectInfo} editable={projectInfoEditable} />
+              <ProjectContractList
+                data={projectInfo}
+                editable={projectInfoEditable}
+                inlineEquipment
+              />
             </div>
+          </Card>
+          <Card className="p-5">
+            <h2 className="mb-3 text-sm font-semibold text-ink">{d.contractFiles.title}</h2>
+            <CustomerFiles
+              customerId={detail.id}
+              category="CONTRACT"
+              files={detail.contractFiles}
+            />
           </Card>
         </TabsContent>
 

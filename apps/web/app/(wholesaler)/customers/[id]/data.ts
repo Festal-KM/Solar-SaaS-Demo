@@ -137,6 +137,7 @@ export interface CustomerDetail {
   files: RelatedFile[]; // 関連ファイルタブ（GENERAL）
   applicationFiles: RelatedFile[]; // 設置申請タブの申請関連ドキュメント（APPLICATION）
   pvDrawingFiles: RelatedFile[]; // 施工状況タブの PV設置図面（PV_DRAWING）
+  contractFiles: RelatedFile[]; // 契約状況タブの契約関連ファイル（CONTRACT）
   tasks: CustomerTask[];
   messages: ChatMessage[];
   currentUserId: string; // 自分のメッセージ判定用（チャット右寄せ）
@@ -403,6 +404,9 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
     const pvDrawingFiles: RelatedFile[] = fileRows
       .filter((f) => f.category === "PV_DRAWING")
       .map(toRelatedFile);
+    const contractFiles: RelatedFile[] = fileRows
+      .filter((f) => f.category === "CONTRACT")
+      .map(toRelatedFile);
 
     const messages: ChatMessage[] = messageRows.map((m) => ({
       id: m.id,
@@ -445,6 +449,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       updatedAt: customer.updatedAt.toISOString(),
       contract: {
         status: customer.contractStatus as ContractStatusValue,
+        // 一覧バッジで status を使用。plan/amount/expectedDate は現状未参照（将来の概況再導入用）。
         plan: customer.contractPlan,
         amount: customer.contractAmount ?? null,
         expectedDate: isoOrNull(customer.contractExpectedDate),
@@ -465,6 +470,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       files,
       applicationFiles,
       pvDrawingFiles,
+      contractFiles,
       tasks,
       messages,
       currentUserId: ctx.actorUserId,

@@ -260,8 +260,13 @@ export const CustomerMessageCreateSchema = z.object({
 export type CustomerMessageCreateInput = z.infer<typeof CustomerMessageCreateSchema>;
 
 // 顧客ファイルの用途カテゴリ。GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
-// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット（バッチ C）。
-export const CustomerFileCategoryEnum = z.enum(["GENERAL", "APPLICATION", "PV_DRAWING"]);
+// PV_DRAWING=施工状況タブの PV設置図面（PDF）専用スロット（バッチ C）、CONTRACT=契約状況タブの契約関連ファイル。
+export const CustomerFileCategoryEnum = z.enum([
+  "GENERAL",
+  "APPLICATION",
+  "PV_DRAWING",
+  "CONTRACT",
+]);
 
 export type CustomerFileCategory = z.infer<typeof CustomerFileCategoryEnum>;
 
@@ -438,6 +443,8 @@ export const ProjectEquipmentEditSchema = z.object({
 export type ProjectEquipmentEditInput = z.infer<typeof ProjectEquipmentEditSchema>;
 
 // 設備カテゴリ値域（ContractEquipment.category / EquipmentCategory enum と一致）。
+// CONSTRUCTION = 契約商材ラインとしての施工（金額・業者・内容）。施工状況タブの
+// Construction（工事進捗・fee 原価）とは別概念。
 export const EQUIPMENT_CATEGORY_VALUES = [
   "PV",
   "BT",
@@ -446,11 +453,31 @@ export const EQUIPMENT_CATEGORY_VALUES = [
   "AC",
   "ACCESSORY",
   "GIFT",
+  "CONSTRUCTION",
 ] as const;
 
 export const EquipmentCategoryEnum = z.enum(EQUIPMENT_CATEGORY_VALUES);
 
 export type EquipmentCategoryValue = z.infer<typeof EquipmentCategoryEnum>;
+
+/**
+ * Sum per-line product amounts (PV/BT/付帯/施工 …) into a contract total.
+ * Pure — ignores null entries. Returns `null` when every line is null (so the
+ * caller can distinguish "no amounts entered yet" from a real 0 total).
+ */
+export function sumEquipmentAmounts(
+  amounts: ReadonlyArray<number | null | undefined>,
+): number | null {
+  let total = 0;
+  let seen = false;
+  for (const a of amounts) {
+    if (a != null) {
+      total += a;
+      seen = true;
+    }
+  }
+  return seen ? total : null;
+}
 
 // 契約状況タブでの「設備の追加・編集」ペイロード（契約 find-or-create 方式）。
 //
@@ -465,6 +492,9 @@ export const ProjectContractEquipmentUpsertSchema = z.object({
   category: EquipmentCategoryEnum,
   // Contract.contractAmount へ反映する任意の契約金額（円・整数・0 以上）。
   contractAmount: z.number().int().nonnegative().nullable().optional(),
+  // 商材ごとの契約金額（ContractEquipment.amount）。顧客向け金額（原価ではない）。
+  // 円・整数・0 以上。null でクリア可、省略は無変更。
+  amount: z.number().int().nonnegative().nullable().optional(),
   contracted: z.boolean().optional(),
   manufacturer: z.string().max(255).nullable().optional(),
   model: z.string().max(255).nullable().optional(),

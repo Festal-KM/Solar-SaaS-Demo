@@ -29,6 +29,7 @@ import {
   ProjectContractEditSchema,
   ProjectContractEquipmentUpsertSchema,
   ProjectOverviewSchema,
+  sumEquipmentAmounts,
 } from "@solar/contracts";
 import { Prisma } from "@solar/db";
 import { revalidatePath } from "next/cache";
@@ -656,6 +657,8 @@ export const saveProjectContractEquipmentAction = withServerActionContext<
 
     const writable = {
       ...(parsed.contracted !== undefined ? { contracted: parsed.contracted } : {}),
+      // 商材ごとの契約金額（顧客向け・原価ではない）。null でクリア。
+      ...(parsed.amount !== undefined ? { amount: parsed.amount } : {}),
       ...(parsed.manufacturer !== undefined
         ? { manufacturer: parsed.manufacturer?.trim() || null }
         : {}),
@@ -698,6 +701,26 @@ export const saveProjectContractEquipmentAction = withServerActionContext<
         },
         select: { id: true },
       });
+    }
+
+    // 契約合計（Contract.contractAmount）= 各商材 amount の合計を反映（UI 整合）。
+    // 明示的な contractAmount 指定が無いときのみ、商材金額から導出する。全商材 null の
+    // ときは合計を更新しない（既存の契約金額を温存）。GrossProfit/Incentive は触らない。
+    if (parsed.contractAmount == null) {
+      const lines = await tx.contractEquipment.findMany({
+        where: { contractId },
+        select: { amount: true },
+      });
+      const total = sumEquipmentAmounts(
+        lines.map((l) => (l.amount != null ? Number(l.amount.toString()) : null)),
+      );
+      if (total != null) {
+        await tx.contract.update({
+          where: { id: contractId },
+          data: { contractAmount: total },
+          select: { id: true },
+        });
+      }
     }
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);

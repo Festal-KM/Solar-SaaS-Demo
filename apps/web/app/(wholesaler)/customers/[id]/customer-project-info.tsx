@@ -14,6 +14,7 @@ import {
   EditConstructionDialog,
   EditContractDialog,
   EditEquipmentDialog,
+  EquipmentInlineEdit,
   HearingInlineEdit,
 } from "./project-info-edit";
 
@@ -146,6 +147,13 @@ function EquipmentCard({
       </div>
       {item.contracted ? (
         <dl className="grid grid-cols-2 gap-x-5 gap-y-2.5 sm:grid-cols-3">
+          {/* 商材ごとの金額（顧客向け・原価ではない）を右揃えで先頭表示。 */}
+          <div className="min-w-0">
+            <dt className="text-[11px] text-mute-light">{e.amount}</dt>
+            <dd className="mt-0.5 text-right text-sm font-semibold tabular-nums text-ink">
+              {item.amount != null ? `¥${item.amount.toLocaleString("ja-JP")}` : EMPTY}
+            </dd>
+          </div>
           {rows.map((r) => (
             <MetaItem key={r.label} label={r.label} value={r.value} />
           ))}
@@ -156,6 +164,16 @@ function EquipmentCard({
 }
 
 const e = p.equipment;
+
+// 施工商材ライン（CONSTRUCTION）の表示行。契約上の施工金額・業者・内容。
+// 施工状況タブの Construction（工事進捗・fee 原価）とは別概念。
+function constructionRows(it: AnyEquipmentItem) {
+  return [
+    { label: e.vendor, value: it.manufacturer ?? EMPTY },
+    { label: e.modelNo, value: it.model ?? EMPTY },
+    { label: e.detail, value: it.detail ?? EMPTY },
+  ];
+}
 
 function pvRows(it: AnyEquipmentItem) {
   return [
@@ -231,6 +249,7 @@ function emptyItem(): AnyEquipmentItem {
   return {
     id: "",
     contracted: false,
+    amount: null,
     manufacturer: null,
     model: null,
     capacity: null,
@@ -247,8 +266,26 @@ function emptyItem(): AnyEquipmentItem {
 
 // 契約 0 件の顧客の設備追加グリッド用の空カテゴリ集合（全カテゴリ空配列）。
 function emptyAnyEquipment(): AnyEquipment {
-  return { PV: [], BT: [], EQ: [], IH: [], AC: [], ACCESSORY: [], GIFT: [] };
+  return { PV: [], BT: [], EQ: [], IH: [], AC: [], ACCESSORY: [], GIFT: [], CONSTRUCTION: [] };
 }
+
+// 商材ライン（カテゴリ）の表示順・タイトル・行ビルダーの単一ソース。CONSTRUCTION
+// （契約商材ラインとしての施工）を含む。EquipmentGrid（読み取り）と契約状況タブの
+// インライン編集の両方がこの順序・タイトルを参照する。
+const CATEGORY_META: {
+  key: EquipmentCategoryKey;
+  title: string;
+  rows: (it: AnyEquipmentItem) => { label: string; value: string }[];
+}[] = [
+  { key: "PV", title: e.pv, rows: pvRows },
+  { key: "BT", title: e.bt, rows: btRows },
+  { key: "EQ", title: e.eq, rows: eqRows },
+  { key: "IH", title: e.ih, rows: ihRows },
+  { key: "AC", title: e.ac, rows: acRows },
+  { key: "ACCESSORY", title: e.accessory, rows: accessoryRows },
+  { key: "GIFT", title: e.gift, rows: giftRows },
+  { key: "CONSTRUCTION", title: e.construction, rows: constructionRows },
+];
 
 function EquipmentGrid({
   equipment,
@@ -259,28 +296,49 @@ function EquipmentGrid({
   // （空カテゴリは id=""）を受け取り、追加（item.id 無し）/ 編集（item.id 有り）を分岐する。
   editSlotFor?: (category: EquipmentCategoryKey, item: AnyEquipmentItem, title: string) => React.ReactNode;
 }) {
-  const card = (
-    category: EquipmentCategoryKey,
-    title: string,
-    item: AnyEquipmentItem,
-    rows: { label: string; value: string }[],
-  ) => (
-    <EquipmentCard
-      title={title}
-      item={item}
-      rows={rows}
-      editSlot={editSlotFor?.(category, item, title)}
-    />
-  );
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      {card("PV", e.pv, firstOrEmpty(equipment.PV), pvRows(firstOrEmpty(equipment.PV)))}
-      {card("BT", e.bt, firstOrEmpty(equipment.BT), btRows(firstOrEmpty(equipment.BT)))}
-      {card("EQ", e.eq, firstOrEmpty(equipment.EQ), eqRows(firstOrEmpty(equipment.EQ)))}
-      {card("IH", e.ih, firstOrEmpty(equipment.IH), ihRows(firstOrEmpty(equipment.IH)))}
-      {card("AC", e.ac, firstOrEmpty(equipment.AC), acRows(firstOrEmpty(equipment.AC)))}
-      {card("ACCESSORY", e.accessory, firstOrEmpty(equipment.ACCESSORY), accessoryRows(firstOrEmpty(equipment.ACCESSORY)))}
-      {card("GIFT", e.gift, firstOrEmpty(equipment.GIFT), giftRows(firstOrEmpty(equipment.GIFT)))}
+      {CATEGORY_META.map(({ key, title, rows }) => {
+        const item = firstOrEmpty(equipment[key]);
+        return (
+          <EquipmentCard
+            key={key}
+            title={title}
+            item={item}
+            rows={rows(item)}
+            editSlot={editSlotFor?.(key, item, title)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// 契約状況タブ専用: 商材ライン（PV/BT/付帯/施工）をカード内インラインで編集するグリッド。
+// ポップアップ廃止。各カテゴリ代表 1 行を EquipmentInlineEdit で直接編集する（contractId
+// が null でも保存時にサーバーが最小契約を生成）。customer.update 権限保持者のみ描画。
+function EquipmentInlineGrid({
+  contractId,
+  customerId,
+  editFor,
+}: {
+  contractId: string | null;
+  customerId: string;
+  // contractId × category 代表行の編集用 raw 値（無ければ null=新規）。
+  editFor: (category: EquipmentCategoryKey) => ProjectEquipmentEditable | null;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      {CATEGORY_META.map(({ key, title }) => (
+        <EquipmentInlineEdit
+          key={key}
+          customerId={customerId}
+          category={key}
+          contractId={contractId}
+          initial={editFor(key)}
+          title={title}
+        />
+      ))}
     </div>
   );
 }
@@ -884,15 +942,32 @@ export function ProjectContractList({
   data,
   editable = null,
   readOnly = false,
+  inlineEquipment = false,
 }: {
   data: CustomerProjectInfoData;
   editable?: ProjectInfoEditable | null;
   readOnly?: boolean;
+  // 契約状況タブ: 商材ライン（PV/BT/付帯/施工）をポップアップではなくカード内インライン
+  // 編集で描画する。基本情報タブ（readOnly）では false（読み取りカードのまま）。
+  inlineEquipment?: boolean;
 }) {
   const f = p.fields;
+  const ct = labels.customer.detail.contractTab;
   const contracts = data.contracts as AnyContract[];
   // readOnly では編集トリガーを描画しないため customerId/editable 引き当ては無効化する。
   const customerId = readOnly ? null : editable?.customerId ?? null;
+  // インライン編集は権限保持者（customerId 非 null）かつ inlineEquipment 指定時のみ。
+  const useInline = inlineEquipment && !!customerId;
+
+  // contractId × category の代表編集行を引き当てる（インライン編集の初期値）。
+  function inlineEditFor(contractId: string | null) {
+    return (category: EquipmentCategoryKey): ProjectEquipmentEditable | null => {
+      if (!editable || !contractId) return null;
+      return (
+        (editable.equipmentByContract[contractId] ?? []).find((e) => e.category === category) ?? null
+      );
+    };
+  }
 
   const editContractById = new Map<string, ProjectContractEditable>(
     (readOnly ? [] : editable?.contracts ?? []).map((ec) => [ec.contractId, ec]),
@@ -940,14 +1015,24 @@ export function ProjectContractList({
           <div className="space-y-4 rounded-md border border-hairline-light p-4">
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
-                {p.sections.equipment}
+                {useInline ? ct.equipmentTitle : p.sections.equipment}
               </h3>
-              <span className="text-[11px] text-mute-light">{p.equipmentAddHint}</span>
+              <span className="text-[11px] text-mute-light">
+                {useInline ? ct.equipmentHint : p.equipmentAddHint}
+              </span>
             </div>
-            <EquipmentGrid
-              equipment={emptyAnyEquipment()}
-              editSlotFor={(category, item, title) => equipmentEditSlot(null, category, item, title)}
-            />
+            {useInline ? (
+              <EquipmentInlineGrid
+                contractId={null}
+                customerId={customerId}
+                editFor={inlineEditFor(null)}
+              />
+            ) : (
+              <EquipmentGrid
+                equipment={emptyAnyEquipment()}
+                editSlotFor={(category, item, title) => equipmentEditSlot(null, category, item, title)}
+              />
+            )}
           </div>
         ) : (
           <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
@@ -996,20 +1081,29 @@ export function ProjectContractList({
                 </div>
               </dl>
 
-              {/* 設備明細 */}
+              {/* 商材ライン（PV/BT/付帯/施工）。契約状況タブはカード内インライン編集、
+                  基本情報タブ（readOnly）は読み取りカード。 */}
               <div>
                 <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-                  {p.sections.equipment}
+                  {useInline ? ct.equipmentTitle : p.sections.equipment}
                 </h4>
-                <EquipmentGrid
-                  equipment={c.equipment}
-                  editSlotFor={
-                    customerId
-                      ? (category, item, title) =>
-                          equipmentEditSlot(c.contractId, category, item, title)
-                      : undefined
-                  }
-                />
+                {useInline ? (
+                  <EquipmentInlineGrid
+                    contractId={c.contractId}
+                    customerId={customerId!}
+                    editFor={inlineEditFor(c.contractId)}
+                  />
+                ) : (
+                  <EquipmentGrid
+                    equipment={c.equipment}
+                    editSlotFor={
+                      customerId
+                        ? (category, item, title) =>
+                            equipmentEditSlot(c.contractId, category, item, title)
+                        : undefined
+                    }
+                  />
+                )}
               </div>
             </div>
           );
