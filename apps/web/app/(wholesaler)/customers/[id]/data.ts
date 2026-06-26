@@ -126,6 +126,7 @@ export interface CustomerDetail {
   maekakuPreferredAt: string | null; // マエカク希望日時（ISO、商談履歴タブで入力）
   nextAction: string | null; // 次回アクション（商談履歴タブで入力）
   nextAppointmentAt: string | null; // 次回アポ日程（ISO、商談履歴タブで入力）
+  nextAppointmentAssigneeUserId: string | null; // 次回アポ担当者（自社 User、商談タブで入力）
   assigneeName: string;
   tossUp: AssigneeDisplay | null; // トスアップ担当（自社/二次店、未設定は null）
   closing: AssigneeDisplay | null; // クロージング担当（自社/二次店、未設定は null）
@@ -243,6 +244,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
         maekakuPreferredAt: true,
         nextAction: true,
         nextAppointmentAt: true,
+        nextAppointmentAssigneeUserId: true,
         registeredByUserId: true,
         tossUpUserId: true,
         tossUpRelationshipId: true,
@@ -469,6 +471,7 @@ export async function getCustomerDetail(id: string): Promise<CustomerDetail | nu
       maekakuPreferredAt: isoOrNull(customer.maekakuPreferredAt),
       nextAction: customer.nextAction,
       nextAppointmentAt: isoOrNull(customer.nextAppointmentAt),
+      nextAppointmentAssigneeUserId: customer.nextAppointmentAssigneeUserId,
       assigneeName: assigneeDisplay,
       tossUp: resolveAssignee(customer.tossUpUserId, customer.tossUpRelationshipId),
       closing: resolveAssignee(customer.closingUserId, customer.closingRelationshipId),

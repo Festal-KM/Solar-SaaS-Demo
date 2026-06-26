@@ -125,6 +125,10 @@ async function loadProjectInfo(
       tossUpRelationshipId: true,
       closingUserId: true,
       closingRelationshipId: true,
+      // 次回アポ（商談タブ編集・コールタブ read-only 表示）。
+      nextAppointmentAt: true,
+      nextAction: true,
+      nextAppointmentAssigneeUserId: true,
       // F-063 ヒアリング（住環境・家族）。マスキング/二次店物理除外は DTO 整形時に適用。
       landlinePhone: true,
       mobilePhone: true,
@@ -147,7 +151,11 @@ async function loadProjectInfo(
       loanCompletionCallPreferredAt: true,
       loanCompletionCallNote: true,
       generalCallPreferredTime: true,
-      maekakuPreferredPhone: true,
+      // 過去コール履歴（CustomerCallLog・画面追加・架電日時/対応者/メモ）。calledAt 降順。
+      callLogs: {
+        orderBy: { calledAt: "desc" },
+        select: { id: true, calledAt: true, handlerUserId: true, note: true },
+      },
       existingEquipments: {
         orderBy: { category: "asc" },
         select: {
@@ -161,23 +169,12 @@ async function loadProjectInfo(
           attributes: true,
         },
       },
-      // マエカクコール過去履歴（Appointment→PreCall）。アポ獲得日も同源から導出。
+      // アポ獲得日（代表アポ）を導出するための最小選択。
       appointments: {
         orderBy: { scheduledAt: "desc" },
         select: {
           acquiredAt: true,
           scheduledAt: true,
-          preCall: {
-            select: {
-              id: true,
-              calledAt: true,
-              result: true,
-              visitConfirmedAt: true,
-              personConfirmed: true,
-              note: true,
-              nextAction: true,
-            },
-          },
         },
       },
     },
@@ -304,7 +301,12 @@ async function loadProjectInfo(
   // 担当者名（自社社員 User / 二次店 Relationship→dealer）の解決。
   const userIds = [
     ...new Set(
-      [customer.tossUpUserId, customer.closingUserId].filter((v): v is string => !!v),
+      [
+        customer.tossUpUserId,
+        customer.closingUserId,
+        customer.nextAppointmentAssigneeUserId,
+        ...customer.callLogs.map((l) => l.handlerUserId),
+      ].filter((v): v is string => !!v),
     ),
   ];
   const relIds = [
@@ -548,29 +550,26 @@ async function loadProjectInfo(
         attributes: asRecord(eq.attributes),
       })),
     },
-    // コールタブ 4 セクション。マエカク希望電話は連絡先 PII（maskMobilePhone で下4桁マスク）。
-    // マエカク希望日時は商談履歴タブと共用列。preCallHistory はアポ事前確認コールの実績（read-only）。
+    // コールタブ。固定電話/携帯電話は連絡先 PII（maskLandlinePhone/maskMobilePhone で下4桁
+    // マスク）でタブ上部に表示。マエカク希望日時は商談履歴タブと共用列。callLogs は画面から
+    // 追加する過去コール履歴（架電日時/対応者/メモ）。次回アポは商談タブ編集値の read-only。
     calls: {
+      landlinePhone: maskLandlinePhone(customer.landlinePhone, viewer),
+      mobilePhone: maskMobilePhone(customer.mobilePhone, viewer),
       maekakuStatus: customer.maekakuStatus,
       maekakuPreferredAt: isoOrNull(customer.maekakuPreferredAt),
       maekakuCallNote: customer.maekakuCallNote,
-      maekakuPreferredPhone: maskMobilePhone(customer.maekakuPreferredPhone, viewer),
-      preCallHistory: customer.appointments
-        .filter((a) => a.preCall != null)
-        .map((a) => {
-          const pc = a.preCall!;
-          return {
-            preCallId: pc.id,
-            calledAt: pc.calledAt.toISOString(),
-            result: pc.result,
-            visitConfirmedAt: isoOrNull(pc.visitConfirmedAt),
-            personConfirmed: pc.personConfirmed,
-            appointmentScheduledAt: isoOrNull(a.scheduledAt),
-            note: pc.note,
-            nextAction: pc.nextAction,
-          };
-        })
-        .sort((a, b) => new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime()),
+      nextAppointmentAt: isoOrNull(customer.nextAppointmentAt),
+      nextAppointmentAssigneeName: customer.nextAppointmentAssigneeUserId
+        ? nameByUserId.get(customer.nextAppointmentAssigneeUserId) ?? null
+        : null,
+      nextAction: customer.nextAction,
+      callLogs: customer.callLogs.map((l) => ({
+        id: l.id,
+        calledAt: l.calledAt.toISOString(),
+        handlerName: l.handlerUserId ? nameByUserId.get(l.handlerUserId) ?? null : null,
+        note: l.note,
+      })),
       thankYouCallStatus: customer.thankYouCallStatus,
       thankYouCallPreferredAt: isoOrNull(customer.thankYouCallPreferredAt),
       thankYouCallNote: customer.thankYouCallNote,

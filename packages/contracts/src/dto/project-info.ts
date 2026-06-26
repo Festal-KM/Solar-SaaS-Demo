@@ -192,30 +192,33 @@ export interface ProjectHearingDto {
 export type CustomerHearingDto = ProjectHearingDto;
 export type CustomerHearingForDealerDto = ProjectHearingForDealerDto;
 
-// マエカクコールの過去コール履歴 1 件（Appointment→PreCall・read-only）。
-// アポ獲得のたびに発生する事前確認コールの実績。result は PreCallResult の CODE。
-export interface ProjectPreCallHistoryDto {
-  preCallId: string;
+// 過去コール履歴 1 件（CustomerCallLog・画面から追加するシンプルな架電実績）。
+// 架電日時 / 対応者（自社 User 名・マスク対象外）/ メモ のみ。
+export interface ProjectCallLogDto {
+  id: string;
   calledAt: string;
-  result: string | null; // PreCallResult CODE（APPROVED/ABSENT/CALLBACK/CANCELLED/RESCHEDULED）
-  visitConfirmedAt: string | null;
-  personConfirmed: boolean;
-  appointmentScheduledAt: string | null;
+  handlerName: string | null;
   note: string | null;
-  nextAction: string | null;
 }
 
 // コール状況（コールタブ 4 セクション）。各コール（マエカク / サンキュー / ローン審査完了 /
 // 施工完了）のステータス + 希望日時 + メモ。ステータス CODE: マエカクは pending/done/
-// unnecessary、その他は CALL_STATUS_VALUES（not_done/done/unnecessary）。マエカク希望電話は
-// 連絡先 PII のため maskPhone 相当適用後の文字列。マエカク希望日時は商談履歴タブと共用列。
-// preCallHistory はマエカクコールの過去コール履歴（read-only）。
+// unnecessary、その他は CALL_STATUS_VALUES（not_done/done/unnecessary）。マエカク希望日時は
+// 商談履歴タブと共用列。landlinePhone/mobilePhone は連絡先 PII（maskLandlinePhone/
+// maskMobilePhone 適用後）でコールタブ上部に表示。callLogs は画面から追加する過去コール履歴。
+// nextAppointmentAt/nextAppointmentAssigneeName/nextAction は商談タブ編集値の read-only 表示。
 export interface ProjectCallsDto {
+  // コールタブ上部の固定電話・携帯電話（マスク済み）。
+  landlinePhone: string; // maskLandlinePhone 適用後
+  mobilePhone: string; // maskMobilePhone 適用後
   maekakuStatus: string | null;
   maekakuPreferredAt: string | null;
   maekakuCallNote: string | null;
-  maekakuPreferredPhone: string; // maskPhone 適用後（'未設定' / '***-****-XXXX' / 生番号）
-  preCallHistory: ProjectPreCallHistoryDto[];
+  // 次回アポ（商談タブで編集・コールタブ read-only）。
+  nextAppointmentAt: string | null;
+  nextAppointmentAssigneeName: string | null; // 自社 User 名（マスク対象外）
+  nextAction: string | null;
+  callLogs: ProjectCallLogDto[];
   thankYouCallStatus: string | null;
   thankYouCallPreferredAt: string | null;
   thankYouCallNote: string | null;
@@ -265,7 +268,7 @@ export interface ProjectInfoDto {
   profitAndLoss: ProjectProfitDto[];
   // F-063 追加カテゴリ: ヒアリング（住環境・家族）。契約後設備 equipment（カテゴリ 7）とは別概念。
   hearing: ProjectHearingDto;
-  // バッチ B: コール状況（完工/ローン完了コール・汎用希望時間帯・マエカク希望電話）。
+  // コール状況（完工/ローン完了コール・電話番号・過去コール履歴・次回アポ）。
   calls: ProjectCallsDto;
 }
 

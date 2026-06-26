@@ -2786,6 +2786,15 @@ model ContractPayment {
 >
 > **住所欄重複解消（追補・小）**: 顧客情報インライン編集（`BasicInfoInlineEdit`）は構造化住所（`postalCode`/`prefecture`/`city`/`addressLine`）入力を持つため、重複するフルテキスト `address` 入力欄を **編集 UI から除去**する（`page.tsx` の `basicInitial` と読み取り専用 `InfoRow` も同様）。
 > DB カラム `Customer.address` 自体は保持し、顧客一覧検索（`address` contains）には影響させない（編集ローダの select は残置可）。
+>
+> **コールタブ追加改修（追補）**: コールタブ（`ProjectCallStatusSection`）を以下のとおり改修する。バッチ B（4 セクション再設計）の上に積む差分。
+> - **電話番号ヘッダ（要件1）**: タブ最上部に固定電話 `Customer.landlinePhone` / 携帯電話 `Customer.mobilePhone` を **マスク済み read-only** で表示する（コール業務で番号を即参照できるよう常設）。マスクは `maskLandlinePhone` / `maskMobilePhone`（既存 PII マスク・下4桁／市区町村まで方針）を `getProjectInfo` ローダで適用し、`ProjectCallsDto.landlinePhone` / `.mobilePhone`（**マスク後文字列**）として供給。二次店 DTO でもマスク済みのため `toProjectInfoDealerDto` は calls を素通し（生番号は露出しない・CLAUDE.md #5/#6）。
+> - **マエカク希望電話の廃止（要件2）**: マエカクコールの希望電話 `maekakuPreferredPhone` は **UI から完全除去**（`MaekakuCallInlineEdit` の入力・`ProjectCallsDto.maekakuPreferredPhone`・`ProjectCallStatusSchema.maekakuPreferredPhone`・`saveProjectCallStatusAction` の書き込み・関連ラベルを削除）。上記電話番号ヘッダが代替する。**DB 列 `Customer.maekakuPreferredPhone` は非破壊のため残置**（seed も従来通り投入可）。
+> - **過去コール履歴の刷新（要件3）**: `Appointment→PreCall` 由来の自動履歴表示（`ProjectPreCallHistoryDto`）を廃止し、**新テーブル `CustomerCallLog`**（架電日時 `calledAt` / 対応者 `handlerUserId`(自社 User・任意) / メモ `note` / 監査 `createdByUserId`）由来の **シンプル一覧（calledAt 降順）＋ 画面からの追加・削除フォーム**に置換する。`ProjectCallLogDto`（id / calledAt / handlerName / note）として `getProjectInfo` が供給（`handlerName` は同テナント User 名解決・マスク対象外）。追加は `createCustomerCallLogAction`、削除は `deleteCustomerCallLogAction`（いずれも三段イディオム auth→`assertCan(customer.update)`→`withTenant` + RLS。`handlerUserId` は指定時のみ同テナント User を検証、`customerId`/`callLogId` はテナント内存在検証）。`CustomerCallLog` の **RLS policy は必須**（`Customer.wholesalerId` 経由の相関 EXISTS。`CustomerActivity_isolation` と同パターン）。`createdByUserId`（作成者・監査）と `handlerUserId`（対応者）は別概念で混同しない。
+> - **次回アポ担当者／次回アクション（要件4）**: マエカクコール section に **次回アポ日程 `nextAppointmentAt` / 次回アポ担当者 `nextAppointmentAssigneeUserId`(自社 User 名) / 次回アクション `nextAction`** を **read-only 表示**（編集は商談タブ）。新列 `Customer.nextAppointmentAssigneeUserId`（自社 User 参照・非破壊 ADD COLUMN）は **商談タブ `NegotiationStatusPanel` の selector で編集**し、`updateCustomerAction` / `CustomerUpdateSchema.nextAppointmentAssigneeUserId`（同テナント User 検証）で保存。`closingUserId`（クロージング担当）とは別概念で混同しない。`page.tsx` が `users`（自社社員）と初期値を両タブへ供給。
+> - 文言は `apps/web/lib/i18n/labels.ts`（`customer.detail.callSections` / `customer.detail.negotiation`）に集約。`maekakuPreferredPhone` / `preCallResultLabels` / `preCall*` 系 orphan ラベルは削除。
+>
+> マイグレーション `20260626000000_customer_call_log`（`Customer` ADD COLUMN `nextAppointmentAssigneeUserId` + `CustomerCallLog` テーブル + index + FK(onDelete Cascade) + RLS policy。すべて非破壊）。
 
 ### 16.6 段階移行プラン
 

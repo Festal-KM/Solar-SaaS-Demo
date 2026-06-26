@@ -22,8 +22,13 @@ interface NegotiationStatusPanelProps {
   initialContractStatus: ContractStatusValue;
   initialNextAction: string | null;
   initialNextAppointmentAt: string | null; // ISO or null
+  initialNextAppointmentAssigneeUserId: string | null;
   initialMaekakuPreferredAt: string | null; // ISO or null
+  // 次回アポ担当者 select 用（自社社員）。
+  users: { id: string; name: string }[];
 }
+
+const ASSIGNEE_UNSET = "__unset__";
 
 const MAEKAKU_UNSET = "__unset__";
 
@@ -49,7 +54,9 @@ export function NegotiationStatusPanel({
   initialContractStatus,
   initialNextAction,
   initialNextAppointmentAt,
+  initialNextAppointmentAssigneeUserId,
   initialMaekakuPreferredAt,
+  users,
 }: NegotiationStatusPanelProps) {
   const t = labels.customer;
   const d = t.detail;
@@ -60,6 +67,9 @@ export function NegotiationStatusPanel({
   const [contractStatus, setContractStatus] = useState<ContractStatusValue>(initialContractStatus);
   const [nextAction, setNextAction] = useState(initialNextAction ?? "");
   const [nextAppointmentAt, setNextAppointmentAt] = useState(toDateInput(initialNextAppointmentAt));
+  const [nextAppointmentAssigneeUserId, setNextAppointmentAssigneeUserId] = useState<string>(
+    initialNextAppointmentAssigneeUserId ?? ASSIGNEE_UNSET,
+  );
   const [maekakuPreferredAt, setMaekakuPreferredAt] = useState(
     toDateTimeInput(initialMaekakuPreferredAt),
   );
@@ -70,6 +80,7 @@ export function NegotiationStatusPanel({
     contractStatus !== initialContractStatus ||
     nextAction !== (initialNextAction ?? "") ||
     nextAppointmentAt !== toDateInput(initialNextAppointmentAt) ||
+    nextAppointmentAssigneeUserId !== (initialNextAppointmentAssigneeUserId ?? ASSIGNEE_UNSET) ||
     maekakuPreferredAt !== toDateTimeInput(initialMaekakuPreferredAt);
 
   function handleSave() {
@@ -82,6 +93,8 @@ export function NegotiationStatusPanel({
           contractStatus,
           nextAction: nextAction.trim() ? nextAction.trim() : null,
           nextAppointmentAt: nextAppointmentAt || null,
+          nextAppointmentAssigneeUserId:
+            nextAppointmentAssigneeUserId === ASSIGNEE_UNSET ? null : nextAppointmentAssigneeUserId,
           maekakuPreferredAt: maekakuPreferredAt || null,
         });
         toast.success(c.saved);
@@ -99,7 +112,7 @@ export function NegotiationStatusPanel({
     <div className="space-y-4">
       {/* 上段サブパネル: マエカク / 商談ステータス / 次回アポ日程 を横並び */}
       <div className="border-hairline-light bg-surface-soft/40 rounded-lg border p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1.5">
             <Label htmlFor="neg-maekaku">{d.negotiation.maekaku}</Label>
           <select
@@ -148,6 +161,22 @@ export function NegotiationStatusPanel({
               onChange={(e) => setNextAppointmentAt(e.target.value)}
               className={selectClass}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="neg-next-assignee">{d.negotiation.nextAppointmentAssignee}</Label>
+            <select
+              id="neg-next-assignee"
+              value={nextAppointmentAssigneeUserId}
+              onChange={(e) => setNextAppointmentAssigneeUserId(e.target.value)}
+              className={selectClass}
+            >
+              <option value={ASSIGNEE_UNSET}>{d.negotiation.nextAppointmentAssigneeUnset}</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>

@@ -502,7 +502,9 @@ export default async function CustomerDetailPage({ params }: PageProps) {
               initialContractStatus={detail.contract.status}
               initialNextAction={detail.nextAction}
               initialNextAppointmentAt={detail.nextAppointmentAt}
+              initialNextAppointmentAssigneeUserId={detail.nextAppointmentAssigneeUserId}
               initialMaekakuPreferredAt={detail.maekakuPreferredAt}
+              users={users}
             />
           </Card>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -653,11 +655,15 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </Card>
         </TabsContent>
 
-        {/* コール状況 — 完工/ローン完了コール状況・希望日時・汎用希望時間帯・マエカク希望電話 */}
+        {/* コール状況 — 電話番号ヘッダ・4 コール状況/希望日時・次回アポ read-only・過去コール履歴 */}
         <TabsContent value="calls">
           <Card className="p-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">{d.tabs.calls}</h2>
-            <ProjectCallStatusSection data={projectInfo} editable={projectInfoEditable} />
+            <ProjectCallStatusSection
+              data={projectInfo}
+              editable={projectInfoEditable}
+              users={users}
+            />
           </Card>
         </TabsContent>
 

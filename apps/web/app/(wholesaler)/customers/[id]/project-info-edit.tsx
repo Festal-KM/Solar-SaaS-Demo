@@ -7,7 +7,7 @@
 // 編集対象は既存列のみ。仕入値スナップショット（ContractItem.snapshot*）は扱わない。
 
 import { LOAN_REVIEW_STATUS_VALUES } from "@solar/contracts";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -27,6 +27,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { labels } from "@/lib/i18n/labels";
 
 import {
+  createCustomerCallLogAction,
+  deleteCustomerCallLogAction,
   saveCustomerHearingAction,
   saveProjectApplicationAction,
   saveProjectCallStatusAction,
@@ -305,7 +307,8 @@ function CallStatusSelect({
   );
 }
 
-/* マエカクコール（ステータス maekakuStatus + 希望日時 maekakuPreferredAt 共用列 + メモ + 希望電話） */
+/* マエカクコール（ステータス maekakuStatus + 希望日時 maekakuPreferredAt 共用列 + メモ）。
+   マエカク希望電話は廃止（コールタブ上部に固定/携帯電話を表示）。 */
 export function MaekakuCallInlineEdit({
   customerId,
   initial,
@@ -317,21 +320,16 @@ export function MaekakuCallInlineEdit({
   const [pending, start] = useTransition();
   const [status, setStatus] = useState(initial.maekakuStatus ?? "");
   const [preferredAt, setPreferredAt] = useState(toDateTimeInput(initial.maekakuPreferredAt));
-  const [phone, setPhone] = useState(initial.maekakuPreferredPhone ?? "");
   const [note, setNote] = useState(initial.maekakuCallNote ?? "");
 
   const initStatus = initial.maekakuStatus ?? "";
   const initAt = toDateTimeInput(initial.maekakuPreferredAt);
   const dirty =
-    status !== initStatus ||
-    preferredAt !== initAt ||
-    phone !== (initial.maekakuPreferredPhone ?? "") ||
-    note !== (initial.maekakuCallNote ?? "");
+    status !== initStatus || preferredAt !== initAt || note !== (initial.maekakuCallNote ?? "");
 
   function reset() {
     setStatus(initStatus);
     setPreferredAt(initAt);
-    setPhone(initial.maekakuPreferredPhone ?? "");
     setNote(initial.maekakuCallNote ?? "");
   }
 
@@ -342,7 +340,6 @@ export function MaekakuCallInlineEdit({
           customerId,
           maekakuStatus: status === "" ? null : (status as "pending" | "done" | "unnecessary"),
           maekakuPreferredAt: preferredAt ? new Date(preferredAt).toISOString() : null,
-          maekakuPreferredPhone: strOrNull(phone),
           maekakuCallNote: strOrNull(note),
         });
         toast.success(c.saved);
@@ -367,15 +364,135 @@ export function MaekakuCallInlineEdit({
         <FormField label={f.maekakuPreferredAt} htmlFor="mk-at">
           <input id="mk-at" type="datetime-local" className={FIELD} value={preferredAt} onChange={(e) => setPreferredAt(e.target.value)} />
         </FormField>
-        <FormField label={f.maekakuPreferredPhone} htmlFor="mk-phone">
-          <Input id="mk-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </FormField>
       </div>
       <FormField label={f.maekakuCallNote} htmlFor="mk-note">
         <Textarea id="mk-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
       </FormField>
       <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
     </div>
+  );
+}
+
+/* 過去コール履歴の追加フォーム（CustomerCallLog）。架電日時 + 対応者 select + メモ。
+   対応者デフォルトは現在の操作ユーザー（未指定なら未選択）。createCustomerCallLogAction で
+   作成 → toast + router.refresh。customer.update 権限保持者のみ呼び出される（呼び出し側でゲート）。 */
+export function CallLogAddForm({
+  customerId,
+  users,
+  defaultHandlerUserId = null,
+}: {
+  customerId: string;
+  users: { id: string; name: string }[];
+  defaultHandlerUserId?: string | null;
+}) {
+  const s = p.callSections;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [calledAt, setCalledAt] = useState("");
+  const [handlerUserId, setHandlerUserId] = useState(defaultHandlerUserId ?? "");
+  const [note, setNote] = useState("");
+
+  function onAdd() {
+    if (!calledAt) {
+      toast.error(s.callLogCalledAt);
+      return;
+    }
+    start(async () => {
+      try {
+        await createCustomerCallLogAction({
+          customerId,
+          calledAt: new Date(calledAt).toISOString(),
+          handlerUserId: handlerUserId || null,
+          note: strOrNull(note),
+        });
+        toast.success(c.saved);
+        setCalledAt("");
+        setNote("");
+        setHandlerUserId(defaultHandlerUserId ?? "");
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="rounded-md border border-hairline-light bg-surface-soft/40 p-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <FormField label={s.callLogCalledAt} htmlFor="cl-at">
+          <input
+            id="cl-at"
+            type="datetime-local"
+            className={FIELD}
+            value={calledAt}
+            onChange={(e) => setCalledAt(e.target.value)}
+          />
+        </FormField>
+        <FormField label={s.callLogHandler} htmlFor="cl-handler">
+          <select
+            id="cl-handler"
+            className={FIELD}
+            value={handlerUserId}
+            onChange={(e) => setHandlerUserId(e.target.value)}
+          >
+            <option value="">{s.callLogHandlerUnset}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label={s.callLogNote} htmlFor="cl-note">
+          <Input id="cl-note" value={note} onChange={(e) => setNote(e.target.value)} />
+        </FormField>
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Button type="button" size="sm" onClick={onAdd} disabled={pending || !calledAt}>
+          {pending ? s.callLogAdding : s.callLogAdd}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* 過去コール履歴 1 行の削除ボタン（CustomerCallLog）。 */
+export function CallLogDeleteButton({
+  customerId,
+  callLogId,
+}: {
+  customerId: string;
+  callLogId: string;
+}) {
+  const s = p.callSections;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onDelete() {
+    if (!window.confirm(s.callLogDeleteConfirm)) return;
+    start(async () => {
+      try {
+        await deleteCustomerCallLogAction({ customerId, callLogId });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="size-7 text-mute-light hover:text-destructive"
+      aria-label={s.callLogDelete}
+      onClick={onDelete}
+      disabled={pending}
+    >
+      <Trash2 className="size-4" />
+    </Button>
   );
 }
 

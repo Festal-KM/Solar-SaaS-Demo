@@ -1061,6 +1061,9 @@ model Customer {
   maekakuStatus              String?
   nextAction                 String?
   nextAppointmentAt          DateTime?
+  // 次回アポイントの担当者（自社社員 User 参照）。商談タブで編集、コールタブで read-only 表示。
+  // closingUserId（クロージング担当）とは別概念。
+  nextAppointmentAssigneeUserId String?
   // F-063 住環境・家族属性ヒアリング（docs/05 §17）。連絡先 2 系統分離・家族属性・
   // 案内者・提案商材・マエカク希望日時。phone は当面併存（後方互換 §17.6）。
   landlinePhone              String?            // 固定電話
@@ -1106,6 +1109,7 @@ model Customer {
   activities   CustomerActivity[]
   tasks        CustomerTask[]
   files        CustomerFile[]
+  callLogs     CustomerCallLog[]
   messages     CustomerMessage[]
   existingEquipments CustomerExistingEquipment[]
   proposedProductRef Product? @relation("CustomerProposedProduct", fields: [proposedProductId], references: [id], onDelete: SetNull)
@@ -1251,6 +1255,24 @@ model CustomerMessage {
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, createdAt])
+}
+
+// 過去コール履歴（コールタブ・画面から追加可能なシンプルな架電実績）。
+// 架電日時 / 対応者（自社 User） / メモ のみ。Appointment→PreCall 由来の自動履歴とは別概念。
+// テナント分離は Customer.wholesalerId 経由の相関 EXISTS（CustomerActivity と同パターン）。
+model CustomerCallLog {
+  id              String   @id @default(cuid())
+  customerId      String
+  calledAt        DateTime // 架電日時
+  handlerUserId   String?  // 対応者（自社 User 参照、未設定可）。createdByUserId とは別概念。
+  note            String?  // メモ（自由記述）
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, calledAt])
 }
 
 model Appointment {

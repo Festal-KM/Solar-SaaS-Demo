@@ -20,6 +20,8 @@
 
 import {
   buildDemoContractSeed,
+  CustomerCallLogCreateSchema,
+  CustomerCallLogDeleteSchema,
   CustomerCreateSchema,
   CustomerHearingSchema,
   CustomerUpdateSchema,
@@ -38,6 +40,8 @@ import { NotFoundError } from "@/lib/errors";
 import { withServerActionContext } from "@/lib/tenancy/server-action";
 
 import type {
+  CustomerCallLogCreateInput,
+  CustomerCallLogDeleteInput,
   CustomerCreateInput,
   CustomerHearingInput,
   CustomerUpdateInput,
@@ -207,6 +211,9 @@ export const updateCustomerAction = withServerActionContext<
           : {}),
         ...(parsed.nextAppointmentAt !== undefined
           ? { nextAppointmentAt: parsed.nextAppointmentAt ? new Date(parsed.nextAppointmentAt) : null }
+          : {}),
+        ...(parsed.nextAppointmentAssigneeUserId !== undefined
+          ? { nextAppointmentAssigneeUserId: parsed.nextAppointmentAssigneeUserId }
           : {}),
         ...(parsed.maekakuPreferredAt !== undefined
           ? { maekakuPreferredAt: parsed.maekakuPreferredAt ? new Date(parsed.maekakuPreferredAt) : null }
@@ -420,7 +427,7 @@ export const saveProjectOverviewAction = withServerActionContext<
 );
 
 // コール状況（コールタブ 4 セクション・Customer 列）。マエカク/サンキュー/ローン審査完了/
-// 施工完了コールのステータス + 希望日時 + メモ、汎用コール希望時間帯、マエカク希望電話。
+// 施工完了コールのステータス + 希望日時 + メモ、汎用コール希望時間帯。マエカク希望電話は廃止。
 // マエカク希望日時は商談履歴タブと共用列（last-write-wins）。三段イディオム（auth→customer.update→withTenant）。
 export const saveProjectCallStatusAction = withServerActionContext<
   ProjectCallStatusInput,
@@ -445,9 +452,6 @@ export const saveProjectCallStatusAction = withServerActionContext<
           : {}),
         ...(parsed.maekakuCallNote !== undefined
           ? { maekakuCallNote: parsed.maekakuCallNote?.trim() || null }
-          : {}),
-        ...(parsed.maekakuPreferredPhone !== undefined
-          ? { maekakuPreferredPhone: parsed.maekakuPreferredPhone?.trim() || null }
           : {}),
         ...(parsed.thankYouCallStatus !== undefined
           ? { thankYouCallStatus: parsed.thankYouCallStatus }
@@ -485,6 +489,79 @@ export const saveProjectCallStatusAction = withServerActionContext<
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
     return { customerId: parsed.customerId };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 過去コール履歴（CustomerCallLog）の追加・削除（コールタブ）.
+//
+// 架電日時 / 対応者（自社 User）/ メモ を画面から追加する。createdByUserId（作成者/
+// 監査）は ctx 由来であり入力には含めない。handlerUserId（対応者）は指定時のみ同テナント
+// User を検証する。customerId はテナント内の存在検証。三段イディオム（auth→customer.update
+// →withTenant）+ RLS 二重防御。CustomerCallLog の RLS は Customer.wholesalerId 経由の相関 EXISTS。
+// ---------------------------------------------------------------------------
+export interface CustomerCallLogResult {
+  id: string;
+}
+
+export const createCustomerCallLogAction = withServerActionContext<
+  CustomerCallLogCreateInput,
+  CustomerCallLogResult
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = CustomerCallLogCreateSchema.parse(input);
+
+    const existing = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundError("顧客が見つかりません");
+
+    // 対応者（自社 User）は指定時のみ同テナントの User を検証する（越境防止）。
+    if (parsed.handlerUserId) {
+      const handler = await tx.user.findUnique({
+        where: { id: parsed.handlerUserId },
+        select: { id: true },
+      });
+      if (!handler) throw new NotFoundError("対応者が見つかりません");
+    }
+
+    const created = await tx.customerCallLog.create({
+      data: {
+        customerId: parsed.customerId,
+        calledAt: new Date(parsed.calledAt),
+        handlerUserId: parsed.handlerUserId ?? null,
+        note: parsed.note?.trim() || null,
+        createdByUserId: ctx.actorUserId,
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { id: created.id };
+  },
+);
+
+export const deleteCustomerCallLogAction = withServerActionContext<
+  CustomerCallLogDeleteInput,
+  CustomerCallLogResult
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = CustomerCallLogDeleteSchema.parse(input);
+
+    // 対象履歴が当該 customer 配下であることを RLS スコープ内で検証（越境防止）。
+    const row = await tx.customerCallLog.findFirst({
+      where: { id: parsed.callLogId, customerId: parsed.customerId },
+      select: { id: true },
+    });
+    if (!row) throw new NotFoundError("コール履歴が見つかりません");
+
+    await tx.customerCallLog.delete({ where: { id: parsed.callLogId } });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { id: parsed.callLogId };
   },
 );
 

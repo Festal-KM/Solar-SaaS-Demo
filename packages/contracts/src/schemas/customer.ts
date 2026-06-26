@@ -171,6 +171,8 @@ export const CustomerUpdateSchema = z.object({
   maekakuStatus: z.enum(["pending", "done", "unnecessary"]).nullable().optional(),
   nextAction: z.string().max(2000).nullable().optional(),
   nextAppointmentAt: z.string().nullable().optional(),
+  // 次回アポ担当者（自社 User）。商談タブで編集、コールタブで read-only 表示。null でクリア。
+  nextAppointmentAssigneeUserId: z.string().min(1).nullable().optional(),
   // マエカク電話希望日時（maekakuStatus と併存）。日付は YYYY-MM-DD or ISO 文字列、null でクリア。
   maekakuPreferredAt: z.string().nullable().optional(),
   // 担当者変更（顧客の registeredByUserId = 登録者を更新）。
@@ -311,6 +313,29 @@ export const CustomerTaskCreateSchema = z.object({
 });
 
 export type CustomerTaskCreateInput = z.infer<typeof CustomerTaskCreateSchema>;
+
+// ---------------------------------------------------------------------------
+// 過去コール履歴（CustomerCallLog）— コールタブから追加する架電実績.
+//
+// 架電日時 / 対応者（自社 User）/ メモ のみのシンプルな構成。calledAt は必須。
+// handlerUserId（対応者）は同テナント User を Server Action で検証する。
+// createdByUserId（作成者/監査）は ctx 由来であり入力には含めない。
+// ---------------------------------------------------------------------------
+export const CustomerCallLogCreateSchema = z.object({
+  customerId: z.string().min(1),
+  calledAt: z.string().min(1, "架電日時を入力してください"),
+  handlerUserId: z.string().min(1).nullable().optional(),
+  note: z.string().max(2000).nullable().optional(),
+});
+
+export type CustomerCallLogCreateInput = z.infer<typeof CustomerCallLogCreateSchema>;
+
+export const CustomerCallLogDeleteSchema = z.object({
+  customerId: z.string().min(1),
+  callLogId: z.string().min(1),
+});
+
+export type CustomerCallLogDeleteInput = z.infer<typeof CustomerCallLogDeleteSchema>;
 
 // ---------------------------------------------------------------------------
 // F-063 住環境・家族属性ヒアリング（docs/05 §17.4 / §17.9）.
@@ -636,7 +661,8 @@ export type ProjectApplicationEditInput = z.infer<typeof ProjectApplicationEditS
 // unnecessary）+ 希望日時（maekakuPreferredAt・商談履歴タブと共用列）+ メモ。
 // サンキューコール（thankYouCall*）は施工タブ Construction.thankYouCallAt とは別概念・別列。
 // 日時は YYYY-MM-DD or ISO 文字列で受け、Server Action 側で Date 化する。
-// 各 null でクリア可能、省略は無変更。汎用コール希望時間帯・マエカク希望電話は維持。
+// 各 null でクリア可能、省略は無変更。マエカク希望電話は廃止（コールタブ上部に
+// 固定電話/携帯電話を直接表示するため）。汎用コール希望時間帯は維持。
 // ---------------------------------------------------------------------------
 export const ProjectCallStatusSchema = z.object({
   customerId: z.string().min(1),
@@ -644,7 +670,6 @@ export const ProjectCallStatusSchema = z.object({
   maekakuStatus: z.enum(["pending", "done", "unnecessary"]).nullable().optional(),
   maekakuPreferredAt: z.string().nullable().optional(),
   maekakuCallNote: z.string().max(2000).nullable().optional(),
-  maekakuPreferredPhone: z.string().max(50).nullable().optional(),
   // サンキューコール（CALL_STATUS_VALUES）。
   thankYouCallStatus: CallStatusEnum.nullable().optional(),
   thankYouCallPreferredAt: z.string().nullable().optional(),

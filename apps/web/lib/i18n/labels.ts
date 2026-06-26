@@ -2049,7 +2049,6 @@ export const labels = {
           callMaekakuStatus: "マエカクステータス",
           maekakuPreferredAt: "マエカク希望日時",
           maekakuCallNote: "メモ",
-          maekakuPreferredPhone: "マエカク希望電話",
           thankYouCallStatus: "サンキューコールステータス",
           thankYouCallPreferredAt: "サンキューコール希望日時",
           thankYouCallNote: "メモ",
@@ -2061,30 +2060,32 @@ export const labels = {
           loanCompletionCallNote: "メモ",
           generalCallPreferredTime: "汎用コール希望時間帯",
         },
-        // コールタブの 4 セクション見出し + マエカク過去コール履歴。
+        // コールタブの電話番号ヘッダ + 4 セクション見出し + 過去コール履歴 + 次回アポ（read-only）。
         callSections: {
+          // タブ上部の電話番号ヘッダ（マスク済み）。
+          phoneHeaderTitle: "電話番号",
+          landlinePhone: "固定電話番号",
+          mobilePhone: "携帯電話番号",
           maekakuCall: "マエカクコール",
           thankYouCall: "サンキューコール",
           loanCompletionCall: "ローン審査完了コール",
           postCompletionCall: "施工完了コール",
-          preCallHistoryTitle: "過去コール履歴",
-          preCallHistoryEmpty: "履歴はありません",
-          preCallCalledAt: "架電日時",
-          preCallResult: "結果",
-          preCallVisitConfirmedAt: "訪問確定日時",
-          preCallPersonConfirmed: "本人確認",
-          preCallAppointmentAt: "対象アポ日時",
-          preCallNote: "メモ",
-          preCallNextAction: "次回アクション",
+          // マエカクコール read-only の次回アポ表示（編集は商談タブ）。
+          nextAppointmentAt: "次回アポイント日程",
+          nextAppointmentAssignee: "次回アポ担当者",
+          nextAction: "次回アクション",
+          // 過去コール履歴（CustomerCallLog・画面から追加）。
+          callLogTitle: "過去コール履歴",
+          callLogEmpty: "履歴はありません",
+          callLogCalledAt: "架電日時",
+          callLogHandler: "対応者",
+          callLogNote: "メモ",
+          callLogAdd: "追加",
+          callLogAdding: "追加中…",
+          callLogDelete: "削除",
+          callLogDeleteConfirm: "このコール履歴を削除しますか？",
+          callLogHandlerUnset: "未選択",
         },
-        // PreCallResult CODE → 表示ラベル（マエカク過去コール履歴）。
-        preCallResultLabels: {
-          APPROVED: "承認",
-          ABSENT: "不在",
-          CALLBACK: "折返し",
-          CANCELLED: "キャンセル",
-          RESCHEDULED: "日程変更",
-        } as Record<string, string>,
         // DTO の enum CODE → 表示ラベル。
         callStatusLabels: {
           NONE: "未架電",
@@ -2391,6 +2392,8 @@ export const labels = {
         },
         dealStatus: "商談ステータス",
         nextAppointment: "次回アポ日程",
+        nextAppointmentAssignee: "次回アポ担当者",
+        nextAppointmentAssigneeUnset: "未選択",
         maekakuPreferredAt: "マエカク希望日時",
         nextAction: "次回アクション",
         nextActionPlaceholder: "次に行うアクションを入力（例: 再訪日程の調整、見積り送付 など）",

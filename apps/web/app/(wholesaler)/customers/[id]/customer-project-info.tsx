@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { labels } from "@/lib/i18n/labels";
 
 import {
+  CallLogAddForm,
+  CallLogDeleteButton,
   EditApplicationDialog,
   EditConstructionDialog,
   EditContractDialog,
@@ -548,36 +550,45 @@ function callPhaseLabel(code: string | null): string | null {
   return p.callPhaseStatusLabels[code] ?? code;
 }
 
-// マエカク過去コール履歴（read-only 一覧。Appointment→PreCall 由来）。
-function PreCallHistoryList({ data }: { data: CustomerProjectInfoData }) {
+// 過去コール履歴（CustomerCallLog・架電日時/対応者/メモ）。canEdit のとき追加フォーム +
+// 各行に削除ボタンを描画する。read-only（二次店等）では一覧のみ。calledAt 降順（ローダ整形済）。
+function CallLogList({
+  data,
+  customerId,
+  users,
+}: {
+  data: CustomerProjectInfoData;
+  customerId: string | null;
+  users: { id: string; name: string }[];
+}) {
   const s = p.callSections;
-  const history = data.calls.preCallHistory;
+  const logs = data.calls.callLogs;
+  const canEdit = customerId != null;
   return (
-    <div className="mt-4">
-      <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-        {s.preCallHistoryTitle}
+    <div className="mt-4 space-y-3">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+        {s.callLogTitle}
       </h4>
-      {history.length === 0 ? (
-        <p className="text-sm text-mute-light">{s.preCallHistoryEmpty}</p>
+      {canEdit ? <CallLogAddForm customerId={customerId!} users={users} /> : null}
+      {logs.length === 0 ? (
+        <p className="text-sm text-mute-light">{s.callLogEmpty}</p>
       ) : (
         <ul className="space-y-2">
-          {history.map((h) => (
+          {logs.map((l) => (
             <li
-              key={h.preCallId}
+              key={l.id}
               className="rounded-md border border-hairline-light bg-surface-soft p-3"
             >
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-                <MetaItem label={s.preCallCalledAt} value={fmtDateTime(h.calledAt)} />
-                <MetaItem
-                  label={s.preCallResult}
-                  value={h.result ? p.preCallResultLabels[h.result] ?? h.result : null}
-                />
-                <MetaItem label={s.preCallAppointmentAt} value={fmtDateTime(h.appointmentScheduledAt)} />
-                <MetaItem label={s.preCallVisitConfirmedAt} value={fmtDateTime(h.visitConfirmedAt)} />
-                <MetaItem label={s.preCallPersonConfirmed} value={fmtBool(h.personConfirmed)} />
-                <MetaItem label={s.preCallNote} value={h.note} />
-                <MetaItem label={s.preCallNextAction} value={h.nextAction} />
-              </dl>
+              <div className="flex items-start justify-between gap-2">
+                <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+                  <MetaItem label={s.callLogCalledAt} value={fmtDateTime(l.calledAt)} />
+                  <MetaItem label={s.callLogHandler} value={l.handlerName} />
+                  <MetaItem label={s.callLogNote} value={l.note} />
+                </dl>
+                {canEdit ? (
+                  <CallLogDeleteButton customerId={customerId!} callLogId={l.id} />
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>
@@ -587,13 +598,18 @@ function PreCallHistoryList({ data }: { data: CustomerProjectInfoData }) {
 }
 
 // コールタブ 4 セクション（マエカク / サンキュー / ローン審査完了 / 施工完了）。
+// 最上部に固定/携帯電話番号（マスク済み）を表示。マエカクコール section には次回アポ
+// （日程/担当者/アクション）を read-only 表示（編集は商談タブ）+ 過去コール履歴を併設。
 // editable 非 null（customer.update 権限）のとき各セクションをインライン編集、null は read-only。
 export function ProjectCallStatusSection({
   data,
   editable = null,
+  users = [],
 }: {
   data: CustomerProjectInfoData;
   editable?: ProjectInfoEditable | null;
+  // 過去コール履歴の対応者 select 用（自社社員）。read-only 時は不要。
+  users?: { id: string; name: string }[];
 }) {
   const f = p.fields;
   const s = p.callSections;
@@ -603,7 +619,28 @@ export function ProjectCallStatusSection({
 
   return (
     <div className="space-y-6">
-      {/* マエカクコール（編集 + 過去コール履歴） */}
+      {/* 電話番号ヘッダ（コール業務向けにタブ上部へ固定/携帯電話を表示。マスク済み） */}
+      <section>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
+          {s.phoneHeaderTitle}
+        </h3>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-md border border-hairline-light bg-surface-soft/40 p-4 sm:grid-cols-2">
+          <div className="min-w-0">
+            <dt className="text-[11px] text-mute-light">{s.landlinePhone}</dt>
+            <dd className="mt-0.5 text-base font-semibold tabular-nums text-ink">
+              {calls.landlinePhone && calls.landlinePhone.length > 0 ? calls.landlinePhone : EMPTY}
+            </dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-[11px] text-mute-light">{s.mobilePhone}</dt>
+            <dd className="mt-0.5 text-base font-semibold tabular-nums text-ink">
+              {calls.mobilePhone && calls.mobilePhone.length > 0 ? calls.mobilePhone : EMPTY}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      {/* マエカクコール（編集 + 次回アポ read-only + 過去コール履歴） */}
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
           {s.maekakuCall}
@@ -622,11 +659,23 @@ export function ProjectCallStatusSection({
                 }
               />
               <MetaItem label={f.maekakuPreferredAt} value={fmtDateTime(calls.maekakuPreferredAt)} />
-              <MetaItem label={f.maekakuPreferredPhone} value={calls.maekakuPreferredPhone} />
               <MetaItem label={f.maekakuCallNote} value={calls.maekakuCallNote} />
             </dl>
           )}
-          <PreCallHistoryList data={data} />
+
+          {/* 次回アポ（日程 / 担当者 / アクション）。編集は商談タブのみ・ここは read-only。 */}
+          <div className="mt-4">
+            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+              {s.nextAppointmentAt}
+            </h4>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light bg-surface-soft/40 p-4 sm:grid-cols-3">
+              <MetaItem label={s.nextAppointmentAt} value={fmtDateTime(calls.nextAppointmentAt)} />
+              <MetaItem label={s.nextAppointmentAssignee} value={calls.nextAppointmentAssigneeName} />
+              <MetaItem label={s.nextAction} value={calls.nextAction} />
+            </dl>
+          </div>
+
+          <CallLogList data={data} customerId={canEdit ? customerId : null} users={users} />
         </div>
       </section>
 

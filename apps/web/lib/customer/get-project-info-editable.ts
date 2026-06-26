@@ -57,7 +57,6 @@ export interface ProjectCallsEditable {
   maekakuStatus: string | null;
   maekakuPreferredAt: string | null;
   maekakuCallNote: string | null;
-  maekakuPreferredPhone: string | null;
   thankYouCallStatus: string | null;
   thankYouCallPreferredAt: string | null;
   thankYouCallNote: string | null;
@@ -205,7 +204,6 @@ export async function getCustomerProjectInfoEditable(
         landlinePhone: true,
         mobilePhone: true,
         proposedProduct: true,
-        maekakuPreferredPhone: true,
         thankYouCallStatus: true,
         thankYouCallPreferredAt: true,
         thankYouCallNote: true,
@@ -392,7 +390,6 @@ export async function getCustomerProjectInfoEditable(
         maekakuStatus: customer.maekakuStatus,
         maekakuPreferredAt: isoOrNull(customer.maekakuPreferredAt),
         maekakuCallNote: customer.maekakuCallNote,
-        maekakuPreferredPhone: customer.maekakuPreferredPhone,
         thankYouCallStatus: customer.thankYouCallStatus,
         thankYouCallPreferredAt: isoOrNull(customer.thankYouCallPreferredAt),
         thankYouCallNote: customer.thankYouCallNote,

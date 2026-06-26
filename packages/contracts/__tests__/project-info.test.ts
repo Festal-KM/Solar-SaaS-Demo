@@ -155,6 +155,27 @@ function baseDto(): ProjectInfoDto {
       acquiredAt: null,
       existingEquipments: [],
     },
+    calls: {
+      landlinePhone: "未設定",
+      mobilePhone: "未設定",
+      maekakuStatus: null,
+      maekakuPreferredAt: null,
+      maekakuCallNote: null,
+      nextAppointmentAt: null,
+      nextAppointmentAssigneeName: null,
+      nextAction: null,
+      callLogs: [],
+      thankYouCallStatus: null,
+      thankYouCallPreferredAt: null,
+      thankYouCallNote: null,
+      loanCompletionCallStatus: null,
+      loanCompletionCallPreferredAt: null,
+      loanCompletionCallNote: null,
+      postCompletionCallStatus: null,
+      postCompletionCallPreferredAt: null,
+      postCompletionCallNote: null,
+      generalCallPreferredTime: null,
+    },
   };
 }
 

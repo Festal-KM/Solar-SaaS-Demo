@@ -1427,6 +1427,13 @@ async function seedCustomerHearing(
     select: { id: true },
   });
 
+  // 過去コール履歴・次回アポ担当者のデモに使う自社社員（卸テナント = wholesalerId の ACTIVE ユーザー）。
+  const staff = await tx.user.findMany({
+    where: { tenantId: wholesalerId, status: "ACTIVE" },
+    orderBy: { name: "asc" },
+    select: { id: true },
+  });
+
   const GUIDE = ["HUSBAND", "WIFE", "BOTH", "OTHER"] as const;
   const PRESENCE = ["YES", "NO", "UNKNOWN"] as const;
   const MAKERS = ["パナソニック", "三菱電機", "ダイキン", "コロナ"];
@@ -1461,8 +1468,28 @@ async function seedCustomerHearing(
         maekakuCallNote: s % 3 === 0 ? "前確: 在宅時間 夜間希望" : null,
         generalCallPreferredTime: s % 2 === 0 ? "平日19:00以降" : "土日終日",
         maekakuPreferredPhone: `080-2${String(1000 + s).padStart(4, "0")}-${String(4000 + s).padStart(4, "0")}`,
+        // 次回アポ担当者（自社社員）。コールタブ read-only / 商談タブ編集のデモ。
+        nextAppointmentAssigneeUserId: staff.length > 0 ? staff[s % staff.length]!.id : null,
       },
     });
+
+    // 過去コール履歴（CustomerCallLog）。冪等: 既存を削除して 0〜2 件投入（架電日時/対応者/メモ）。
+    // createdByUserId は自社社員必須のため staff が居るときのみ投入する。
+    await tx.customerCallLog.deleteMany({ where: { customerId: c.id } });
+    if (staff.length > 0) {
+      const callLogCount = s % 3; // 0/1/2 件
+      for (let i = 0; i < callLogCount; i++) {
+        await tx.customerCallLog.create({
+          data: {
+            customerId: c.id,
+            calledAt: day(-(i + 1) - (s % 3)),
+            handlerUserId: staff[(s + i) % staff.length]!.id,
+            note: i === 0 ? "不在のため折返し依頼" : "夜間に再架電予定",
+            createdByUserId: staff[0]!.id,
+          },
+        });
+      }
+    }
 
     // ガス給湯器（有無のみ）。
     await tx.customerExistingEquipment.upsert({
