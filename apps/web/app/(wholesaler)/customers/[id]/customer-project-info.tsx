@@ -524,27 +524,6 @@ export function ProjectCurrentStateInfo({
   );
 }
 
-// コールセクション共通カード。見出し + 子（read-only MetaItem 群 or インライン編集フォーム）。
-// editable が渡れば editForm をその場描画（ポップアップなし）、無ければ read-only 表示。
-function CallCard({
-  title,
-  children,
-  editForm,
-}: {
-  title: string;
-  children?: React.ReactNode;
-  editForm?: React.ReactNode;
-}) {
-  return (
-    <section>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">{title}</h3>
-      <div className="rounded-md border border-hairline-light p-4">
-        {editForm ?? <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">{children}</dl>}
-      </div>
-    </section>
-  );
-}
-
 function callPhaseLabel(code: string | null): string | null {
   if (!code) return null;
   return p.callPhaseStatusLabels[code] ?? code;
@@ -619,7 +598,7 @@ export function ProjectCallStatusSection({
 
   return (
     <div className="space-y-6">
-      {/* 電話番号ヘッダ（コール業務向けにタブ上部へ固定/携帯電話を表示。マスク済み） */}
+      {/* 電話番号ヘッダ（コール業務向けにタブ上部へ固定/携帯電話を表示。マスク済み・全幅） */}
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
           {s.phoneHeaderTitle}
@@ -640,90 +619,134 @@ export function ProjectCallStatusSection({
         </dl>
       </section>
 
-      {/* マエカクコール（編集 + 次回アポ read-only + 過去コール履歴） */}
-      <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
-          {s.maekakuCall}
-        </h3>
-        <div className="rounded-md border border-hairline-light p-4">
-          {canEdit ? (
-            <MaekakuCallInlineEdit customerId={customerId!} initial={editable!.calls} />
-          ) : (
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-              <MetaItem
-                label={f.callMaekakuStatus}
-                value={
-                  calls.maekakuStatus
-                    ? p.maekakuStatusDisplayLabels[calls.maekakuStatus] ?? calls.maekakuStatus
-                    : null
-                }
-              />
-              <MetaItem label={f.maekakuPreferredAt} value={fmtDateTime(calls.maekakuPreferredAt)} />
-              <MetaItem label={f.maekakuCallNote} value={calls.maekakuCallNote} />
-            </dl>
-          )}
-
-          {/* 次回アポ（日程 / 担当者 / アクション）。編集は商談タブのみ・ここは read-only。 */}
-          <div className="mt-4">
-            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-              {s.nextAppointmentAt}
-            </h4>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light bg-surface-soft/40 p-4 sm:grid-cols-3">
-              <MetaItem label={s.nextAppointmentAt} value={fmtDateTime(calls.nextAppointmentAt)} />
-              <MetaItem label={s.nextAppointmentAssignee} value={calls.nextAppointmentAssigneeName} />
-              <MetaItem label={s.nextAction} value={calls.nextAction} />
-            </dl>
+      {/* 本体 2 カラム（lg〜）: 左=コール履歴（主領域） / 右=各ステータス（コンパクト）。モバイルは縦積み。 */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        {/* 左カラム: コール履歴（CustomerCallLog） */}
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
+            {s.historyColumnTitle}
+          </h3>
+          <div className="rounded-md border border-hairline-light p-4">
+            <CallLogList data={data} customerId={canEdit ? customerId : null} users={users} />
           </div>
+        </section>
 
-          <CallLogList data={data} customerId={canEdit ? customerId : null} users={users} />
-        </div>
-      </section>
+        {/* 右カラム: 各ステータス（コンパクト・縦積み） */}
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
+            {s.statusColumnTitle}
+          </h3>
+          <div className="space-y-3">
+            {/* マエカクコール（編集 + 次回アポ担当者/次回アクション read-only） */}
+            <CompactCallBlock title={s.maekakuCall}>
+              {canEdit ? (
+                <MaekakuCallInlineEdit customerId={customerId!} initial={editable!.calls} />
+              ) : (
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  <MetaItem
+                    label={f.callMaekakuStatus}
+                    value={
+                      calls.maekakuStatus
+                        ? p.maekakuStatusDisplayLabels[calls.maekakuStatus] ?? calls.maekakuStatus
+                        : null
+                    }
+                  />
+                  <MetaItem
+                    label={f.maekakuPreferredAt}
+                    value={fmtDateTime(calls.maekakuPreferredAt)}
+                  />
+                  <MetaItem label={f.maekakuCallNote} value={calls.maekakuCallNote} />
+                </dl>
+              )}
 
-      {/* サンキューコール */}
-      <CallCard
-        title={s.thankYouCall}
-        editForm={
-          canEdit ? <ThankYouCallInlineEdit customerId={customerId!} initial={editable!.calls} /> : undefined
-        }
-      >
-        <MetaItem label={f.thankYouCallStatus} value={callPhaseLabel(calls.thankYouCallStatus)} />
-        <MetaItem label={f.thankYouCallPreferredAt} value={fmtDateTime(calls.thankYouCallPreferredAt)} />
-        <MetaItem label={f.thankYouCallNote} value={calls.thankYouCallNote} />
-      </CallCard>
+              {/* 次回アポ担当者 / 次回アクション（+ 日程）。編集は商談タブのみ・ここは read-only。 */}
+              <div className="mt-3 border-t border-hairline-light pt-3">
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  <MetaItem
+                    label={s.nextAppointmentAt}
+                    value={fmtDateTime(calls.nextAppointmentAt)}
+                  />
+                  <MetaItem
+                    label={s.nextAppointmentAssignee}
+                    value={calls.nextAppointmentAssigneeName}
+                  />
+                  <MetaItem label={s.nextAction} value={calls.nextAction} />
+                </dl>
+              </div>
+            </CompactCallBlock>
 
-      {/* ローン審査完了コール */}
-      <CallCard
-        title={s.loanCompletionCall}
-        editForm={
-          canEdit ? (
-            <LoanCompletionCallInlineEdit customerId={customerId!} initial={editable!.calls} />
-          ) : undefined
-        }
-      >
-        <MetaItem label={f.loanCompletionCallStatus} value={callPhaseLabel(calls.loanCompletionCallStatus)} />
-        <MetaItem
-          label={f.loanCompletionCallPreferredAt}
-          value={fmtDateTime(calls.loanCompletionCallPreferredAt)}
-        />
-        <MetaItem label={f.loanCompletionCallNote} value={calls.loanCompletionCallNote} />
-      </CallCard>
+            {/* サンキューコール */}
+            <CompactCallBlock title={s.thankYouCall}>
+              {canEdit ? (
+                <ThankYouCallInlineEdit customerId={customerId!} initial={editable!.calls} />
+              ) : (
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  <MetaItem
+                    label={f.thankYouCallStatus}
+                    value={callPhaseLabel(calls.thankYouCallStatus)}
+                  />
+                  <MetaItem
+                    label={f.thankYouCallPreferredAt}
+                    value={fmtDateTime(calls.thankYouCallPreferredAt)}
+                  />
+                  <MetaItem label={f.thankYouCallNote} value={calls.thankYouCallNote} />
+                </dl>
+              )}
+            </CompactCallBlock>
 
-      {/* 施工完了コール */}
-      <CallCard
-        title={s.postCompletionCall}
-        editForm={
-          canEdit ? (
-            <PostCompletionCallInlineEdit customerId={customerId!} initial={editable!.calls} />
-          ) : undefined
-        }
-      >
-        <MetaItem label={f.postCompletionCallStatus} value={callPhaseLabel(calls.postCompletionCallStatus)} />
-        <MetaItem
-          label={f.postCompletionCallPreferredAt}
-          value={fmtDateTime(calls.postCompletionCallPreferredAt)}
-        />
-        <MetaItem label={f.postCompletionCallNote} value={calls.postCompletionCallNote} />
-      </CallCard>
+            {/* ローン審査完了コール */}
+            <CompactCallBlock title={s.loanCompletionCall}>
+              {canEdit ? (
+                <LoanCompletionCallInlineEdit customerId={customerId!} initial={editable!.calls} />
+              ) : (
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  <MetaItem
+                    label={f.loanCompletionCallStatus}
+                    value={callPhaseLabel(calls.loanCompletionCallStatus)}
+                  />
+                  <MetaItem
+                    label={f.loanCompletionCallPreferredAt}
+                    value={fmtDateTime(calls.loanCompletionCallPreferredAt)}
+                  />
+                  <MetaItem label={f.loanCompletionCallNote} value={calls.loanCompletionCallNote} />
+                </dl>
+              )}
+            </CompactCallBlock>
+
+            {/* 施工完了コール */}
+            <CompactCallBlock title={s.postCompletionCall}>
+              {canEdit ? (
+                <PostCompletionCallInlineEdit customerId={customerId!} initial={editable!.calls} />
+              ) : (
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  <MetaItem
+                    label={f.postCompletionCallStatus}
+                    value={callPhaseLabel(calls.postCompletionCallStatus)}
+                  />
+                  <MetaItem
+                    label={f.postCompletionCallPreferredAt}
+                    value={fmtDateTime(calls.postCompletionCallPreferredAt)}
+                  />
+                  <MetaItem label={f.postCompletionCallNote} value={calls.postCompletionCallNote} />
+                </dl>
+              )}
+            </CompactCallBlock>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// 右カラム用コンパクトステータスブロック。小さめ見出し + 詰めた余白の枠。
+// 子は read-only MetaItem 群 or インライン編集フォーム（編集 UI はそのまま流用）。
+function CompactCallBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-hairline-light p-3">
+      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+        {title}
+      </h4>
+      {children}
     </div>
   );
 }

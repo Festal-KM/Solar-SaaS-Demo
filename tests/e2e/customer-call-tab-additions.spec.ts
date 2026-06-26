@@ -222,9 +222,19 @@ test.describe("顧客詳細 コールタブ 追加改修", () => {
     const callPanel = await openCallTab(page);
 
     // マエカクコールの read-only 次回アポ表示に担当者名・次回アクションが反映される。
+    // 2 カラム化で左カラムのコール履歴追加フォーム（#cl-handler select）に全社員 option が
+    // 並ぶため、素の getByText(targetName) は hidden な <option> を先に拾い得る（strict/visible 失敗）。
+    // 担当者名は read-only 表示（dt「次回アポ担当者」の直後 dd）にスコープして検証する。
     await expect(callPanel.getByText("次回アポ担当者", { exact: true }).first()).toBeVisible();
-    await expect(callPanel.getByText(targetName).first()).toBeVisible({ timeout: 30_000 });
-    await expect(callPanel.getByText(uniqueAction).first()).toBeVisible({ timeout: 30_000 });
+    const assigneeValue = callPanel
+      .locator('xpath=.//dt[normalize-space()="次回アポ担当者"]/following-sibling::dd[1]')
+      .first();
+    await expect(assigneeValue).toHaveText(targetName, { timeout: 30_000 });
+    // 次回アクションも read-only 表示（dt「次回アクション」の直後 dd）にスコープ。
+    const nextActionValue = callPanel
+      .locator('xpath=.//dt[normalize-space()="次回アクション"]/following-sibling::dd[1]')
+      .first();
+    await expect(nextActionValue).toHaveText(uniqueAction, { timeout: 30_000 });
 
     // コールタブ側には次回アポ担当者の編集 UI（select）が無い（read-only）。
     await expect(callPanel.locator("#neg-next-assignee")).toHaveCount(0);

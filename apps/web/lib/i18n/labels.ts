@@ -2066,6 +2066,9 @@ export const labels = {
           phoneHeaderTitle: "電話番号",
           landlinePhone: "固定電話番号",
           mobilePhone: "携帯電話番号",
+          // 2 カラムレイアウト（左=履歴 / 右=各ステータス）の列見出し。
+          historyColumnTitle: "コール履歴",
+          statusColumnTitle: "コールステータス",
           maekakuCall: "マエカクコール",
           thankYouCall: "サンキューコール",
           loanCompletionCall: "ローン審査完了コール",
