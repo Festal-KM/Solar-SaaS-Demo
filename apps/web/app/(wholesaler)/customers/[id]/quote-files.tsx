@@ -4,11 +4,12 @@
 // アップロード/一覧。R2 へ直接 PUT し、CustomerActivityFile（category=QUOTE）を記録する。
 // ファイル名クリックで pre-signed GET URL を取得し別タブで開く。
 
-import { FileSpreadsheet, FileText, Upload } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { FileDropzone } from "@/components/ui/file-dropzone";
 import { labels } from "@/lib/i18n/labels";
 
 import {
@@ -30,7 +31,7 @@ export function QuoteFiles({ customerId, activityId, files }: QuoteFilesProps) {
   const c = labels.common;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [uploadingCount, setUploadingCount] = useState(0);
+  const [uploadingNames, setUploadingNames] = useState<string[]>([]);
 
   function handleOpen(fileId: string) {
     startTransition(async () => {
@@ -43,12 +44,11 @@ export function QuoteFiles({ customerId, activityId, files }: QuoteFilesProps) {
     });
   }
 
-  async function handleFilesSelected(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
-    const picked = Array.from(fileList);
+  async function handleFilesSelected(picked: File[]) {
+    if (picked.length === 0) return;
     let recorded = false;
     for (const file of picked) {
-      setUploadingCount((n) => n + 1);
+      setUploadingNames((prev) => [...prev, file.name]);
       try {
         const { putUrl, headers, fileKey } = await presignCustomerFileUpload({
           customerId,
@@ -71,7 +71,11 @@ export function QuoteFiles({ customerId, activityId, files }: QuoteFilesProps) {
       } catch (err) {
         toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
       } finally {
-        setUploadingCount((n) => Math.max(0, n - 1));
+        setUploadingNames((prev) => {
+          const i = prev.indexOf(file.name);
+          if (i < 0) return prev;
+          return [...prev.slice(0, i), ...prev.slice(i + 1)];
+        });
       }
     }
     if (recorded) {
@@ -84,12 +88,6 @@ export function QuoteFiles({ customerId, activityId, files }: QuoteFilesProps) {
     <div className="mt-2 space-y-2 border-t border-hairline-light pt-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-mute-light">{d.quoteSection.files}</span>
-        {uploadingCount > 0 ? (
-          <span className="flex items-center gap-1 text-xs text-mute-light">
-            <Upload className="size-3 animate-pulse" />
-            {d.newActivity.uploading}
-          </span>
-        ) : null}
       </div>
 
       {files.length === 0 ? (
@@ -117,16 +115,13 @@ export function QuoteFiles({ customerId, activityId, files }: QuoteFilesProps) {
         </ul>
       )}
 
-      <input
-        id={`quote-file-input-${activityId}`}
-        type="file"
-        multiple
-        onChange={(e) => {
-          void handleFilesSelected(e.target.files);
-          e.target.value = "";
-        }}
-        aria-label={d.quoteSection.addFile}
-        className="block w-full text-xs text-body-light file:mr-2 file:rounded-sm file:border file:border-hairline-light file:bg-white file:px-2 file:py-1 file:text-xs file:text-ink hover:file:bg-slate-50"
+      <FileDropzone
+        inputId={`quote-file-input-${activityId}`}
+        onFiles={handleFilesSelected}
+        uploadingNames={uploadingNames}
+        isUploading={false}
+        inputAriaLabel={d.quoteSection.addFile}
+        compact
       />
     </div>
   );

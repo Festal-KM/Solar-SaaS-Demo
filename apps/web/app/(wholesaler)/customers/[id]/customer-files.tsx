@@ -4,11 +4,12 @@
 // 既存ファイルはファイル名クリックで pre-signed GET URL を取得し別タブで開く
 // (F-031 / docs/04 §1.3). data.ts（server-only）の実行時値は import しない（型のみ）。
 
-import { FileSpreadsheet, FileText, Upload } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { FileDropzone } from "@/components/ui/file-dropzone";
 import { labels } from "@/lib/i18n/labels";
 
 import {
@@ -32,7 +33,7 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
   const c = labels.common;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [uploadingCount, setUploadingCount] = useState(0);
+  const [uploadingNames, setUploadingNames] = useState<string[]>([]);
 
   function handleOpen(fileId: string) {
     startTransition(async () => {
@@ -45,12 +46,11 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
     });
   }
 
-  async function handleFilesSelected(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
-    const picked = Array.from(fileList);
+  async function handleFilesSelected(picked: File[]) {
+    if (picked.length === 0) return;
     let recorded = false;
     for (const file of picked) {
-      setUploadingCount((n) => n + 1);
+      setUploadingNames((prev) => [...prev, file.name]);
       try {
         const { putUrl, headers, fileKey } = await presignCustomerFileUpload({
           customerId,
@@ -72,7 +72,11 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
       } catch (err) {
         toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
       } finally {
-        setUploadingCount((n) => Math.max(0, n - 1));
+        setUploadingNames((prev) => {
+          const i = prev.indexOf(file.name);
+          if (i < 0) return prev;
+          return [...prev.slice(0, i), ...prev.slice(i + 1)];
+        });
       }
     }
     if (recorded) {
@@ -84,24 +88,12 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
   return (
     <div className="space-y-4">
       {/* ファイルピッカー */}
-      <div className="space-y-2">
-        <input
-          id={`customer-file-input-${category.toLowerCase()}`}
-          type="file"
-          multiple
-          onChange={(e) => {
-            void handleFilesSelected(e.target.files);
-            e.target.value = "";
-          }}
-          className="block w-full text-sm text-body-light file:mr-3 file:rounded-sm file:border file:border-hairline-light file:bg-white file:px-3 file:py-1.5 file:text-sm file:text-ink hover:file:bg-slate-50"
-        />
-        {uploadingCount > 0 ? (
-          <p className="flex items-center gap-1.5 text-xs text-mute-light">
-            <Upload className="size-3.5 animate-pulse" />
-            {d.newActivity.uploading}
-          </p>
-        ) : null}
-      </div>
+      <FileDropzone
+        inputId={`customer-file-input-${category.toLowerCase()}`}
+        onFiles={handleFilesSelected}
+        uploadingNames={uploadingNames}
+        isUploading={uploadingNames.length > 0}
+      />
 
       {/* 一覧 */}
       {files.length === 0 ? (

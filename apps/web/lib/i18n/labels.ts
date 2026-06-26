@@ -2480,6 +2480,12 @@ export const labels = {
         showAll: "すべてのタスクを見る",
         empty: "タスクはありません",
       },
+      fileDropzone: {
+        primary: "ファイルをドラッグ&ドロップ",
+        secondary: "またはクリックして選択",
+        hint: "複数選択可・1ファイル最大 10MB",
+        dragActive: "ここにドロップ",
+      },
     },
     pageSize: {
       label: "{n}件",
