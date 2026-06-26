@@ -1968,7 +1968,6 @@ export const labels = {
       // 案件情報（F-061 統合ビュー）。約90項目をカテゴリ別に表示。
       projectInfo: {
         empty: "未設定",
-        openDocs: "契約書一式を開く",
         contracted: "契約あり",
         notContracted: "契約なし",
         sections: {
@@ -2000,7 +1999,6 @@ export const labels = {
           tossDept: "トス部署",
           belongDept: "所属部署",
           contractDate: "ご契約日",
-          contractDocsUrl: "契約書一式URL",
           proposalAmount: "ご提案金額（税込）",
           paymentCount: "支払い回数",
           paymentStatus: "支払いステータス",
@@ -2308,7 +2306,11 @@ export const labels = {
         addContract: "契約を追加",
         addingContract: "契約を追加中…",
         deleteContract: "この契約を削除",
+        deleteContractText: "契約を削除",
+        deletingContract: "削除中…",
         deleteContractConfirm: "この契約を削除しますか？商材ラインも削除されます。",
+        // 契約サマリ（サブタブ上部のインライン編集）。契約金額は商材ライン合計（read-only）。
+        summaryTitle: "契約サマリ",
         // 付帯商材（ACCESSORY）の複数行運用。
         accessoryTitle: "付帯商材",
         addAccessory: "付帯商材を追加",

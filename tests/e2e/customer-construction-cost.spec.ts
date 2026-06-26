@@ -18,7 +18,7 @@ import { expect, test, type Page } from "@playwright/test";
 // workers:1 + fullyParallel:false（playwright.config.ts）に追従。
 //
 // 今回の差分: seed は Construction.fee のサンプル値（850000 + (seq%4)*50000）を冪等投入し、
-// EditConstructionDialog にも fee 入力欄（#cn-fee, type=number, ラベル「施工コスト」）が
+// EditConstructionDialog にも fee 入力欄（#cn-fee, MoneyInput=type=text, ラベル「施工コスト」）が
 // 追加された。これに伴い、施工コストは契約済み顧客で実データ「¥金額」表示となり、
 // round-trip 検証は対応事業者名(vendorName)の代替ではなく fee の数値そのものを
 // 編集→保存→再描画で直接検証する。
@@ -142,12 +142,12 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    // 施工コスト入力欄（#cn-fee, type=number）が存在することを確認し、一意な値へ書き換えて保存。
+    // 施工コスト入力欄（#cn-fee, MoneyInput=type=text）が存在することを確認し、一意な値へ書き換えて保存。
     // 末尾を固定しつつ衝突しない値を作る（seed の 850,000〜1,000,000 帯とは別の桁にする）。
     const feeValue = 1_200_000 + (Date.now() % 1000) * 100; // 1,200,000〜1,299,900
     const feeInput = dialog.locator("#cn-fee");
     await expect(feeInput, "施工コスト入力欄(#cn-fee)が存在する").toBeVisible();
-    await expect(feeInput).toHaveAttribute("type", "number");
+    await expect(feeInput).toHaveAttribute("type", "text");
     await feeInput.fill(String(feeValue));
     await dialog.getByRole("button", { name: "保存" }).click();
     await expect(dialog).toBeHidden({ timeout: 30_000 });

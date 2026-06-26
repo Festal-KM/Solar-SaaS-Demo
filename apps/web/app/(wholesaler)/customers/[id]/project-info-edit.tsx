@@ -23,8 +23,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { labels } from "@/lib/i18n/labels";
+import { cn } from "@/lib/utils";
 
 import {
   createContractAction,
@@ -90,6 +92,39 @@ function numOrNull(s: string): number | null {
 
 function strOrNull(s: string): string | null {
   return s.trim() ? s.trim() : null;
+}
+
+// 金額入力。内部 state は raw な数字文字列（呼び出し側は従来どおり numOrNull で円整数化）。
+// 表示は ¥ + 3 桁カンマ区切り（fmtYen と整合）。fill('350000') のような数字入力も
+// 非数字 strip を経て 350000 として扱う。
+function formatYenInput(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return "";
+  return `¥${Number(digits).toLocaleString("ja-JP")}`;
+}
+
+function MoneyInput({
+  id,
+  value,
+  onChange,
+  className,
+}: {
+  id: string;
+  value: string;
+  onChange: (raw: string) => void;
+  className?: string;
+}) {
+  return (
+    <Input
+      id={id}
+      type="text"
+      inputMode="numeric"
+      value={formatYenInput(value)}
+      onChange={(ev) => onChange(ev.target.value.replace(/[^\d]/g, ""))}
+      placeholder="¥0"
+      className={cn("text-right tabular-nums", className)}
+    />
+  );
 }
 
 // 三値（有 / 無 / 未設定）プルダウンの共通値。
@@ -1033,7 +1068,7 @@ export function EditContractDialog({
               <Input id="ct-loanco" value={loanCompany} onChange={(e) => setLoanCompany(e.target.value)} />
             </FormField>
             <FormField label={f.downPayment} htmlFor="ct-down">
-              <Input id="ct-down" type="number" min={0} value={downPayment} onChange={(e) => setDownPayment(e.target.value)} />
+              <MoneyInput id="ct-down" value={downPayment} onChange={setDownPayment} />
             </FormField>
             <FormField label={f.creditLife} htmlFor="ct-credit">
               <select id="ct-credit" className={FIELD} value={creditLifeInsurance} onChange={(e) => setCreditLifeInsurance(e.target.value)}>
@@ -1320,16 +1355,7 @@ export function EquipmentInlineEdit({
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <FormField label={e.amount} htmlFor={`eq-amount-${category}`}>
-          <Input
-            id={`eq-amount-${category}`}
-            type="number"
-            inputMode="numeric"
-            min={0}
-            value={amount}
-            onChange={(ev) => setAmount(ev.target.value)}
-            placeholder="0"
-            className="text-right tabular-nums"
-          />
+          <MoneyInput id={`eq-amount-${category}`} value={amount} onChange={setAmount} />
         </FormField>
         {isConstruction ? (
           <FormField label={e.vendor} htmlFor={`eq-vendor-${category}`}>
@@ -1490,16 +1516,7 @@ export function AccessoryInlineEdit({
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <FormField label={e.amount} htmlFor={`acc-amount-${initial.id}`}>
-          <Input
-            id={`acc-amount-${initial.id}`}
-            type="number"
-            inputMode="numeric"
-            min={0}
-            value={amount}
-            onChange={(ev) => setAmount(ev.target.value)}
-            placeholder="0"
-            className="text-right tabular-nums"
-          />
+          <MoneyInput id={`acc-amount-${initial.id}`} value={amount} onChange={setAmount} />
         </FormField>
         <FormField label={e.count} htmlFor={`acc-qty-${initial.id}`}>
           <Input id={`acc-qty-${initial.id}`} type="number" min={0} value={quantity} onChange={(ev) => setQuantity(ev.target.value)} />
@@ -1589,7 +1606,8 @@ export function AddContractButton({ customerId }: { customerId: string }) {
   );
 }
 
-/* 契約を削除するボタン（依存がある契約はサーバーがガード）。 */
+/* 契約を削除するボタン（依存がある契約はサーバーがガード）。サブタブヘッダで
+   「契約を追加」と並ぶテキストボタン。危険操作のため confirm + destructive 配色。 */
 export function DeleteContractButton({
   customerId,
   contractId,
@@ -1617,15 +1635,160 @@ export function DeleteContractButton({
   return (
     <Button
       type="button"
-      variant="ghost"
-      size="icon"
-      className="size-7 text-mute-light hover:text-destructive"
-      aria-label={ct.deleteContract}
+      variant="outline"
+      size="sm"
+      className="text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/30"
       onClick={onDelete}
       disabled={pending}
     >
-      <Trash2 className="size-4" />
+      <Trash2 className="mr-1 size-4" />
+      {pending ? ct.deletingContract : ct.deleteContractText}
     </Button>
+  );
+}
+
+/* ── 契約サマリのカード内インライン編集（契約状況タブ・サブタブ上部）。ポップアップ廃止。
+   契約日 / 支払回数 / 入金ステータス / 入金日 / 二次店支払日 / 機器シリアルを直接編集。
+   契約金額は商材ライン合計（read-only・編集対象外）。ローン情報はローン審査タブの
+   EditContractDialog に分離。dirty 追跡 + Save/キャンセル + saveProjectContractAction
+   （部分更新＝送ったフィールドのみ更新）+ toast + router.refresh。input id は既存 e2e 互換
+   （ct-date / ct-paycount / ct-paystatus / ct-deposit / ct-payout / ct-serial）を踏襲。
+   customer.update 権限保持者のみ呼び出される（呼び出し側でゲート）。 ── */
+export function ContractDetailInlineEdit({
+  customerId,
+  initial,
+  contractAmount,
+}: {
+  customerId: string;
+  initial: ProjectContractEditable;
+  // 商材ライン合計（read-only 表示用）。
+  contractAmount: number | null;
+}) {
+  const ct = labels.customer.detail.contractTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [contractDate, setContractDate] = useState(toDateInput(initial.contractDate));
+  const [paymentCount, setPaymentCount] = useState(initial.paymentCount != null ? String(initial.paymentCount) : "");
+  const [paymentStatus, setPaymentStatus] = useState(initial.paymentStatus ?? "UNPAID");
+  const [depositDate, setDepositDate] = useState(toDateInput(initial.depositDate));
+  const [dealerPayoutDate, setDealerPayoutDate] = useState(toDateInput(initial.dealerPayoutDate));
+  const [equipmentSerialId, setEquipmentSerialId] = useState(initial.equipmentSerialId ?? "");
+
+  const initDate = toDateInput(initial.contractDate);
+  const initCount = initial.paymentCount != null ? String(initial.paymentCount) : "";
+  const initStatus = initial.paymentStatus ?? "UNPAID";
+  const initDeposit = toDateInput(initial.depositDate);
+  const initPayout = toDateInput(initial.dealerPayoutDate);
+  const dirty =
+    contractDate !== initDate ||
+    paymentCount !== initCount ||
+    paymentStatus !== initStatus ||
+    depositDate !== initDeposit ||
+    dealerPayoutDate !== initPayout ||
+    equipmentSerialId !== (initial.equipmentSerialId ?? "");
+
+  function reset() {
+    setContractDate(initDate);
+    setPaymentCount(initCount);
+    setPaymentStatus(initStatus);
+    setDepositDate(initDeposit);
+    setDealerPayoutDate(initPayout);
+    setEquipmentSerialId(initial.equipmentSerialId ?? "");
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectContractAction({
+          customerId,
+          contractId: initial.contractId,
+          contractDate: contractDate || null,
+          equipmentSerialId: strOrNull(equipmentSerialId),
+          paymentCount: numOrNull(paymentCount),
+          paymentStatus: paymentStatus as "UNPAID" | "PARTIAL" | "PAID",
+          depositDate: depositDate || null,
+          dealerPayoutDate: dealerPayoutDate || null,
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <FormField label={f.contractDate} htmlFor="ct-date">
+          <input id="ct-date" type="date" className={FIELD} value={contractDate} onChange={(e) => setContractDate(e.target.value)} />
+        </FormField>
+        {/* 契約金額は商材ライン合計（read-only・自動計算）。 */}
+        <div className="space-y-1.5">
+          <Label>{ct.contractAmountAuto}</Label>
+          <p className="flex h-9 items-center text-sm font-medium tabular-nums text-ink">
+            {contractAmount != null ? `¥${contractAmount.toLocaleString("ja-JP")}` : p.empty}
+          </p>
+        </div>
+        <FormField label={f.paymentCount} htmlFor="ct-paycount">
+          <Input id="ct-paycount" type="number" min={0} value={paymentCount} onChange={(e) => setPaymentCount(e.target.value)} />
+        </FormField>
+        <FormField label={f.paymentStatus} htmlFor="ct-paystatus">
+          <select id="ct-paystatus" className={FIELD} value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}>
+            <option value="UNPAID">{p.paymentStatusLabels.UNPAID}</option>
+            <option value="PARTIAL">{p.paymentStatusLabels.PARTIAL}</option>
+            <option value="PAID">{p.paymentStatusLabels.PAID}</option>
+          </select>
+        </FormField>
+        <FormField label={f.depositDate} htmlFor="ct-deposit">
+          <input id="ct-deposit" type="date" className={FIELD} value={depositDate} onChange={(e) => setDepositDate(e.target.value)} />
+        </FormField>
+        <FormField label={f.dealerPayoutDate} htmlFor="ct-payout">
+          <input id="ct-payout" type="date" className={FIELD} value={dealerPayoutDate} onChange={(e) => setDealerPayoutDate(e.target.value)} />
+        </FormField>
+        <FormField label={f.equipmentId} htmlFor="ct-serial">
+          <Input id="ct-serial" value={equipmentSerialId} onChange={(e) => setEquipmentSerialId(e.target.value)} />
+        </FormField>
+      </div>
+      <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+    </div>
+  );
+}
+
+/* ── 契約サブタブ（client ラッパー）。アクティブな契約を state で保持し、ヘッダ右に
+   「契約を追加」+「契約を削除」（アクティブ契約対象）を並置する。各タブ本文は server で
+   生成した React element を content として受け取り描画する（余白を作るタブ直下の削除行は廃止）。 ── */
+export function ContractSubTabs({
+  customerId,
+  tabs,
+}: {
+  customerId: string;
+  tabs: { id: string; label: string; content: React.ReactNode }[];
+}) {
+  const [active, setActive] = useState(tabs[0]?.id ?? "");
+  if (tabs.length === 0) return null;
+
+  return (
+    <Tabs value={active} onValueChange={setActive}>
+      <div className="flex items-center justify-between gap-2">
+        <TabsList variant="underline" className="flex-1">
+          {tabs.map((t) => (
+            <TabsTrigger key={t.id} value={t.id}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <div className="flex shrink-0 items-center gap-2 pb-1">
+          <AddContractButton customerId={customerId} />
+          <DeleteContractButton customerId={customerId} contractId={active} />
+        </div>
+      </div>
+      {tabs.map((t) => (
+        <TabsContent key={t.id} value={t.id} className="space-y-4">
+          {t.content}
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }
 
@@ -1734,7 +1897,7 @@ export function EditConstructionDialog({
               <Input id="cn-vendor" value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
             </FormField>
             <FormField label={f.constructionFee} htmlFor="cn-fee">
-              <Input id="cn-fee" type="number" inputMode="numeric" min={0} value={fee} onChange={(e) => setFee(e.target.value)} />
+              <MoneyInput id="cn-fee" value={fee} onChange={setFee} />
             </FormField>
             <FormField label={f.surveyAt} htmlFor="cn-survey">
               <input id="cn-survey" type="datetime-local" className={FIELD} value={surveyDate} onChange={(e) => setSurveyDate(e.target.value)} />
@@ -1850,7 +2013,7 @@ export function EditApplicationDialog({
               <input id="ap-approved" type="date" className={FIELD} value={approvedDate} onChange={(e) => setApprovedDate(e.target.value)} />
             </FormField>
             <FormField label={f.grantedAmount} htmlFor="ap-granted">
-              <Input id="ap-granted" type="number" min={0} value={grantedAmount} onChange={(e) => setGrantedAmount(e.target.value)} />
+              <MoneyInput id="ap-granted" value={grantedAmount} onChange={setGrantedAmount} />
             </FormField>
           </div>
         </div>

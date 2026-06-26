@@ -3092,6 +3092,14 @@ export function getProjectInfo(
 - **契約削除（任意）**: `deleteContractAction`（`ProjectContractDeleteSchema`）。`GrossProfit`/`Incentive`/`ContractItem`/`Construction`/`Application` の依存がある契約は**削除不可ガード**（損益・インセンティブ・スナップショット・施工/申請を壊さない）。商材ライン（`ContractEquipment`）・支払（`ContractPayment`）は明示削除し、契約 + デモ生成 `Deal` を削除する。
 - **テナント分離・セキュリティ不変条件**: `createContractAction`/`deleteContractAction`/`deleteContractEquipmentAction` も `auth → assertCan('customer.update') → withTenant` の三段イディオム + RLS 二重防御。`customerId`/`contractId`/`equipmentId` を同テナント内で検証（越境作成/削除不可）。仕入値・原価の二次店物理除外・損益タブ非表示ゲート・契約明細スナップショット不変条件（CLAUDE.md #4・#5）は不変。基本情報タブの「契約予定情報」read-only pull 表示（`contractReadOnly`）も複数契約・合計金額・複数付帯に追従する。
 
+### 16.14 契約サブタブ UI 微調整（契約サマリのインライン編集 / 削除ボタン配置 / 契約一式URL 廃止）
+
+§16.13 のサブタブ構成を保ったまま UI を微調整する。**スキーマ・DTO・Server Action は変更せず**（既存 `saveProjectContractAction`/`createContractAction`/`deleteContractAction` を流用）、**マイグレーション不要**。
+
+- **契約サマリのインライン編集化**: サブタブ上部の契約詳細（契約日 / 支払回数 / 入金ステータス / 入金日 / 二次店支払日 / 機器シリアル）を、ポップアップ（`EditContractDialog`）から **カード内インライン編集**（`ContractDetailInlineEdit`）へ変更（他セクションの `HearingInlineEdit` 等と同じ dirty 判定 + 保存/キャンセル + toast + `router.refresh`）。保存は `saveProjectContractAction` の**部分更新**（送ったフィールドのみ）。**契約金額は商材ライン合計（read-only 表示・編集対象外）**。**ローン情報（`loanCompany`/`downPayment`/`creditLifeInsurance`/`loanNote`/`loanReviewStatus`）は契約サマリには出さず、引き続き「ローン審査」タブの `LoanBlock` 内 `EditContractDialog` で編集**（`EditContractDialog` はローン審査タブで継続使用＝orphan ではない）。input id は既存 e2e 互換のため踏襲（`ct-date`/`ct-paycount`/`ct-paystatus`/`ct-deposit`/`ct-payout`/`ct-serial`）。
+- **削除ボタンの配置変更**: 各サブタブ直下の**ゴミ箱アイコン行を撤去**（タブ直下の余白を解消）。サブタブヘッダ（`TabsList` の隣・「契約を追加」の並び）に **テキストボタン「契約を削除」**（`DeleteContractButton`、destructive 寄り控えめスタイル + `confirm`）を「契約を追加」と並置。**削除対象はアクティブなサブタブの契約**。アクティブ契約を保持するため、サブタブ部を client ラッパー `ContractSubTabs`（`tabs: { id; label; content }[]` を受け取り `useState` で active 制御）に切り出す（各タブ本文は server で生成した React element を `content` として受け取る）。削除可否は既存 `deleteContractAction` の依存ガードに委譲。
+- **契約一式URL の UI 除去**: 契約サマリ dl から「契約一式URL（`Contract.docsUrl`）」の表示・リンク・編集を**除去**。`Contract.docsUrl` 列・DTO は残置（UI からのみ除去）。`projectInfo.openDocs`/`projectInfo.fields.contractDocsUrl` ラベルは未使用化したため整理。
+
 ---
 
 ## 17. アポ取り顧客 住環境・家族属性ヒアリングデータモデル（F-063 拡張設計）

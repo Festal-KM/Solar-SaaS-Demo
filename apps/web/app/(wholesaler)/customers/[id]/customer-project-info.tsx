@@ -3,10 +3,8 @@
 // 受け取り、9 カテゴリをカテゴリ別に閲覧表示する。読み取り専用（編集は F-062）。
 
 import { deriveCrossSellBadges } from "@solar/contracts";
-import { ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { labels } from "@/lib/i18n/labels";
 
 import {
@@ -15,7 +13,8 @@ import {
   AddContractButton,
   CallLogAddForm,
   CallLogDeleteButton,
-  DeleteContractButton,
+  ContractDetailInlineEdit,
+  ContractSubTabs,
   EditApplicationDialog,
   EditConstructionDialog,
   EditContractDialog,
@@ -1215,42 +1214,29 @@ export function ProjectContractList({
     const ec = editContractById.get(c.contractId);
     return (
       <div className="space-y-4">
+        {/* 契約サマリ。権限保持者（customerId かつ editable 有）はカード内インライン編集、
+            readOnly/二次店は read-only dl。ローン情報・契約一式URL はここには出さない。 */}
         {customerId && ec ? (
-          <div className="flex items-center justify-end gap-1">
-            <EditContractDialog customerId={customerId} initial={ec} />
-          </div>
-        ) : null}
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-          <MetaItem label={f.contractDate} value={fmtDate(c.contractDate)} />
-          {/* 契約金額は商材ライン合計（read-only・自動計算／要件B）。 */}
-          <MetaItem label={ct.contractAmountAuto} value={fmtYen(c.contractAmount)} />
-          <MetaItem label={f.paymentCount} value={c.paymentCount != null ? `${c.paymentCount} 回` : null} />
-          <MetaItem
-            label={f.paymentStatus}
-            value={c.paymentStatus ? p.paymentStatusLabels[c.paymentStatus] ?? c.paymentStatus : null}
+          <ContractDetailInlineEdit
+            customerId={customerId}
+            initial={ec}
+            contractAmount={c.contractAmount}
           />
-          <MetaItem label={f.depositDate} value={fmtDate(c.depositDate)} />
-          <MetaItem label={f.dealerPayoutDate} value={fmtDate(c.dealerPayoutDate)} />
-          <MetaItem label={f.equipmentId} value={c.equipmentSerialId} />
-          <div className="min-w-0">
-            <dt className="text-[11px] text-mute-light">{f.contractDocsUrl}</dt>
-            <dd className="mt-0.5 text-sm font-medium">
-              {c.docsUrl ? (
-                <a
-                  href={c.docsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
-                >
-                  {p.openDocs}
-                  <ExternalLink className="size-3.5" />
-                </a>
-              ) : (
-                <span className="text-ink">{EMPTY}</span>
-              )}
-            </dd>
-          </div>
-        </dl>
+        ) : (
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+            <MetaItem label={f.contractDate} value={fmtDate(c.contractDate)} />
+            {/* 契約金額は商材ライン合計（read-only・自動計算／要件B）。 */}
+            <MetaItem label={ct.contractAmountAuto} value={fmtYen(c.contractAmount)} />
+            <MetaItem label={f.paymentCount} value={c.paymentCount != null ? `${c.paymentCount} 回` : null} />
+            <MetaItem
+              label={f.paymentStatus}
+              value={c.paymentStatus ? p.paymentStatusLabels[c.paymentStatus] ?? c.paymentStatus : null}
+            />
+            <MetaItem label={f.depositDate} value={fmtDate(c.depositDate)} />
+            <MetaItem label={f.dealerPayoutDate} value={fmtDate(c.dealerPayoutDate)} />
+            <MetaItem label={f.equipmentId} value={c.equipmentSerialId} />
+          </dl>
+        )}
 
         {/* 商材ライン（PV/BT/付帯[複数]/施工）。契約状況タブはカード内インライン編集、
             基本情報タブ（readOnly）は読み取りカード。 */}
@@ -1327,32 +1313,15 @@ export function ProjectContractList({
         )
       ) : useInline ? (
         // 契約サブタブ（契約 #1 / #2 …）。各サブタブにその契約の詳細 + 商材ライン。
-        <Tabs defaultValue={contracts[0]!.contractId}>
-          <div className="flex items-center justify-between gap-2">
-            <TabsList variant="underline" className="flex-1">
-              {contracts.map((c, idx) => (
-                <TabsTrigger key={c.contractId} value={c.contractId}>
-                  {`${ct.subtabHeading} #${idx + 1}`}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            {customerId ? (
-              <div className="shrink-0 pb-1">
-                <AddContractButton customerId={customerId} />
-              </div>
-            ) : null}
-          </div>
-          {contracts.map((c) => (
-            <TabsContent key={c.contractId} value={c.contractId} className="space-y-4">
-              {customerId ? (
-                <div className="flex justify-end">
-                  <DeleteContractButton customerId={customerId} contractId={c.contractId} />
-                </div>
-              ) : null}
-              <ContractDetailBody c={c} />
-            </TabsContent>
-          ))}
-        </Tabs>
+        // ヘッダ右に「契約を追加」+「契約を削除」（アクティブ契約対象）を並置（client）。
+        <ContractSubTabs
+          customerId={customerId!}
+          tabs={contracts.map((c, idx) => ({
+            id: c.contractId,
+            label: `${ct.subtabHeading} #${idx + 1}`,
+            content: <ContractDetailBody c={c} />,
+          }))}
+        />
       ) : (
         contracts.map((c, idx) => (
           <div key={c.contractId} className="space-y-4 rounded-md border border-hairline-light p-4">
