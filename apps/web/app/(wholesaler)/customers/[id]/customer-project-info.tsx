@@ -6,11 +6,16 @@ import { deriveCrossSellBadges } from "@solar/contracts";
 import { ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { labels } from "@/lib/i18n/labels";
 
 import {
+  AccessoryInlineEdit,
+  AddAccessoryButton,
+  AddContractButton,
   CallLogAddForm,
   CallLogDeleteButton,
+  DeleteContractButton,
   EditApplicationDialog,
   EditConstructionDialog,
   EditContractDialog,
@@ -320,30 +325,61 @@ function EquipmentGrid({
 }
 
 // 契約状況タブ専用: 商材ライン（PV/BT/付帯/施工）をカード内インラインで編集するグリッド。
-// ポップアップ廃止。各カテゴリ代表 1 行を EquipmentInlineEdit で直接編集する（contractId
-// が null でも保存時にサーバーが最小契約を生成）。customer.update 権限保持者のみ描画。
+// ポップアップ廃止。PV/BT/EQ/IH/AC/GIFT/施工は各カテゴリ代表 1 行を EquipmentInlineEdit で
+// 直接編集する（contractId が null でも保存時にサーバーが最小契約を生成）。付帯商材
+// （ACCESSORY）のみ複数行運用: 全行を AccessoryInlineEdit で個別編集 + 削除 + 追加（要件C）。
+// accessoryRows は当該契約の ACCESSORY 全行（契約が無い場合は空・追加導線も非表示）。
+// customer.update 権限保持者のみ描画。
 function EquipmentInlineGrid({
   contractId,
   customerId,
   editFor,
+  accessoryRows = [],
 }: {
   contractId: string | null;
   customerId: string;
   // contractId × category 代表行の編集用 raw 値（無ければ null=新規）。
   editFor: (category: EquipmentCategoryKey) => ProjectEquipmentEditable | null;
+  // 当該契約の ACCESSORY 全行（複数行）。
+  accessoryRows?: ProjectEquipmentEditable[];
 }) {
+  const ct = labels.customer.detail.contractTab;
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      {CATEGORY_META.map(({ key, title }) => (
-        <EquipmentInlineEdit
-          key={key}
-          customerId={customerId}
-          category={key}
-          contractId={contractId}
-          initial={editFor(key)}
-          title={title}
-        />
-      ))}
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {CATEGORY_META.filter(({ key }) => key !== "ACCESSORY").map(({ key, title }) => (
+          <EquipmentInlineEdit
+            key={key}
+            customerId={customerId}
+            category={key}
+            contractId={contractId}
+            initial={editFor(key)}
+            title={title}
+          />
+        ))}
+      </div>
+
+      {/* 付帯商材（ACCESSORY）— 複数行 + 追加（contractId 確定時のみ追加導線を出す）。 */}
+      <div className="space-y-3 rounded-md border border-hairline-light p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-ink">{ct.accessoryTitle}</p>
+          {contractId ? <AddAccessoryButton customerId={customerId} contractId={contractId} /> : null}
+        </div>
+        {contractId == null || accessoryRows.length === 0 ? (
+          <p className="text-sm text-mute-light">{ct.accessoryEmpty}</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {accessoryRows.map((row) => (
+              <AccessoryInlineEdit
+                key={row.id}
+                customerId={customerId}
+                contractId={contractId}
+                initial={row}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -774,14 +810,9 @@ function LoanBlock({
         ) : null}
       </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-        <MetaItem label={f.loanReviewCallAt} value={fmtDateTime(contract.loanReviewCallAt)} />
         <MetaItem label={f.loanCompany} value={contract.loanCompany} />
         <MetaItem label={f.downPayment} value={fmtYen(contract.downPayment)} />
         <MetaItem label={f.creditLife} value={fmtBool(contract.creditLifeInsurance)} />
-        <MetaItem
-          label={f.callStatus}
-          value={p.callStatusLabels[contract.callStatus] ?? contract.callStatus}
-        />
         <MetaItem
           label={f.loanReviewStatus}
           value={
@@ -1172,26 +1203,109 @@ export function ProjectContractList({
     );
   }
 
+  // 当該契約の ACCESSORY 全行（複数行運用）。
+  function accessoryRowsFor(contractId: string): ProjectEquipmentEditable[] {
+    if (!editable) return [];
+    return (editable.equipmentByContract[contractId] ?? []).filter((e) => e.category === "ACCESSORY");
+  }
+
+  // 1 契約分の詳細（契約日/金額=合計/支払/シリアル/契約書類）+ 商材ライン。サブタブ
+  // （useInline）と非インライン（readOnly カード）の両方から再利用する。
+  function ContractDetailBody({ c }: { c: AnyContract }) {
+    const ec = editContractById.get(c.contractId);
+    return (
+      <div className="space-y-4">
+        {customerId && ec ? (
+          <div className="flex items-center justify-end gap-1">
+            <EditContractDialog customerId={customerId} initial={ec} />
+          </div>
+        ) : null}
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+          <MetaItem label={f.contractDate} value={fmtDate(c.contractDate)} />
+          {/* 契約金額は商材ライン合計（read-only・自動計算／要件B）。 */}
+          <MetaItem label={ct.contractAmountAuto} value={fmtYen(c.contractAmount)} />
+          <MetaItem label={f.paymentCount} value={c.paymentCount != null ? `${c.paymentCount} 回` : null} />
+          <MetaItem
+            label={f.paymentStatus}
+            value={c.paymentStatus ? p.paymentStatusLabels[c.paymentStatus] ?? c.paymentStatus : null}
+          />
+          <MetaItem label={f.depositDate} value={fmtDate(c.depositDate)} />
+          <MetaItem label={f.dealerPayoutDate} value={fmtDate(c.dealerPayoutDate)} />
+          <MetaItem label={f.equipmentId} value={c.equipmentSerialId} />
+          <div className="min-w-0">
+            <dt className="text-[11px] text-mute-light">{f.contractDocsUrl}</dt>
+            <dd className="mt-0.5 text-sm font-medium">
+              {c.docsUrl ? (
+                <a
+                  href={c.docsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+                >
+                  {p.openDocs}
+                  <ExternalLink className="size-3.5" />
+                </a>
+              ) : (
+                <span className="text-ink">{EMPTY}</span>
+              )}
+            </dd>
+          </div>
+        </dl>
+
+        {/* 商材ライン（PV/BT/付帯[複数]/施工）。契約状況タブはカード内インライン編集、
+            基本情報タブ（readOnly）は読み取りカード。 */}
+        <div>
+          <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+            {useInline ? ct.equipmentTitle : p.sections.equipment}
+          </h4>
+          {useInline ? (
+            <EquipmentInlineGrid
+              contractId={c.contractId}
+              customerId={customerId!}
+              editFor={inlineEditFor(c.contractId)}
+              accessoryRows={accessoryRowsFor(c.contractId)}
+            />
+          ) : (
+            <EquipmentGrid
+              equipment={c.equipment}
+              editSlotFor={
+                customerId
+                  ? (category, item, title) => equipmentEditSlot(c.contractId, category, item, title)
+                  : undefined
+              }
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* 契約・金額（金額サマリ）。ご提案金額・インセンティブ額・粗利は契約内容には
-          表示しない（粗利は損益計算タブに集約）。 */}
+      {/* 契約・金額（金額サマリ・全契約合計）。ご提案金額・インセンティブ額・粗利は
+          契約内容には表示しない（粗利は損益計算タブに集約）。 */}
       <Section title={p.sections.contract}>
         <MetaItem label={f.contractAmount} value={fmtYen(data.financials.contractAmount)} />
       </Section>
 
-      {/* 契約（1:N。各契約に金額・支払・設備明細を展開）。契約 0 件でも、権限保持者には
-          設備の追加導線（空カテゴリの＋）を出し、保存時にサーバーが最小契約を生成する。 */}
+      {/* 契約（1:N）。契約状況タブ（useInline）では契約ごとのサブタブ + 「契約を追加」。
+          契約 0 件でも、権限保持者には設備の追加導線を出し、保存時にサーバーが最小契約を
+          生成する。基本情報タブ（readOnly）は従来どおり契約カードを縦に並べる。 */}
       {contracts.length === 0 ? (
         customerId ? (
           <div className="space-y-4 rounded-md border border-hairline-light p-4">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
                 {useInline ? ct.equipmentTitle : p.sections.equipment}
               </h3>
               <span className="text-[11px] text-mute-light">
                 {useInline ? ct.equipmentHint : p.equipmentAddHint}
               </span>
+              {useInline ? (
+                <div className="ml-auto">
+                  <AddContractButton customerId={customerId} />
+                </div>
+              ) : null}
             </div>
             {useInline ? (
               <EquipmentInlineGrid
@@ -1211,75 +1325,45 @@ export function ProjectContractList({
             {p.noContract}
           </p>
         )
-      ) : (
-        contracts.map((c, idx) => {
-          const ec = editContractById.get(c.contractId);
-          return (
-            <div key={c.contractId} className="space-y-4 rounded-md border border-hairline-light p-4">
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
-                  {`${p.sections.contract} #${idx + 1}`}
-                </h3>
-                {customerId && ec ? <EditContractDialog customerId={customerId} initial={ec} /> : null}
+      ) : useInline ? (
+        // 契約サブタブ（契約 #1 / #2 …）。各サブタブにその契約の詳細 + 商材ライン。
+        <Tabs defaultValue={contracts[0]!.contractId}>
+          <div className="flex items-center justify-between gap-2">
+            <TabsList variant="underline" className="flex-1">
+              {contracts.map((c, idx) => (
+                <TabsTrigger key={c.contractId} value={c.contractId}>
+                  {`${ct.subtabHeading} #${idx + 1}`}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {customerId ? (
+              <div className="shrink-0 pb-1">
+                <AddContractButton customerId={customerId} />
               </div>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                <MetaItem label={f.contractDate} value={fmtDate(c.contractDate)} />
-                <MetaItem label={f.contractAmount} value={fmtYen(c.contractAmount)} />
-                <MetaItem label={f.paymentCount} value={c.paymentCount != null ? `${c.paymentCount} 回` : null} />
-                <MetaItem
-                  label={f.paymentStatus}
-                  value={c.paymentStatus ? p.paymentStatusLabels[c.paymentStatus] ?? c.paymentStatus : null}
-                />
-                <MetaItem label={f.depositDate} value={fmtDate(c.depositDate)} />
-                <MetaItem label={f.dealerPayoutDate} value={fmtDate(c.dealerPayoutDate)} />
-                <MetaItem label={f.equipmentId} value={c.equipmentSerialId} />
-                <div className="min-w-0">
-                  <dt className="text-[11px] text-mute-light">{f.contractDocsUrl}</dt>
-                  <dd className="mt-0.5 text-sm font-medium">
-                    {c.docsUrl ? (
-                      <a
-                        href={c.docsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
-                      >
-                        {p.openDocs}
-                        <ExternalLink className="size-3.5" />
-                      </a>
-                    ) : (
-                      <span className="text-ink">{EMPTY}</span>
-                    )}
-                  </dd>
+            ) : null}
+          </div>
+          {contracts.map((c) => (
+            <TabsContent key={c.contractId} value={c.contractId} className="space-y-4">
+              {customerId ? (
+                <div className="flex justify-end">
+                  <DeleteContractButton customerId={customerId} contractId={c.contractId} />
                 </div>
-              </dl>
-
-              {/* 商材ライン（PV/BT/付帯/施工）。契約状況タブはカード内インライン編集、
-                  基本情報タブ（readOnly）は読み取りカード。 */}
-              <div>
-                <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-                  {useInline ? ct.equipmentTitle : p.sections.equipment}
-                </h4>
-                {useInline ? (
-                  <EquipmentInlineGrid
-                    contractId={c.contractId}
-                    customerId={customerId!}
-                    editFor={inlineEditFor(c.contractId)}
-                  />
-                ) : (
-                  <EquipmentGrid
-                    equipment={c.equipment}
-                    editSlotFor={
-                      customerId
-                        ? (category, item, title) =>
-                            equipmentEditSlot(c.contractId, category, item, title)
-                        : undefined
-                    }
-                  />
-                )}
-              </div>
+              ) : null}
+              <ContractDetailBody c={c} />
+            </TabsContent>
+          ))}
+        </Tabs>
+      ) : (
+        contracts.map((c, idx) => (
+          <div key={c.contractId} className="space-y-4 rounded-md border border-hairline-light p-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+                {`${p.sections.contract} #${idx + 1}`}
+              </h3>
             </div>
-          );
-        })
+            <ContractDetailBody c={c} />
+          </div>
+        ))
       )}
 
       {/* 認定・設備（申請） */}

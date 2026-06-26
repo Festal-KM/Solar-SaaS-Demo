@@ -90,12 +90,20 @@ test.describe("ローン情報タブ（専用タブ・契約 1:N）", () => {
     await expect(
       panel.locator("dt", { hasText: "ローン審査ステータス" }).first(),
     ).toBeVisible();
-    for (const label of ["ローン審査コール日時", "ローン会社", "頭金", "団体信用生命保険"]) {
+    // ローン・団信ブロックの表示項目。架電日時(loanReviewCallAt)は契約タブ改修#1 で
+    // 契約編集ダイアログから削除されたため、ローン・団信ブロックにも「ローン審査コール
+    // 日時」は描画されない（ローン審査ステータス/会社/頭金/団信が残存）。
+    for (const label of ["ローン会社", "頭金", "団体信用生命保険"]) {
       await expect(
         panel.locator("dt", { hasText: label }).first(),
         `ローン・団信フィールド「${label}」が表示される`,
       ).toBeVisible();
     }
+    // 旧「ローン審査コール日時」項目は廃止されている。
+    await expect(
+      panel.locator("dt", { hasText: "ローン審査コール日時" }),
+      "架電日時(loanReviewCallAt)はローン・団信ブロックに描画されない（改修#1で削除）",
+    ).toHaveCount(0);
 
     // 表示値は 4 値ラベルのいずれか（seed は seq % 4 で確実に設定）。
     const before = await metaValue(panel, "ローン審査ステータス");

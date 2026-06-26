@@ -27,7 +27,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { labels } from "@/lib/i18n/labels";
 
 import {
+  createContractAction,
   createCustomerCallLogAction,
+  deleteContractAction,
+  deleteContractEquipmentAction,
   deleteCustomerCallLogAction,
   saveCustomerHearingAction,
   saveProjectApplicationAction,
@@ -928,7 +931,9 @@ export function HearingInlineEdit({
   );
 }
 
-/* ── 契約・金額・ローン（Contract + ContractPayment） ── */
+/* ── 契約・支払・ローン（Contract + ContractPayment）。架電関連（callStatus /
+   loanReviewCallAt）と契約金額の手動入力は除去した。契約金額は商材ライン amount の
+   合計が正であり、設備保存のたびにサーバーが再計算する（要件A/B）。 ── */
 export function EditContractDialog({
   customerId,
   initial,
@@ -938,10 +943,7 @@ export function EditContractDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [contractDate, setContractDate] = useState(toDateInput(initial.contractDate));
-  const [contractAmount, setContractAmount] = useState(initial.contractAmount != null ? String(initial.contractAmount) : "");
   const [equipmentSerialId, setEquipmentSerialId] = useState(initial.equipmentSerialId ?? "");
-  const [loanReviewCallAt, setLoanReviewCallAt] = useState(toDateTimeInput(initial.loanReviewCallAt));
-  const [callStatus, setCallStatus] = useState(initial.callStatus);
   const [paymentCount, setPaymentCount] = useState(initial.paymentCount != null ? String(initial.paymentCount) : "");
   const [paymentStatus, setPaymentStatus] = useState(initial.paymentStatus ?? "UNPAID");
   const [depositDate, setDepositDate] = useState(toDateInput(initial.depositDate));
@@ -955,10 +957,7 @@ export function EditContractDialog({
 
   function reset() {
     setContractDate(toDateInput(initial.contractDate));
-    setContractAmount(initial.contractAmount != null ? String(initial.contractAmount) : "");
     setEquipmentSerialId(initial.equipmentSerialId ?? "");
-    setLoanReviewCallAt(toDateTimeInput(initial.loanReviewCallAt));
-    setCallStatus(initial.callStatus);
     setPaymentCount(initial.paymentCount != null ? String(initial.paymentCount) : "");
     setPaymentStatus(initial.paymentStatus ?? "UNPAID");
     setDepositDate(toDateInput(initial.depositDate));
@@ -981,10 +980,7 @@ export function EditContractDialog({
         customerId,
         contractId: initial.contractId,
         contractDate: contractDate || null,
-        contractAmount: numOrNull(contractAmount),
         equipmentSerialId: strOrNull(equipmentSerialId),
-        loanReviewCallAt: loanReviewCallAt ? new Date(loanReviewCallAt).toISOString() : null,
-        callStatus: callStatus as "NONE" | "SCHEDULED" | "DONE" | "CALLBACK_WAIT" | "NG",
         paymentCount: numOrNull(paymentCount),
         paymentStatus: paymentStatus as "UNPAID" | "PARTIAL" | "PAID",
         depositDate: depositDate || null,
@@ -1010,20 +1006,8 @@ export function EditContractDialog({
             <FormField label={f.contractDate} htmlFor="ct-date">
               <input id="ct-date" type="date" className={FIELD} value={contractDate} onChange={(e) => setContractDate(e.target.value)} />
             </FormField>
-            <FormField label={f.contractAmount} htmlFor="ct-amount">
-              <Input id="ct-amount" type="number" min={0} value={contractAmount} onChange={(e) => setContractAmount(e.target.value)} />
-            </FormField>
             <FormField label={f.equipmentId} htmlFor="ct-serial">
               <Input id="ct-serial" value={equipmentSerialId} onChange={(e) => setEquipmentSerialId(e.target.value)} />
-            </FormField>
-            <FormField label={f.callStatus} htmlFor="ct-call">
-              <select id="ct-call" className={FIELD} value={callStatus} onChange={(e) => setCallStatus(e.target.value)}>
-                <option value="NONE">{p.callStatusLabels.NONE}</option>
-                <option value="SCHEDULED">{p.callStatusLabels.SCHEDULED}</option>
-                <option value="DONE">{p.callStatusLabels.DONE}</option>
-                <option value="CALLBACK_WAIT">{p.callStatusLabels.CALLBACK_WAIT}</option>
-                <option value="NG">{p.callStatusLabels.NG}</option>
-              </select>
             </FormField>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1045,9 +1029,6 @@ export function EditContractDialog({
             </FormField>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <FormField label={f.loanReviewCallAt} htmlFor="ct-loancall">
-              <input id="ct-loancall" type="datetime-local" className={FIELD} value={loanReviewCallAt} onChange={(e) => setLoanReviewCallAt(e.target.value)} />
-            </FormField>
             <FormField label={f.loanCompany} htmlFor="ct-loanco">
               <Input id="ct-loanco" value={loanCompany} onChange={(e) => setLoanCompany(e.target.value)} />
             </FormField>
@@ -1115,8 +1096,6 @@ export function EditEquipmentDialog({
   const [warrantyExtended, setWarrantyExtended] = useState(boolToSelect(initial?.warrantyExtended ?? null));
   const [warrantyDisaster, setWarrantyDisaster] = useState(boolToSelect(initial?.warrantyDisaster ?? null));
   const [detail, setDetail] = useState(initial?.detail ?? "");
-  // 契約金額は契約 0 件の追加時のみ入力（既存契約があれば EditContractDialog 側で編集）。
-  const [contractAmount, setContractAmount] = useState("");
   const { pending, run } = useSaver(() => setOpen(false));
 
   function reset() {
@@ -1131,7 +1110,6 @@ export function EditEquipmentDialog({
     setWarrantyExtended(boolToSelect(initial?.warrantyExtended ?? null));
     setWarrantyDisaster(boolToSelect(initial?.warrantyDisaster ?? null));
     setDetail(initial?.detail ?? "");
-    setContractAmount("");
   }
 
   function onOpenChange(next: boolean) {
@@ -1144,9 +1122,9 @@ export function EditEquipmentDialog({
       saveProjectContractEquipmentAction({
         customerId,
         contractId: initial?.contractId ?? contractId,
+        // 既存行は equipmentId を渡して更新。未指定は新規作成（複数行追加）。
+        equipmentId: initial?.id ?? null,
         category,
-        // 契約 0 件の追加時のみ契約金額を渡す（既存契約には触らない）。
-        contractAmount: contractId == null && isAdd ? numOrNull(contractAmount) : undefined,
         contracted,
         manufacturer: strOrNull(manufacturer),
         model: strOrNull(model),
@@ -1175,19 +1153,6 @@ export function EditEquipmentDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-          {contractId == null && isAdd ? (
-            <FormField label={f.contractAmount} htmlFor="eq-contract-amount">
-              <Input
-                id="eq-contract-amount"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={contractAmount}
-                onChange={(ev) => setContractAmount(ev.target.value)}
-                placeholder="0"
-              />
-            </FormField>
-          ) : null}
           <FormField label={p.contracted} htmlFor="eq-contracted">
             <select id="eq-contracted" className={FIELD} value={contracted ? "true" : "false"} onChange={(ev) => setContracted(ev.target.value === "true")}>
               <option value="true">{p.contracted}</option>
@@ -1324,6 +1289,8 @@ export function EquipmentInlineEdit({
         await saveProjectContractEquipmentAction({
           customerId,
           contractId: initial?.contractId ?? contractId,
+          // 既存行は equipmentId を渡して更新（PV/BT/施工等は代表 1 行を維持）。
+          equipmentId: initial?.id ?? null,
           category,
           amount: numOrNull(amount),
           // 商材金額の入力があれば「契約あり」とみなす（追加導線の意図）。
@@ -1427,6 +1394,238 @@ export function EquipmentInlineEdit({
         </Button>
       </div>
     </div>
+  );
+}
+
+/* ── 付帯商材（ACCESSORY）の 1 行インライン編集（複数行運用・要件C）。金額/数量/型番/
+   設置場所/内容を直接編集し、saveProjectContractEquipmentAction で更新（equipmentId 指定）。
+   削除ボタン（deleteContractEquipmentAction）付き。追加/編集/削除のたびに契約金額が再計算。 ── */
+export function AccessoryInlineEdit({
+  customerId,
+  contractId,
+  initial,
+}: {
+  customerId: string;
+  contractId: string;
+  initial: ProjectEquipmentEditable;
+}) {
+  const e = p.equipment;
+  const ct = labels.customer.detail.contractTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [amount, setAmount] = useState(initial.amount != null ? String(initial.amount) : "");
+  const [quantity, setQuantity] = useState(initial.quantity != null ? String(initial.quantity) : "");
+  const [model, setModel] = useState(initial.model ?? "");
+  const [installLocation, setInstallLocation] = useState(initial.installLocation ?? "");
+  const [detail, setDetail] = useState(initial.detail ?? "");
+
+  const initAmount = initial.amount != null ? String(initial.amount) : "";
+  const initQty = initial.quantity != null ? String(initial.quantity) : "";
+  const dirty =
+    amount !== initAmount ||
+    quantity !== initQty ||
+    model !== (initial.model ?? "") ||
+    installLocation !== (initial.installLocation ?? "") ||
+    detail !== (initial.detail ?? "");
+
+  function reset() {
+    setAmount(initAmount);
+    setQuantity(initQty);
+    setModel(initial.model ?? "");
+    setInstallLocation(initial.installLocation ?? "");
+    setDetail(initial.detail ?? "");
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectContractEquipmentAction({
+          customerId,
+          contractId,
+          equipmentId: initial.id,
+          category: "ACCESSORY",
+          contracted: true,
+          amount: numOrNull(amount),
+          quantity: numOrNull(quantity),
+          model: strOrNull(model),
+          installLocation: strOrNull(installLocation),
+          detail: strOrNull(detail),
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  function onDelete() {
+    if (!window.confirm(ct.deleteAccessoryConfirm)) return;
+    start(async () => {
+      try {
+        await deleteContractEquipmentAction({ customerId, contractId, equipmentId: initial.id });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-hairline-light p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-ink">{e.accessory}</p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-7 text-mute-light hover:text-destructive"
+          aria-label={ct.deleteAccessory}
+          onClick={onDelete}
+          disabled={pending}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <FormField label={e.amount} htmlFor={`acc-amount-${initial.id}`}>
+          <Input
+            id={`acc-amount-${initial.id}`}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={amount}
+            onChange={(ev) => setAmount(ev.target.value)}
+            placeholder="0"
+            className="text-right tabular-nums"
+          />
+        </FormField>
+        <FormField label={e.count} htmlFor={`acc-qty-${initial.id}`}>
+          <Input id={`acc-qty-${initial.id}`} type="number" min={0} value={quantity} onChange={(ev) => setQuantity(ev.target.value)} />
+        </FormField>
+        <FormField label={e.modelNo1} htmlFor={`acc-model-${initial.id}`}>
+          <Input id={`acc-model-${initial.id}`} value={model} onChange={(ev) => setModel(ev.target.value)} />
+        </FormField>
+        <FormField label={e.pcLocationSwap} htmlFor={`acc-loc-${initial.id}`}>
+          <Input id={`acc-loc-${initial.id}`} value={installLocation} onChange={(ev) => setInstallLocation(ev.target.value)} />
+        </FormField>
+      </div>
+      <FormField label={e.detail} htmlFor={`acc-detail-${initial.id}`}>
+        <Textarea id={`acc-detail-${initial.id}`} rows={2} value={detail} onChange={(ev) => setDetail(ev.target.value)} />
+      </FormField>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={reset} disabled={pending || !dirty}>
+          {ed.cancel}
+        </Button>
+        <Button type="button" size="sm" onClick={onSave} disabled={pending || !dirty}>
+          {pending ? c.saving : ed.save}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* 付帯商材を新規追加するボタン（空行を新規作成 → router.refresh で行が出現）。 */
+export function AddAccessoryButton({
+  customerId,
+  contractId,
+}: {
+  customerId: string;
+  contractId: string;
+}) {
+  const ct = labels.customer.detail.contractTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onAdd() {
+    start(async () => {
+      try {
+        await saveProjectContractEquipmentAction({
+          customerId,
+          contractId,
+          category: "ACCESSORY",
+          contracted: true,
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onAdd} disabled={pending}>
+      <Plus className="mr-1 size-4" />
+      {pending ? ct.addingAccessory : ct.addAccessory}
+    </Button>
+  );
+}
+
+/* 契約を追加するボタン（契約 #2 以降。createContractAction で最小 Deal+Contract を生成）。 */
+export function AddContractButton({ customerId }: { customerId: string }) {
+  const ct = labels.customer.detail.contractTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onAdd() {
+    start(async () => {
+      try {
+        await createContractAction({ customerId });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onAdd} disabled={pending}>
+      <Plus className="mr-1 size-4" />
+      {pending ? ct.addingContract : ct.addContract}
+    </Button>
+  );
+}
+
+/* 契約を削除するボタン（依存がある契約はサーバーがガード）。 */
+export function DeleteContractButton({
+  customerId,
+  contractId,
+}: {
+  customerId: string;
+  contractId: string;
+}) {
+  const ct = labels.customer.detail.contractTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onDelete() {
+    if (!window.confirm(ct.deleteContractConfirm)) return;
+    start(async () => {
+      try {
+        await deleteContractAction({ customerId, contractId });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="size-7 text-mute-light hover:text-destructive"
+      aria-label={ct.deleteContract}
+      onClick={onDelete}
+      disabled={pending}
+    >
+      <Trash2 className="size-4" />
+    </Button>
   );
 }
 

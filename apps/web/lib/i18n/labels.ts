@@ -2300,9 +2300,24 @@ export const labels = {
       // 商材ライン（PV/BT/付帯/施工）をカード内インラインで入力する（概況は廃止）。
       contractTab: {
         detailTitle: "契約予定情報（案件詳細）",
-        detailHint: "契約・金額・支払・商材ライン・認定を契約ごとに編集",
+        detailHint: "契約・支払・商材ライン・認定を契約ごとに編集（契約金額は商材ライン合計）",
         equipmentTitle: "商材ライン",
-        equipmentHint: "PV/BT/付帯/施工の各商材の金額・内容を入力",
+        equipmentHint: "PV/BT/付帯/施工の各商材の金額・内容を入力（契約金額は自動合計）",
+        // 契約サブタブ（契約 #1 / #2 …＋追加）。
+        subtabHeading: "契約",
+        addContract: "契約を追加",
+        addingContract: "契約を追加中…",
+        deleteContract: "この契約を削除",
+        deleteContractConfirm: "この契約を削除しますか？商材ラインも削除されます。",
+        // 付帯商材（ACCESSORY）の複数行運用。
+        accessoryTitle: "付帯商材",
+        addAccessory: "付帯商材を追加",
+        addingAccessory: "追加中…",
+        deleteAccessory: "この付帯商材を削除",
+        deleteAccessoryConfirm: "この付帯商材を削除しますか？",
+        accessoryEmpty: "付帯商材は未登録です。",
+        // 各契約カードの契約金額（商材ライン合計・read-only）。
+        contractAmountAuto: "契約金額（商材ライン合計）",
       },
       loanTab: {
         empty: "ローン情報を表示できる契約がありません。",

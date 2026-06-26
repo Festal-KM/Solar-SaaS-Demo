@@ -441,16 +441,16 @@ export const ProjectOverviewSchema = z.object({
 
 export type ProjectOverviewInput = z.infer<typeof ProjectOverviewSchema>;
 
-// 契約・金額・ローン（Contract + ContractPayment、1 契約単位）。
+// 契約・支払・ローン（Contract + ContractPayment、1 契約単位）。
+// 契約金額（contractAmount）は商材ライン amount 合計が正であり、本スキーマでは扱わない
+// （saveProjectContractEquipmentAction が設備保存のたびに常時再計算する）。架電関連
+// （callStatus / loanReviewCallAt）は本タブから除去した（DB 列は残置・UI からのみ除去）。
 export const ProjectContractEditSchema = z.object({
   customerId: z.string().min(1),
   contractId: z.string().min(1),
   // Contract 列
   contractDate: z.string().nullable().optional(),
-  contractAmount: z.number().int().nonnegative().nullable().optional(),
   equipmentSerialId: z.string().max(255).nullable().optional(),
-  loanReviewCallAt: z.string().nullable().optional(),
-  callStatus: z.enum(["NONE", "SCHEDULED", "DONE", "CALLBACK_WAIT", "NG"]).optional(),
   // ContractPayment 列（1:1。未存在時は upsert）
   paymentCount: z.number().int().nonnegative().nullable().optional(),
   paymentStatus: z.enum(["UNPAID", "PARTIAL", "PAID"]).optional(),
@@ -465,6 +465,36 @@ export const ProjectContractEditSchema = z.object({
 });
 
 export type ProjectContractEditInput = z.infer<typeof ProjectContractEditSchema>;
+
+// 契約の新規作成（契約 #2 以降の追加）。customerId のみ受け取り、Server Action が
+// 最小 Deal + Contract を生成する（buildDemoContractSeed と同等・GrossProfit/Incentive
+// は生成しない）。wholesalerId/ownerRelationshipId は Customer 由来（input から取らない）。
+export const ProjectContractCreateSchema = z.object({
+  customerId: z.string().min(1),
+});
+
+export type ProjectContractCreateInput = z.infer<typeof ProjectContractCreateSchema>;
+
+// 契約の削除（任意）。GrossProfit/Incentive/ContractItem 等の依存がある契約は
+// Server Action 側で削除不可ガードする。
+export const ProjectContractDeleteSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+});
+
+export type ProjectContractDeleteInput = z.infer<typeof ProjectContractDeleteSchema>;
+
+// 商材ライン 1 行の削除（付帯商材の複数行運用で個別行を消す）。equipmentId は
+// contractId 配下であることを Server Action が検証する（越境削除不可）。
+export const ProjectContractEquipmentDeleteSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+  equipmentId: z.string().min(1),
+});
+
+export type ProjectContractEquipmentDeleteInput = z.infer<
+  typeof ProjectContractEquipmentDeleteSchema
+>;
 
 // 設備明細（ContractEquipment の非価格フィールドのみ。価格・スナップショットは扱わない）。
 export const ProjectEquipmentEditSchema = z.object({
@@ -527,16 +557,18 @@ export function sumEquipmentAmounts(
 // 契約状況タブでの「設備の追加・編集」ペイロード（契約 find-or-create 方式）。
 //
 // contractId は任意: 未指定なら顧客に契約が無いとみなし、Server Action がデモ用の
-// 最小 Deal + Contract を find-or-create してから当該カテゴリの ContractEquipment を
-// upsert する（1 顧客 1 契約想定）。category は upsert キー（contractId × category の
-// 代表 1 行）。contractAmount は同時に Contract.contractAmount へ反映する任意項目。
-// 仕入値スナップショット（ContractItem.snapshot*）は扱わない（CLAUDE.md #4 / #5）。
+// 最小 Deal + Contract を find-or-create してから ContractEquipment を upsert する。
+// equipmentId 指定時はその行を更新、未指定（新規追加）時は新しい行を作成する。これに
+// より付帯商材（ACCESSORY）等を同一契約に複数行追加できる。PV/BT/施工等は呼び出し側が
+// 代表 1 行の equipmentId を渡すことで従来どおり 1 行運用にできる。契約金額
+// （Contract.contractAmount）は本アクションが設備 amount 合計から常時再計算する（手動
+// 上書き経路は廃止）。仕入値スナップショット（ContractItem.snapshot*）は扱わない（#4 / #5）。
 export const ProjectContractEquipmentUpsertSchema = z.object({
   customerId: z.string().min(1),
   contractId: z.string().min(1).nullable().optional(),
   category: EquipmentCategoryEnum,
-  // Contract.contractAmount へ反映する任意の契約金額（円・整数・0 以上）。
-  contractAmount: z.number().int().nonnegative().nullable().optional(),
+  // 更新対象の ContractEquipment 行 ID。未指定は新規作成（複数行追加に対応）。
+  equipmentId: z.string().min(1).nullable().optional(),
   // 商材ごとの契約金額（ContractEquipment.amount）。顧客向け金額（原価ではない）。
   // 円・整数・0 以上。null でクリア可、省略は無変更。
   amount: z.number().int().nonnegative().nullable().optional(),

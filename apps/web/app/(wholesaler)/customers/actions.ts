@@ -28,7 +28,10 @@ import {
   ProjectApplicationEditSchema,
   ProjectConstructionEditSchema,
   ProjectCallStatusSchema,
+  ProjectContractCreateSchema,
+  ProjectContractDeleteSchema,
   ProjectContractEditSchema,
+  ProjectContractEquipmentDeleteSchema,
   ProjectContractEquipmentUpsertSchema,
   ProjectOverviewSchema,
   sumEquipmentAmounts,
@@ -39,6 +42,7 @@ import { revalidatePath } from "next/cache";
 import { NotFoundError } from "@/lib/errors";
 import { withServerActionContext } from "@/lib/tenancy/server-action";
 
+import type { TxClient } from "@/lib/tenancy/with-tenant";
 import type {
   CustomerCallLogCreateInput,
   CustomerCallLogDeleteInput,
@@ -48,7 +52,10 @@ import type {
   ProjectApplicationEditInput,
   ProjectConstructionEditInput,
   ProjectCallStatusInput,
+  ProjectContractCreateInput,
+  ProjectContractDeleteInput,
   ProjectContractEditInput,
+  ProjectContractEquipmentDeleteInput,
   ProjectContractEquipmentUpsertInput,
   ProjectOverviewInput,
 } from "@solar/contracts";
@@ -587,16 +594,9 @@ export const saveProjectContractAction = withServerActionContext<
         ...(parsed.contractDate !== undefined && parsed.contractDate
           ? { contractDate: new Date(parsed.contractDate) }
           : {}),
-        ...(parsed.contractAmount !== undefined && parsed.contractAmount != null
-          ? { contractAmount: parsed.contractAmount }
-          : {}),
         ...(parsed.equipmentSerialId !== undefined
           ? { equipmentSerialId: parsed.equipmentSerialId?.trim() || null }
           : {}),
-        ...(parsed.loanReviewCallAt !== undefined
-          ? { loanReviewCallAt: toDateOrNull(parsed.loanReviewCallAt) }
-          : {}),
-        ...(parsed.callStatus !== undefined ? { callStatus: parsed.callStatus } : {}),
       },
       select: { id: true },
     });
@@ -641,6 +641,119 @@ export const saveProjectContractAction = withServerActionContext<
         update: payData,
       });
     }
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 契約状況タブ: 契約の追加・削除（契約 #2 以降をサブタブで運用）.
+//
+// createContractAction は最小 Deal + Contract を生成する（buildDemoContractSeed と同等・
+// GrossProfit/Incentive は作らない／非生成方針不変）。wholesalerId/ownerRelationshipId は
+// Customer 由来（input から取らない）。三段イディオム（auth→customer.update→withTenant）。
+// ---------------------------------------------------------------------------
+export interface CreateContractResult {
+  customerId: string;
+  contractId: string;
+}
+
+export const createContractAction = withServerActionContext<
+  ProjectContractCreateInput,
+  CreateContractResult
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = ProjectContractCreateSchema.parse(input);
+
+    const customer = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true, wholesalerId: true, ownerRelationshipId: true },
+    });
+    if (!customer) throw new NotFoundError("顧客が見つかりません");
+
+    const settings = await tx.wholesalerSettings.findUnique({
+      where: { wholesalerId: customer.wholesalerId },
+      select: { cancelDeadlineDays: true },
+    });
+    const seed = buildDemoContractSeed({ cancelDeadlineDays: settings?.cancelDeadlineDays });
+    const ownerType = ctx.dealerId ? "DEALER" : "WHOLESALER";
+
+    const deal = await tx.deal.create({
+      data: {
+        customerId: parsed.customerId,
+        ownerType,
+        ownerUserId: ctx.actorUserId,
+        ownerRelationshipId: customer.ownerRelationshipId,
+        status: seed.dealStatus,
+      },
+      select: { id: true },
+    });
+    const contract = await tx.contract.create({
+      data: {
+        wholesalerId: customer.wholesalerId,
+        dealId: deal.id,
+        customerId: parsed.customerId,
+        ownerRelationshipId: customer.ownerRelationshipId,
+        contractDate: seed.contractDate,
+        contractAmount: seed.contractAmount,
+        cancelDeadline: seed.cancelDeadline,
+        hasBattery: seed.hasBattery,
+        status: seed.status,
+        createdBy: ctx.actorUserId,
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId, contractId: contract.id };
+  },
+);
+
+// 契約の削除（任意）。GrossProfit/Incentive/ContractItem/Construction/Application の
+// 依存がある契約は削除不可ガードする（損益・インセンティブ・スナップショット・施工/申請を
+// 壊さない／Construction・Application は onDelete カスケードなし）。商材ライン
+// （ContractEquipment）と支払（ContractPayment）はカスケード対象だが、明示削除して
+// 契約 + デモ生成 Deal を削除する。
+export const deleteContractAction = withServerActionContext<
+  ProjectContractDeleteInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = ProjectContractDeleteSchema.parse(input);
+
+    const contract = await tx.contract.findFirst({
+      where: { id: parsed.contractId, customerId: parsed.customerId },
+      select: {
+        id: true,
+        dealId: true,
+        grossProfit: { select: { id: true } },
+        _count: {
+          select: { incentives: true, items: true, constructions: true, applications: true },
+        },
+      },
+    });
+    if (!contract) throw new NotFoundError("契約が見つかりません");
+
+    if (
+      contract.grossProfit ||
+      contract._count.incentives > 0 ||
+      contract._count.items > 0 ||
+      contract._count.constructions > 0 ||
+      contract._count.applications > 0
+    ) {
+      throw new NotFoundError(
+        "損益・インセンティブ・契約明細・施工・申請がある契約は削除できません",
+      );
+    }
+
+    await tx.contractEquipment.deleteMany({ where: { contractId: parsed.contractId } });
+    await tx.contractPayment.deleteMany({ where: { contractId: parsed.contractId } });
+    await tx.contract.delete({ where: { id: parsed.contractId } });
+    // Deal は Contract と 1:1 のデモ生成物。設備入力のために生成した Deal を一緒に削除する。
+    await tx.deal.deleteMany({ where: { id: contract.dealId, customerId: parsed.customerId } });
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
     return { customerId: parsed.customerId };
@@ -700,7 +813,6 @@ export const saveProjectContractEquipmentAction = withServerActionContext<
         select: { cancelDeadlineDays: true },
       });
       const seed = buildDemoContractSeed({
-        contractAmount: parsed.contractAmount ?? null,
         hasBattery: parsed.category === "BT",
         cancelDeadlineDays: settings?.cancelDeadlineDays,
       });
@@ -732,13 +844,6 @@ export const saveProjectContractEquipmentAction = withServerActionContext<
         select: { id: true },
       });
       contractId = contract.id;
-    } else if (parsed.contractAmount != null) {
-      // 既存契約に対して契約金額の指定があれば反映（Contract.contractAmount を正とする）。
-      await tx.contract.update({
-        where: { id: contractId },
-        data: { contractAmount: parsed.contractAmount },
-        select: { id: true },
-      });
     }
 
     const attributes:
@@ -751,12 +856,18 @@ export const saveProjectContractEquipmentAction = withServerActionContext<
           ? (parsed.attributes as Prisma.InputJsonValue)
           : Prisma.JsonNull;
 
-    // 設備は contractId × category の代表 1 行を find-or-create（同カテゴリ複数は作らない）。
-    const existingEq = await tx.contractEquipment.findFirst({
-      where: { contractId, category: parsed.category },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    });
+    // equipmentId 指定時はその行を当該 contractId 配下で検証して更新する。未指定（新規
+    // 追加）時は新しい行を作成する。これにより付帯商材（ACCESSORY）等を同一契約に複数行
+    // 追加できる。equipmentId 未指定でも旧来の「contractId × category 代表 1 行」を維持
+    // したい呼び出し（PV/BT/施工等）は、呼び出し側が既存行の equipmentId を渡すことで更新に倒す。
+    let existingEq: { id: string } | null = null;
+    if (parsed.equipmentId) {
+      existingEq = await tx.contractEquipment.findFirst({
+        where: { id: parsed.equipmentId, contractId, category: parsed.category },
+        select: { id: true },
+      });
+      if (!existingEq) throw new NotFoundError("商材ラインが見つかりません");
+    }
 
     const writable = {
       ...(parsed.contracted !== undefined ? { contracted: parsed.contracted } : {}),
@@ -806,28 +917,59 @@ export const saveProjectContractEquipmentAction = withServerActionContext<
       });
     }
 
-    // 契約合計（Contract.contractAmount）= 各商材 amount の合計を反映（UI 整合）。
-    // 明示的な contractAmount 指定が無いときのみ、商材金額から導出する。全商材 null の
-    // ときは合計を更新しない（既存の契約金額を温存）。GrossProfit/Incentive は触らない。
-    if (parsed.contractAmount == null) {
-      const lines = await tx.contractEquipment.findMany({
-        where: { contractId },
-        select: { amount: true },
-      });
-      const total = sumEquipmentAmounts(
-        lines.map((l) => (l.amount != null ? Number(l.amount.toString()) : null)),
-      );
-      if (total != null) {
-        await tx.contract.update({
-          where: { id: contractId },
-          data: { contractAmount: total },
-          select: { id: true },
-        });
-      }
-    }
+    // 契約金額（Contract.contractAmount）= その契約の全商材ライン amount の合計を常に
+    // 再計算する（手動上書き経路は廃止・要件B）。全商材 null のときは合計 0 とする。
+    // GrossProfit/Incentive は触らない（非生成方針不変）。
+    await recalcContractAmount(tx, contractId);
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
     return { customerId: parsed.customerId, contractId };
+  },
+);
+
+// 契約金額 = 当該契約の全商材ライン amount 合計を再計算して Contract へ反映する。
+// 設備の追加/編集/削除のたびに呼ぶ（要件B・手動上書きなし）。全商材 null なら 0。
+async function recalcContractAmount(tx: TxClient, contractId: string): Promise<void> {
+  const lines = await tx.contractEquipment.findMany({
+    where: { contractId },
+    select: { amount: true },
+  });
+  const total =
+    sumEquipmentAmounts(
+      lines.map((l) => (l.amount != null ? Number(l.amount.toString()) : null)),
+    ) ?? 0;
+  await tx.contract.update({
+    where: { id: contractId },
+    data: { contractAmount: total },
+    select: { id: true },
+  });
+}
+
+// 商材ライン 1 行の削除（付帯商材の複数行運用での個別行削除）。equipmentId が
+// contractId 配下であることを RLS スコープ内で検証してから削除し、契約金額を再計算する。
+export const deleteContractEquipmentAction = withServerActionContext<
+  ProjectContractEquipmentDeleteInput,
+  SaveProjectSectionResult & { contractId: string }
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = ProjectContractEquipmentDeleteSchema.parse(input);
+
+    const row = await tx.contractEquipment.findFirst({
+      where: {
+        id: parsed.equipmentId,
+        contractId: parsed.contractId,
+        contract: { customerId: parsed.customerId },
+      },
+      select: { id: true },
+    });
+    if (!row) throw new NotFoundError("商材ラインが見つかりません");
+
+    await tx.contractEquipment.delete({ where: { id: parsed.equipmentId } });
+    await recalcContractAmount(tx, parsed.contractId);
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId, contractId: parsed.contractId };
   },
 );
 

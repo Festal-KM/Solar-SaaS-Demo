@@ -45,13 +45,12 @@ describe("ProjectOverviewSchema", () => {
 });
 
 describe("ProjectContractEditSchema", () => {
-  it("Contract + Payment 値を受理する", () => {
+  it("Contract + Payment 値を受理する（架電/金額は schema 外）", () => {
     const r = ProjectContractEditSchema.safeParse({
       customerId: "c1",
       contractId: "ct1",
       contractDate: "2026-01-10",
-      contractAmount: 3000000,
-      callStatus: "DONE",
+      equipmentSerialId: "SN-1",
       paymentCount: 120,
       paymentStatus: "PARTIAL",
       creditLifeInsurance: true,
@@ -70,11 +69,11 @@ describe("ProjectContractEditSchema", () => {
     });
     expect(r.success).toBe(true);
   });
-  it("負の金額を reject する", () => {
+  it("負の頭金を reject する", () => {
     const r = ProjectContractEditSchema.safeParse({
       customerId: "c1",
       contractId: "ct1",
-      contractAmount: -1,
+      downPayment: -1,
     });
     expect(r.success).toBe(false);
   });
@@ -86,16 +85,21 @@ describe("ProjectContractEditSchema", () => {
     });
     expect(r.success).toBe(false);
   });
-  it("仕入値スナップショットキーは schema に出ない（strip）", () => {
+  it("架電関連（callStatus / loanReviewCallAt）と契約金額は schema に出ない（strip）", () => {
     const r = ProjectContractEditSchema.parse({
       customerId: "c1",
       contractId: "ct1",
-      // @ts-expect-error 未知キーは strip される
-      snapshotPurchasePrice: 9999,
-      dealerPrice: 1,
+      // @ts-expect-error 架電/金額/仕入値キーは strip される
+      callStatus: "DONE",
+      loanReviewCallAt: "2026-01-01T00:00",
+      contractAmount: 9999,
+      snapshotPurchasePrice: 1,
     });
-    expect(Object.keys(r)).not.toContain("snapshotPurchasePrice");
-    expect(Object.keys(r)).not.toContain("dealerPrice");
+    const keys = Object.keys(r);
+    expect(keys).not.toContain("callStatus");
+    expect(keys).not.toContain("loanReviewCallAt");
+    expect(keys).not.toContain("contractAmount");
+    expect(keys).not.toContain("snapshotPurchasePrice");
   });
 });
 

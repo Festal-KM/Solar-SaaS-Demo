@@ -72,10 +72,7 @@ export interface ProjectCallsEditable {
 export interface ProjectContractEditable {
   contractId: string;
   contractDate: string | null;
-  contractAmount: number | null;
   equipmentSerialId: string | null;
-  loanReviewCallAt: string | null;
-  callStatus: string;
   paymentCount: number | null;
   paymentStatus: string | null;
   depositDate: string | null;
@@ -224,10 +221,7 @@ export async function getCustomerProjectInfoEditable(
       select: {
         id: true,
         contractDate: true,
-        contractAmount: true,
         equipmentSerialId: true,
-        loanReviewCallAt: true,
-        callStatus: true,
         thankYouCallAt: true,
         postCompletionStatus: true,
         defectStatus: true,
@@ -300,10 +294,7 @@ export async function getCustomerProjectInfoEditable(
       contracts.push({
         contractId: c.id,
         contractDate: isoOrNull(c.contractDate),
-        contractAmount: decimalToNumber(c.contractAmount),
         equipmentSerialId: c.equipmentSerialId,
-        loanReviewCallAt: isoOrNull(c.loanReviewCallAt),
-        callStatus: c.callStatus,
         paymentCount: c.payment?.paymentCount ?? null,
         paymentStatus: c.payment?.paymentStatus ?? null,
         depositDate: isoOrNull(c.payment?.depositDate),

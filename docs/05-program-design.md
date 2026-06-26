@@ -3081,6 +3081,17 @@ export function getProjectInfo(
 - **マイグレーション分割**: Postgres の `ALTER TYPE ... ADD VALUE` は同一トランザクション内で新値を使用できないため、enum 追加（`EquipmentCategory.CONSTRUCTION` / `CustomerFileCategory.CONTRACT`）は各々独立したマイグレーションファイル、`ContractEquipment.amount` 列追加は別ファイルとする（enum 各単独 → 列追加の順）。
 - **セキュリティ不変条件**: 仕入値・原価（`snapshotPurchasePrice`/`fee` 等）の二次店物理除外・損益タブ非表示ゲート・契約明細スナップショット不変条件（CLAUDE.md #4・#5）は維持。`amount` は顧客向け金額のため二次店表示可。`GrossProfit`/`Incentive` は自動生成しない（§16.11 と同方針）。
 
+### 16.13 契約タブ再設計（架電除去 / 契約金額自動化 / 付帯複数化 / 1 顧客 N 契約サブタブ）
+
+§16.11–16.12 の契約状況タブを以下のとおり更新する。**旧「1 顧客 1 契約」想定を「1 顧客 N 契約」へ更新**し、契約タブ配下を契約ごとのサブタブで運用する。DB は既に複数契約（`Customer.contracts` 1:N）・複数設備（`Contract.equipment` 1:N）対応のため**マイグレーションは不要**。
+
+- **架電関連項目の UI 除去（要件A）**: 契約編集ダイアログ（`EditContractDialog`）から **架電ステータス（`Contract.callStatus`）・ローン審査架電日時（`Contract.loanReviewCallAt`）** の入力を除去する。`ProjectContractEditSchema` からも両キーを除去（未知キーとして strip）。「ローン情報」タブの `LoanBlock` 表示からも当該 MetaItem を除去。**`Contract.callStatus`/`loanReviewCallAt` 列・`CallStatus` enum は DB 残置**（UI からのみ除去・破壊回避）。**ローン審査ステータス（`ContractPayment.loanReviewStatus`）・ローン会社等のローン情報は架電ではないので残す**（`loanReviewCallAt`＝架電日時のみ除去）。
+- **契約金額 = 商材ライン合計の自動化（要件B）**: 契約金額の手動入力（`EditContractDialog` の `contractAmount` / `EditEquipmentDialog` の契約金額欄）を**廃止**。`Contract.contractAmount` は **その契約の全 `ContractEquipment.amount` 合計**（`sumEquipmentAmounts` 純関数）を正とし、`saveProjectContractEquipmentAction` / `deleteContractEquipmentAction` が**設備の追加・編集・削除のたびに常時再計算**する（全商材 null なら 0）。手動上書き経路（旧「明示 contractAmount 指定時のみ再計算」）は撤廃。`ProjectContractEquipmentUpsertSchema.contractAmount` を除去。各契約カード・上部「契約・金額」サマリ（全契約合計 = `financials.contractAmount`）は read-only 表示。`GrossProfit` 非生成方針・`amount` の二次店可視は不変。
+- **付帯商材（ACCESSORY）の複数行化（要件C）**: 設備 upsert を `contractId × category` 代表 1 行 find-or-create から **`equipmentId` ベース upsert** に拡張。`ProjectContractEquipmentUpsertSchema` に `equipmentId`（任意）を追加し、指定時は当該 `contractId × category` 配下で検証して更新、未指定時は新規行を作成する。これにより **ACCESSORY を同一契約に複数行追加**できる。PV/BT/EQ/IH/AC/GIFT/施工は呼び出し側（`EquipmentInlineEdit`）が既存行の `equipmentId` を渡して従来どおり代表 1 行運用を維持。付帯は `AccessoryInlineEdit`（行ごと編集 + 削除）＋ `AddAccessoryButton`（新規行作成）＋ `deleteContractEquipmentAction`（行削除 → 合計再計算）で運用。`editable.equipmentByContract` は ACCESSORY 全行を供給する。
+- **契約 #2 以降の追加 + サブタブ化（要件D）**: `createContractAction`（`ProjectContractCreateSchema` = `customerId` のみ）で最小 Deal + Contract を生成（`buildDemoContractSeed` 同等・**`GrossProfit`/`Incentive` は作らない**・`wholesalerId`/`ownerRelationshipId` は Customer 由来・`createdBy = ctx.actorUserId`・`contractDate = 今日`・`cancelDeadline = +設定日数`）。契約タブ配下を `Tabs`（`variant="underline"`・ネスト可）で**契約ごとのサブタブ**（「契約 #1」「契約 #2」…）＋「契約を追加」に再構成。各サブタブはその契約の詳細（契約日／契約金額=合計／支払／ローン情報は別タブ／シリアル／契約書類）＋商材ライン（PV/BT/付帯[複数]/施工）を表示・編集。**認定・設備（applications）と契約ファイル（`CustomerFiles CONTRACT`）は契約タブ直下（サブタブ外・共有）**に残す。契約 0 件時は従来どおり「設備追加で最小契約 find-or-create」導線＋「契約を追加」ボタン。
+- **契約削除（任意）**: `deleteContractAction`（`ProjectContractDeleteSchema`）。`GrossProfit`/`Incentive`/`ContractItem`/`Construction`/`Application` の依存がある契約は**削除不可ガード**（損益・インセンティブ・スナップショット・施工/申請を壊さない）。商材ライン（`ContractEquipment`）・支払（`ContractPayment`）は明示削除し、契約 + デモ生成 `Deal` を削除する。
+- **テナント分離・セキュリティ不変条件**: `createContractAction`/`deleteContractAction`/`deleteContractEquipmentAction` も `auth → assertCan('customer.update') → withTenant` の三段イディオム + RLS 二重防御。`customerId`/`contractId`/`equipmentId` を同テナント内で検証（越境作成/削除不可）。仕入値・原価の二次店物理除外・損益タブ非表示ゲート・契約明細スナップショット不変条件（CLAUDE.md #4・#5）は不変。基本情報タブの「契約予定情報」read-only pull 表示（`contractReadOnly`）も複数契約・合計金額・複数付帯に追従する。
+
 ---
 
 ## 17. アポ取り顧客 住環境・家族属性ヒアリングデータモデル（F-063 拡張設計）
