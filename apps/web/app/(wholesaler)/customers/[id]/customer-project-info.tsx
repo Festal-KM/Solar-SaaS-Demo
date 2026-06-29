@@ -127,7 +127,10 @@ function Section({
   return (
     <section>
       <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">{title}</h3>
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <span aria-hidden className="h-3.5 w-0.5 rounded-full bg-primary" />
+          {title}
+        </h3>
         {editSlot}
       </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-hairline-light p-4 sm:grid-cols-3">

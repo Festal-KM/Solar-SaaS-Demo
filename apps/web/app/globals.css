@@ -19,20 +19,20 @@
     --primary: #0070d1;
     --primary-foreground: #ffffff;
 
-    --secondary: #f3f3f3;
+    --secondary: #f1f5f9;
     --secondary-foreground: #000000;
 
-    --muted: #f5f7fa;
-    --muted-foreground: #6b6b6b;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
 
-    --accent: #f5f7fa;
+    --accent: #f1f5f9;
     --accent-foreground: #000000;
 
     --destructive: #c81b3a;
     --destructive-foreground: #ffffff;
 
-    --border: #f3f3f3;
-    --input: #f3f3f3;
+    --border: #e2e8f0;
+    --input: #cbd5e1;
     --ring: #0070d1;
 
     --radius: 8px;
@@ -46,13 +46,15 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    /* ページティント: slate-50。白カード/入力が背景から浮くようにする。 */
+    background-color: #f8fafc;
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     font-feature-settings:
       "rlig" 1,
       "calt" 1;
     -webkit-font-smoothing: antialiased;
-    color: rgba(0, 0, 0, 0.6);
+    color: #334155;
   }
   h1, h2, h3, h4, h5, h6 {
     color: #000000;
