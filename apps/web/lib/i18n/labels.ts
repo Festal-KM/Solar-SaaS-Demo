@@ -2253,7 +2253,6 @@ export const labels = {
           unset: "未設定",
           editOverview: "概況を編集",
           editHearing: "ヒアリングを編集",
-          editContract: "契約・金額・ローンを編集",
           editEquipment: "設備明細を編集",
           addEquipment: "設備を追加",
           editConstruction: "工事・完工を編集",
@@ -2324,9 +2323,59 @@ export const labels = {
         // 各契約カードの契約金額（商材ライン合計・read-only）。
         contractAmountAuto: "契約金額（商材ライン合計）",
       },
+      // ローン審査タブ（独立 LoanReview エンティティ・契約タブと同型のサブタブ）。
       loanTab: {
-        empty: "ローン情報を表示できる契約がありません。",
-        contractHeading: "契約",
+        empty: "ローン審査はまだありません。「審査を追加」から作成してください。",
+        // サブタブ見出し（ローン審査 #1 / #2 …）。
+        subtabHeading: "ローン審査",
+        addReview: "審査を追加",
+        addingReview: "審査を追加中…",
+        deleteReview: "この審査を削除",
+        deleteReviewText: "審査を削除",
+        deletingReview: "削除中…",
+        deleteReviewConfirm: "この審査を削除しますか？審査履歴も削除されます。",
+        // 審査サマリ（インライン編集セクション）。
+        summaryTitle: "審査内容",
+        status: "審査ステータス",
+        loanCompany: "ローン会社",
+        downPayment: "頭金",
+        creditLife: "団信",
+        note: "メモ",
+        defectTitle: "不備内容・解消状況",
+        defectContent: "不備内容",
+        defectStatus: "解消ステータス",
+        reviewedAt: "審査日",
+        // 過去の審査履歴ログ（LoanReviewLog・画面から追加）。
+        historyTitle: "過去の審査履歴",
+        historyEmpty: "履歴はありません",
+        logReviewedAt: "日時",
+        logResult: "結果",
+        logHandler: "記録者",
+        logNote: "メモ",
+        logAdd: "追加",
+        logAdding: "追加中…",
+        logDelete: "削除",
+        logDeleteConfirm: "この審査履歴を削除しますか？",
+        // ローン審査ステータス CODE → ラベル（LOAN_REVIEW_STATUS_VALUES）。
+        statusLabels: {
+          not_reviewed: "審査前",
+          reviewing: "審査中",
+          completed: "完了",
+          defect: "不備在り",
+        } as Record<string, string>,
+        // 不備解消ステータス CODE → ラベル（LOAN_REVIEW_DEFECT_STATUS_VALUES）。
+        defectStatusLabels: {
+          none: "なし",
+          defect: "不備あり（未解消）",
+          resolved: "解消済み",
+        } as Record<string, string>,
+        // 審査履歴結果 CODE → ラベル（LOAN_REVIEW_RESULT_VALUES）。
+        resultLabels: {
+          approved: "可決",
+          rejected: "否決",
+          defect: "不備",
+          other: "その他",
+        } as Record<string, string>,
       },
       // 損益計算タブ（契約単位の売上・原価・粗利）。機密財務のため卸業者限定。
       profitTab: {

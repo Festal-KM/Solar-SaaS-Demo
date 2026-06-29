@@ -231,6 +231,32 @@ export interface ProjectCallsDto {
   generalCallPreferredTime: string | null;
 }
 
+// ローン審査履歴ログ 1 件（LoanReviewLog・各審査内に画面から追加）。日時/結果/メモ。
+// 原価でも PII でもないため二次店レスポンスにもそのまま含める（物理除外しない）。
+export interface ProjectLoanReviewLogDto {
+  id: string;
+  reviewedAt: string;
+  result: string; // approved/rejected/defect/other（CODE）
+  note: string | null;
+  handlerName: string | null; // 記録者（自社 User 名・マスク対象外）
+}
+
+// ローン審査 1 件（LoanReview・契約タブと同型のサブタブ）。ローン会社/頭金/団信/不備内容/
+// 解消ステータス + 過去の審査履歴ログ。ローン会社・頭金・不備は原価ではない（顧客向け・
+// 通常表示で可）ため二次店レスポンスにもそのまま含める（物理除外しない）。
+export interface ProjectLoanReviewDto {
+  loanReviewId: string;
+  status: string; // not_reviewed/reviewing/completed/defect（CODE）
+  loanCompany: string | null;
+  downPayment: number | null;
+  creditLifeInsurance: boolean | null;
+  note: string | null;
+  defectContent: string | null;
+  defectStatus: string | null; // none/defect/resolved（CODE）
+  reviewedAt: string | null;
+  logs: ProjectLoanReviewLogDto[];
+}
+
 export interface ProjectInfoDto {
   basic: {
     customerId: string;
@@ -251,6 +277,8 @@ export interface ProjectInfoDto {
     belongDept: string | null;
   };
   contracts: ProjectContractDto[];
+  // 独立エンティティ「ローン審査」（顧客 1:N・契約タブと同型のサブタブ）。
+  loanReviews: ProjectLoanReviewDto[];
   constructions: ProjectConstructionDto[];
   applications: ProjectApplicationDto[];
   activities: ProjectActivityDto[];

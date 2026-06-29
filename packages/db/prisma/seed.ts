@@ -1493,6 +1493,48 @@ async function seedCustomerHearing(
       }
     }
 
+    // ローン審査（LoanReview・独立エンティティ・契約タブと同型のサブタブ）。冪等: 既存を
+    // 削除して 0〜2 件投入。各審査に 0〜1 件の審査履歴ログ（LoanReviewLog）を付ける。
+    // createdByUserId は自社社員必須のため staff が居るときのみ投入する。
+    await tx.loanReview.deleteMany({ where: { customerId: c.id } });
+    if (staff.length > 0) {
+      const reviewCount = s % 3; // 0/1/2 件
+      const STATUSES = ["not_reviewed", "reviewing", "completed", "defect"];
+      const DEFECT_STATUSES = ["none", "defect", "resolved"];
+      const RESULTS = ["approved", "rejected", "defect", "other"];
+      for (let i = 0; i < reviewCount; i++) {
+        const status = STATUSES[(s + i) % STATUSES.length]!;
+        const isDefect = status === "defect";
+        const review = await tx.loanReview.create({
+          data: {
+            customerId: c.id,
+            status,
+            loanCompany: ["ジャックス", "オリコ", "アプラス"][(s + i) % 3]!,
+            downPayment: 100000 * ((s + i) % 5),
+            creditLifeInsurance: (s + i) % 2 === 0,
+            note: i === 0 ? "本人確認書類を提出済み" : null,
+            defectContent: isDefect ? "源泉徴収票の年度相違" : null,
+            defectStatus: isDefect ? DEFECT_STATUSES[(s + i) % DEFECT_STATUSES.length]! : "none",
+            reviewedAt: day(-(i + 1) * 3 - (s % 4)),
+            createdByUserId: staff[0]!.id,
+          },
+        });
+        const logCount = (s + i) % 2; // 0/1 件
+        for (let j = 0; j < logCount; j++) {
+          await tx.loanReviewLog.create({
+            data: {
+              loanReviewId: review.id,
+              customerId: c.id,
+              reviewedAt: day(-(i + 1) * 3 - j),
+              result: RESULTS[(s + i + j) % RESULTS.length]!,
+              note: j === 0 ? "一次審査の所見" : null,
+              createdByUserId: staff[0]!.id,
+            },
+          });
+        }
+      }
+    }
+
     // ガス給湯器（有無のみ）。
     await tx.customerExistingEquipment.upsert({
       where: { customerId_category: { customerId: c.id, category: "GAS_WATER_HEATER" } },

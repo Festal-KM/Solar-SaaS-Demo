@@ -85,6 +85,22 @@ function baseDto(): ProjectInfoDto {
         equipment,
       },
     ],
+    loanReviews: [
+      {
+        loanReviewId: "lr1",
+        status: "reviewing",
+        loanCompany: "ジャックス",
+        downPayment: 100000,
+        creditLifeInsurance: true,
+        note: null,
+        defectContent: null,
+        defectStatus: "none",
+        reviewedAt: null,
+        logs: [
+          { id: "lrl1", reviewedAt: "2026-06-01T00:00:00.000Z", result: "approved", note: null, handlerName: "佐藤" },
+        ],
+      },
+    ],
     constructions: [
       {
         constructionId: "con1",
@@ -224,6 +240,14 @@ describe("toProjectInfoDealerDto — 仕入値・原価の物理除外（#5）",
     const dealer = toProjectInfoDealerDto(baseDto());
     expect(Object.keys(dealer)).not.toContain("profitAndLoss");
     expect("profitAndLoss" in dealer).toBe(false);
+  });
+
+  it("ローン審査（loanReviews）は二次店 DTO にもそのまま残る（原価でも PII でもない）", () => {
+    const dealer = toProjectInfoDealerDto(baseDto());
+    expect(Object.keys(dealer)).toContain("loanReviews");
+    expect(dealer.loanReviews).toHaveLength(1);
+    expect(dealer.loanReviews[0]!.loanCompany).toBe("ジャックス");
+    expect(dealer.loanReviews[0]!.logs[0]!.result).toBe("approved");
   });
 
   it("JSON シリアライズ後にも原価キー名が出現しない", () => {

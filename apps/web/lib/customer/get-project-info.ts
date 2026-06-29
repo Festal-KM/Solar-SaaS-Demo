@@ -157,6 +157,32 @@ async function loadProjectInfo(
         orderBy: { calledAt: "desc" },
         select: { id: true, calledAt: true, handlerUserId: true, note: true },
       },
+      // ローン審査（LoanReview・顧客 1:N・サブタブ）。createdAt 昇順（#1/#2…の順）。
+      // 各審査の履歴ログ（LoanReviewLog）は reviewedAt 降順。
+      loanReviews: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          status: true,
+          loanCompany: true,
+          downPayment: true,
+          creditLifeInsurance: true,
+          note: true,
+          defectContent: true,
+          defectStatus: true,
+          reviewedAt: true,
+          logs: {
+            orderBy: { reviewedAt: "desc" },
+            select: {
+              id: true,
+              reviewedAt: true,
+              result: true,
+              note: true,
+              createdByUserId: true,
+            },
+          },
+        },
+      },
       existingEquipments: {
         orderBy: { category: "asc" },
         select: {
@@ -307,6 +333,7 @@ async function loadProjectInfo(
         customer.closingUserId,
         customer.nextAppointmentAssigneeUserId,
         ...customer.callLogs.map((l) => l.handlerUserId),
+        ...customer.loanReviews.flatMap((r) => r.logs.map((l) => l.createdByUserId)),
       ].filter((v): v is string => !!v),
     ),
   ];
@@ -493,6 +520,24 @@ async function loadProjectInfo(
       belongDept: customer.belongDept,
     },
     contracts,
+    loanReviews: customer.loanReviews.map((r) => ({
+      loanReviewId: r.id,
+      status: r.status,
+      loanCompany: r.loanCompany,
+      downPayment: r.downPayment,
+      creditLifeInsurance: r.creditLifeInsurance,
+      note: r.note,
+      defectContent: r.defectContent,
+      defectStatus: r.defectStatus,
+      reviewedAt: isoOrNull(r.reviewedAt),
+      logs: r.logs.map((l) => ({
+        id: l.id,
+        reviewedAt: l.reviewedAt.toISOString(),
+        result: l.result,
+        note: l.note,
+        handlerName: nameByUserId.get(l.createdByUserId) ?? null,
+      })),
+    })),
     constructions,
     applications,
     activities: activityRows.map((a) => ({

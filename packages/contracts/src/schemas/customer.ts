@@ -93,6 +93,22 @@ export const LoanReviewStatusEnum = z.enum(LOAN_REVIEW_STATUS_VALUES);
 
 export type LoanReviewStatusValue = z.infer<typeof LoanReviewStatusEnum>;
 
+// ローン審査の不備解消ステータス値域（独立 LoanReview エンティティ）。
+// なし / 不備あり(未解消) / 解消済み。Construction.defectStatus（NONE/OPEN/RESOLVED）
+// とは別概念・別 namespace（小文字 code）。選択 UI・バリデーション・DTO が単一参照する真実。
+export const LOAN_REVIEW_DEFECT_STATUS_VALUES = ["none", "defect", "resolved"] as const;
+
+export const LoanReviewDefectStatusEnum = z.enum(LOAN_REVIEW_DEFECT_STATUS_VALUES);
+
+export type LoanReviewDefectStatusValue = z.infer<typeof LoanReviewDefectStatusEnum>;
+
+// ローン審査履歴ログの結果値域（LoanReviewLog.result）。可決 / 否決 / 不備 / その他。
+export const LOAN_REVIEW_RESULT_VALUES = ["approved", "rejected", "defect", "other"] as const;
+
+export const LoanReviewResultEnum = z.enum(LOAN_REVIEW_RESULT_VALUES);
+
+export type LoanReviewResultValue = z.infer<typeof LoanReviewResultEnum>;
+
 export const CustomerCreateSchema = z
   .object({
     name: z.string().trim().min(1, "氏名を入力してください").max(255),
@@ -338,6 +354,62 @@ export const CustomerCallLogDeleteSchema = z.object({
 });
 
 export type CustomerCallLogDeleteInput = z.infer<typeof CustomerCallLogDeleteSchema>;
+
+// ---------------------------------------------------------------------------
+// ローン審査（LoanReview）— 顧客 1:N・契約タブと同型のサブタブ運用.
+//
+// 新規作成は customerId のみ受け取り、Server Action が最小レコード（status 既定
+// not_reviewed）を生成する。インライン編集は部分更新（送ったフィールドのみ更新、
+// undefined は無変更・null はクリア）。createdByUserId は ctx 由来（input に含めない）。
+// status/defectStatus は値域 enum で制約。Contract のローン列とは別概念・別テーブル。
+// ---------------------------------------------------------------------------
+
+export const LoanReviewCreateSchema = z.object({
+  customerId: z.string().min(1),
+});
+
+export type LoanReviewCreateInput = z.infer<typeof LoanReviewCreateSchema>;
+
+export const LoanReviewSaveSchema = z.object({
+  customerId: z.string().min(1),
+  loanReviewId: z.string().min(1),
+  status: LoanReviewStatusEnum.optional(),
+  loanCompany: z.string().max(255).nullable().optional(),
+  downPayment: z.number().int().nonnegative().nullable().optional(),
+  creditLifeInsurance: z.boolean().nullable().optional(),
+  note: z.string().max(2000).nullable().optional(),
+  defectContent: z.string().max(2000).nullable().optional(),
+  defectStatus: LoanReviewDefectStatusEnum.nullable().optional(),
+  reviewedAt: z.string().nullable().optional(),
+});
+
+export type LoanReviewSaveInput = z.infer<typeof LoanReviewSaveSchema>;
+
+export const LoanReviewDeleteSchema = z.object({
+  customerId: z.string().min(1),
+  loanReviewId: z.string().min(1),
+});
+
+export type LoanReviewDeleteInput = z.infer<typeof LoanReviewDeleteSchema>;
+
+// ローン審査履歴ログ（LoanReviewLog）— 各審査内に追加する日時+結果+メモ。
+export const LoanReviewLogCreateSchema = z.object({
+  customerId: z.string().min(1),
+  loanReviewId: z.string().min(1),
+  reviewedAt: z.string().min(1, "日時を入力してください"),
+  result: LoanReviewResultEnum,
+  note: z.string().max(2000).nullable().optional(),
+});
+
+export type LoanReviewLogCreateInput = z.infer<typeof LoanReviewLogCreateSchema>;
+
+export const LoanReviewLogDeleteSchema = z.object({
+  customerId: z.string().min(1),
+  loanReviewId: z.string().min(1),
+  logId: z.string().min(1),
+});
+
+export type LoanReviewLogDeleteInput = z.infer<typeof LoanReviewLogDeleteSchema>;
 
 // ---------------------------------------------------------------------------
 // F-063 住環境・家族属性ヒアリング（docs/05 §17.4 / §17.9）.

@@ -121,6 +121,20 @@ export interface ProjectConstructionEditable {
   thankYouCallAt: string | null;
 }
 
+// ローン審査（LoanReview）のインライン編集の生値（各審査）。履歴ログは表示 DTO 側に
+// 持つ（追加/削除フォームは loanReviewId と customerId のみ要するため editable には不要）。
+export interface ProjectLoanReviewEditable {
+  loanReviewId: string;
+  status: string;
+  loanCompany: string | null;
+  downPayment: number | null;
+  creditLifeInsurance: boolean | null;
+  note: string | null;
+  defectContent: string | null;
+  defectStatus: string | null;
+  reviewedAt: string | null;
+}
+
 export interface ProjectApplicationEditable {
   applicationId: string;
   contractId: string;
@@ -139,6 +153,8 @@ export interface ProjectInfoEditable {
   hearing: ProjectHearingEditable;
   calls: ProjectCallsEditable;
   contracts: ProjectContractEditable[];
+  // ローン審査（LoanReview）のインライン編集生値（createdAt 昇順＝#1/#2…）。
+  loanReviews: ProjectLoanReviewEditable[];
   // contractId → 設備明細（カテゴリ別の各行）。
   equipmentByContract: Record<string, ProjectEquipmentEditable[]>;
   constructions: ProjectConstructionEditable[];
@@ -288,6 +304,22 @@ export async function getCustomerProjectInfoEditable(
       },
     });
 
+    const loanReviewRows = await tx.loanReview.findMany({
+      where: { customerId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        status: true,
+        loanCompany: true,
+        downPayment: true,
+        creditLifeInsurance: true,
+        note: true,
+        defectContent: true,
+        defectStatus: true,
+        reviewedAt: true,
+      },
+    });
+
     const contracts: ProjectContractEditable[] = [];
     const equipmentByContract: Record<string, ProjectEquipmentEditable[]> = {};
     const constructions: ProjectConstructionEditable[] = [];
@@ -397,6 +429,17 @@ export async function getCustomerProjectInfoEditable(
         generalCallPreferredTime: customer.generalCallPreferredTime,
       },
       contracts,
+      loanReviews: loanReviewRows.map((r) => ({
+        loanReviewId: r.id,
+        status: r.status,
+        loanCompany: r.loanCompany,
+        downPayment: r.downPayment,
+        creditLifeInsurance: r.creditLifeInsurance,
+        note: r.note,
+        defectContent: r.defectContent,
+        defectStatus: r.defectStatus,
+        reviewedAt: isoOrNull(r.reviewedAt),
+      })),
       equipmentByContract,
       constructions,
       applications,

@@ -1,4 +1,19 @@
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
 import { expect, test, type Page } from "@playwright/test";
+
+// 本 spec は「佐藤 一馬」に「審査を追加」で独立 LoanReview を生成しうるため、afterAll で
+// その顧客のローン審査を全削除し、空状態前提の他 spec（同顧客の空状態検証）への汚染を防ぐ。
+function cleanupDemoLoanReviews(): void {
+  const script = resolve(__dirname, "fixtures", "cleanup-demo-loan-reviews.ts");
+  const dbDir = resolve(__dirname, "..", "..", "packages", "db");
+  execFileSync("pnpm", ["exec", "tsx", script], {
+    cwd: dbDir,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+}
 
 // 顧客詳細「コール状況」タブ + 「ローン情報」タブ（専用タブ集約 / docs/02 §16）.
 //
@@ -6,9 +21,11 @@ import { expect, test, type Page } from "@playwright/test";
 //   1. コール状況タブ: 完工/ローン完了コール状況・希望日時・汎用希望時間帯・
 //      マエカク希望電話・マエカクステータスを表示。EditCallStatusDialog で
 //      完工コールステータスを変更保存 → 再描画後に反映される。
-//   2. ローン情報タブ: 顧客に紐づく全契約のローン・団信（loanReviewStatus 含む）を
-//      契約ごとに一覧表示。EditContractDialog で「審査中」に変更保存 → 反映される。
-//      契約が無い顧客は空状態メッセージ（loanTab.empty）を表示する。
+//   2. ローン審査タブ: 顧客に紐づく独立 LoanReview を審査ごとのサブタブ
+//      （ローン審査 #1/#2…）で表示・インライン編集。LoanReviewInlineEdit の
+//      審査ステータス select（#lr-status-<id>）を「審査中」に変更保存 → 反映される。
+//      「審査を追加」で審査サブタブが増え、過去の審査履歴ログを追加できる。
+//      審査 0 件の顧客は空状態メッセージ（loanTab.empty）を表示する。
 //   3. 重複排除: 基本情報タブ内「案件情報」埋め込みビューに コール状況 /
 //      ローン・団信 が重複表示されないこと（専用タブへ集約済み）。他セクションは従来通り。
 //
@@ -37,9 +54,19 @@ async function signInAsDemo(page: Page): Promise<void> {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 120_000 });
 }
 
-// 契約済み顧客（ローン情報タブに契約が出る顧客）を開く。
+// 契約済み顧客（基本情報タブの重複排除検証で契約情報が出る顧客）を開く。
 async function openContractedCustomer(page: Page): Promise<void> {
   await page.goto("/customers?contractStatus=contracted");
+  const firstRow = page.getByRole("button", { name: /様$/ }).first();
+  await expect(firstRow).toBeVisible();
+  await firstRow.click();
+  await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
+}
+
+// 任意の顧客を開く（ローン審査は独立エンティティで契約と無関係なため、
+// 先頭顧客を開いて審査が無ければ「審査を追加」で 1 件作る）。
+async function openFirstCustomer(page: Page): Promise<void> {
+  await page.goto("/customers");
   const firstRow = page.getByRole("button", { name: /様$/ }).first();
   await expect(firstRow).toBeVisible();
   await firstRow.click();
@@ -55,101 +82,120 @@ async function openSeededCustomer(page: Page): Promise<void> {
   await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
 }
 
-// 1 つの「ラベル → 値」(MetaItem) について、ラベルに隣接する dd 値テキストを取得。
-async function metaValue(
-  scope: ReturnType<Page["getByRole"]>,
-  label: string,
-): Promise<string> {
-  const dt = scope.locator("dt", { hasText: label }).first();
-  await expect(dt, `MetaItem ラベル「${label}」が存在する`).toBeVisible();
-  const dd = dt.locator("xpath=following-sibling::dd[1]");
-  return ((await dd.textContent()) ?? "").trim();
-}
-
 // コールタブ（4 セクション・インライン編集）の表面検証は専用 spec
 // tests/e2e/customer-call-tab.spec.ts（5/5 PASS）が網羅する。旧 EditCallStatusDialog
 // （`コール状況を編集` / `#cl-post-status` / 単一「コール状況」見出し）依存の describe は
 // 再設計で削除済みのため、本ファイルからは撤去した。
 
-test.describe("ローン情報タブ（専用タブ・契約 1:N）", () => {
+test.describe("ローン審査タブ（独立 LoanReview・審査サブタブ）", () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test("契約のローン・団信が表示され、loanReviewStatus を『審査中』に変更保存 → 反映される", async ({
-    page,
-  }) => {
-    await signInAsDemo(page);
-    await openContractedCustomer(page);
-
-    // ローン情報タブへ切り替え。
-    await page.getByRole("tab", { name: "ローン審査" }).click();
-    const panel = page.getByRole("tabpanel");
-    await expect(panel).toBeVisible();
-
-    // 契約ブロック見出し（「契約 #1」）+ ローン・団信フィールドが描画される。
-    await expect(panel.getByText(/契約\s*#1/).first()).toBeVisible();
-    await expect(
-      panel.locator("dt", { hasText: "ローン審査ステータス" }).first(),
-    ).toBeVisible();
-    // ローン・団信ブロックの表示項目。架電日時(loanReviewCallAt)は契約タブ改修#1 で
-    // 契約編集ダイアログから削除されたため、ローン・団信ブロックにも「ローン審査コール
-    // 日時」は描画されない（ローン審査ステータス/会社/頭金/団信が残存）。
-    for (const label of ["ローン会社", "頭金", "団体信用生命保険"]) {
-      await expect(
-        panel.locator("dt", { hasText: label }).first(),
-        `ローン・団信フィールド「${label}」が表示される`,
-      ).toBeVisible();
-    }
-    // 旧「ローン審査コール日時」項目は廃止されている。
-    await expect(
-      panel.locator("dt", { hasText: "ローン審査コール日時" }),
-      "架電日時(loanReviewCallAt)はローン・団信ブロックに描画されない（改修#1で削除）",
-    ).toHaveCount(0);
-
-    // 表示値は 4 値ラベルのいずれか（seed は seq % 4 で確実に設定）。
-    const before = await metaValue(panel, "ローン審査ステータス");
-    expect(
-      before,
-      `ローン審査ステータス「${before}」が 4 値ラベルのいずれか`,
-    ).toMatch(/(審査前|審査中|完了|不備在り)/);
-
-    // 契約編集ダイアログを開く（ローン情報タブ内のトリガーに scope）。
-    await panel.getByRole("button", { name: "契約・金額・ローンを編集" }).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    // ローン審査ステータス select に 4 値が存在する。
-    const select = dialog.locator("#ct-loanreview");
-    await expect(select).toBeVisible();
-    const optionTexts = (await select.locator("option").allTextContents()).map((t) => t.trim());
-    for (const label of LOAN_REVIEW_LABELS) {
-      expect(optionTexts, `プルダウンに「${label}」が含まれる`).toContain(label);
-    }
-
-    // 「審査中」(= reviewing) を選択して保存。
-    await select.selectOption("reviewing");
-    await dialog.getByRole("button", { name: "保存" }).click();
-    await expect(dialog).toBeHidden({ timeout: 30_000 });
-
-    // 再描画後、ローン情報タブのローン審査ステータスに「審査中」が反映される。
-    await expect(async () => {
-      const after = await metaValue(panel, "ローン審査ステータス");
-      expect(after).toBe("審査中");
-    }).toPass({ timeout: 30_000 });
+  // 本 describe の #1/#2 は「佐藤 一馬」に審査を生成しうる。空状態検証（#3）の前提を守るため
+  // 全テスト終了後に佐藤 一馬のローン審査を全削除して原状回復する。
+  test.afterAll(() => {
+    cleanupDemoLoanReviews();
   });
 
-  test("契約が無い顧客では空状態メッセージが表示される", async ({ page }) => {
+  test("審査サブタブのインライン編集で審査ステータスを『審査中』に変更保存 → 反映される", async ({
+    page,
+  }) => {
+    // 既存審査の status が既に "reviewing" だとインライン編集が dirty にならず保存ボタンが
+    // disabled のままになる（誤検出を招く）。新規追加した審査は既定 "not_reviewed" なので
+    // 「審査中」への変更が必ず dirty になる。空顧客「佐藤 一馬」に新規審査を作って検証する。
+    cleanupDemoLoanReviews();
+
     await signInAsDemo(page);
     await openSeededCustomer(page);
 
-    await page.getByRole("tab", { name: "ローン審査" }).click();
-    const panel = page.getByRole("tabpanel");
+    // ローン審査タブへ切り替え。
+    await page.getByRole("tab", { name: "ローン審査", exact: true }).click();
+    // 審査サブタブが active のとき tabpanel が入れ子になり getByRole('tabpanel') が複数
+    // 解決するため、外側のローン審査タブパネル（accessible name = "ローン審査" exact）へ scope。
+    const panel = page.getByRole("tabpanel", { name: "ローン審査", exact: true });
     await expect(panel).toBeVisible();
 
-    // 「佐藤 一馬」は契約なし → 空状態メッセージ。契約ブロックは出ない。
+    // 「審査を追加」で新規審査（既定 not_reviewed）を 1 件作る。
+    await panel.getByRole("button", { name: "審査を追加" }).first().click();
+    const subtabHeading = panel.getByRole("tab", { name: /ローン審査\s*#1/ });
+    await expect(subtabHeading).toBeVisible({ timeout: 30_000 });
+
+    // 審査サマリのインライン編集 select（#lr-status-<id>）。状態 select は審査ステータスの
+    // 4 値（statusLabels）を持つ。新規審査サブタブがアクティブ。
+    const statusSelect = panel.locator('select[id^="lr-status-"]').first();
+    await expect(statusSelect).toBeVisible();
+    const optionTexts = (await statusSelect.locator("option").allTextContents()).map((t) => t.trim());
+    for (const label of LOAN_REVIEW_LABELS) {
+      expect(optionTexts, `審査ステータス select に「${label}」が含まれる`).toContain(label);
+    }
+
+    // ローン会社・頭金・団信のインライン編集フィールドも存在する。
+    for (const label of ["ローン会社", "頭金", "団信"]) {
+      await expect(
+        panel.locator("label", { hasText: label }).first(),
+        `インライン編集フィールド「${label}」が表示される`,
+      ).toBeVisible();
+    }
+
+    // 「審査中」(= reviewing) を選択して保存（新規審査は not_reviewed なので必ず dirty）。
+    await statusSelect.selectOption("reviewing");
+    await expect(panel.getByRole("button", { name: "保存" }).first()).toBeEnabled();
+    await panel.getByRole("button", { name: "保存" }).first().click();
+
+    // 再描画後も審査ステータス select の値が「審査中」(reviewing) を保持する。
+    await expect(async () => {
+      const select = panel.locator('select[id^="lr-status-"]').first();
+      await expect(select).toHaveValue("reviewing");
+    }).toPass({ timeout: 30_000 });
+  });
+
+  test("審査履歴ログを追加できる（過去の審査履歴）", async ({ page }) => {
+    await signInAsDemo(page);
+    await openFirstCustomer(page);
+
+    await page.getByRole("tab", { name: "ローン審査", exact: true }).click();
+    // 審査サブタブが active のとき tabpanel が入れ子になり getByRole('tabpanel') が複数
+    // 解決するため、外側のローン審査タブパネル（accessible name = "ローン審査" exact）へ scope。
+    const panel = page.getByRole("tabpanel", { name: "ローン審査", exact: true });
+    await expect(panel).toBeVisible();
+
+    const subtabHeading = panel.getByRole("tab", { name: /ローン審査\s*#1/ });
+    if ((await subtabHeading.count()) === 0) {
+      await panel.getByRole("button", { name: "審査を追加" }).first().click();
+      await expect(subtabHeading).toBeVisible({ timeout: 30_000 });
+    }
+
+    // 過去の審査履歴の追加フォーム（日時 + 結果 select + メモ）。日時を入れて「追加」。
+    const atInput = panel.locator('input[id^="lrl-at-"]').first();
+    await expect(atInput).toBeVisible();
+    await atInput.fill("2026-06-20T10:00");
+    await panel.getByRole("button", { name: "追加", exact: true }).first().click();
+
+    // 追加後、履歴一覧に結果ラベル（可決等）が現れる。
+    await expect(async () => {
+      const results = panel.locator("li", { hasText: /(可決|否決|不備|その他)/ });
+      expect(await results.count()).toBeGreaterThan(0);
+    }).toPass({ timeout: 30_000 });
+  });
+
+  test("審査が無い顧客では空状態メッセージが表示される", async ({ page }) => {
+    // 同 describe の先行テスト（#1/#2）が「佐藤 一馬」に審査を残しうるため、空状態前提を
+    // 担保すべく当該顧客のローン審査を削除してから検証する。
+    cleanupDemoLoanReviews();
+
+    await signInAsDemo(page);
+    await openSeededCustomer(page);
+
+    await page.getByRole("tab", { name: "ローン審査", exact: true }).click();
+    // 審査サブタブが active のとき tabpanel が入れ子になり getByRole('tabpanel') が複数
+    // 解決するため、外側のローン審査タブパネル（accessible name = "ローン審査" exact）へ scope。
+    const panel = page.getByRole("tabpanel", { name: "ローン審査", exact: true });
+    await expect(panel).toBeVisible();
+
+    // 「佐藤 一馬」(seed s=0) は審査 0 件 → 空状態メッセージ。審査サブタブは出ない。
     await expect(
-      panel.getByText("ローン情報を表示できる契約がありません。"),
+      panel.getByText("ローン審査はまだありません。「審査を追加」から作成してください。"),
     ).toBeVisible();
-    await expect(panel.getByText(/契約\s*#1/)).toHaveCount(0);
+    await expect(panel.getByRole("tab", { name: /ローン審査\s*#1/ })).toHaveCount(0);
   });
 });
 

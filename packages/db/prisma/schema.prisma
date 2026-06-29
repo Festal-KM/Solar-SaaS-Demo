@@ -1112,6 +1112,7 @@ model Customer {
   tasks        CustomerTask[]
   files        CustomerFile[]
   callLogs     CustomerCallLog[]
+  loanReviews  LoanReview[]
   messages     CustomerMessage[]
   existingEquipments CustomerExistingEquipment[]
   proposedProductRef Product? @relation("CustomerProposedProduct", fields: [proposedProductId], references: [id], onDelete: SetNull)
@@ -1275,6 +1276,52 @@ model CustomerCallLog {
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, calledAt])
+}
+
+// ローン審査（顧客 1:N・契約タブと同型のサブタブ運用）。独立エンティティとして
+// 1 顧客に複数の審査（ローン審査#1/#2…）を持てる。status/defectStatus/result は
+// String 列で保持し、値域は packages/contracts の Zod enum（LOAN_REVIEW_*）で管理する
+// （新規 enum を作らない）。downPayment は円整数。creditLifeInsurance は団信加入有無。
+// テナント分離は親 Customer.wholesalerId 経由の相関 EXISTS（RLS はマイグレーション参照）。
+// Contract のローン列（ContractPayment.loanReviewStatus 等）とは別概念・別テーブル（残置）。
+model LoanReview {
+  id                  String   @id @default(cuid())
+  customerId          String
+  status              String   @default("not_reviewed") // not_reviewed/reviewing/completed/defect
+  loanCompany         String?  // ローン会社
+  downPayment         Int?     // 頭金（円）
+  creditLifeInsurance Boolean? // 団信加入有無
+  note                String?  // メモ（自由記述）
+  defectContent       String?  // 不備内容（不備で返された場合）
+  defectStatus        String?  // 不備解消ステータス: none/defect(未解消)/resolved
+  reviewedAt          DateTime? // 審査日
+  createdByUserId     String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  customer Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  logs     LoanReviewLog[]
+
+  @@index([customerId, createdAt])
+}
+
+// ローン審査履歴ログ（各審査の中に画面から追加できる日時+結果+メモ・CustomerCallLog と同型）。
+// customerId は RLS 簡素化のため冗長保持（親 LoanReview と一致）。result は String 列で
+// 値域は LOAN_REVIEW_RESULT_VALUES（approved/rejected/defect/other）。テナント分離は
+// customerId→Customer.wholesalerId 経由の相関 EXISTS（RLS はマイグレーション参照）。
+model LoanReviewLog {
+  id              String   @id @default(cuid())
+  loanReviewId    String
+  customerId      String
+  reviewedAt      DateTime // 審査日時
+  result          String   // approved/rejected/defect/other
+  note            String?  // メモ（自由記述）
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  loanReview LoanReview @relation(fields: [loanReviewId], references: [id], onDelete: Cascade)
+
+  @@index([loanReviewId, reviewedAt])
 }
 
 model Appointment {

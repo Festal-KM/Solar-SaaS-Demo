@@ -11,16 +11,20 @@ import {
   AccessoryInlineEdit,
   AddAccessoryButton,
   AddContractButton,
+  AddLoanReviewButton,
   CallLogAddForm,
   CallLogDeleteButton,
   ContractDetailInlineEdit,
   ContractSubTabs,
   EditConstructionDialog,
-  EditContractDialog,
   EditEquipmentDialog,
   EquipmentInlineEdit,
   HearingInlineEdit,
   LoanCompletionCallInlineEdit,
+  LoanReviewInlineEdit,
+  LoanReviewLogAddForm,
+  LoanReviewLogList,
+  LoanReviewSubTabs,
   MaekakuCallInlineEdit,
   PostCompletionCallInlineEdit,
   SpecialNoteInlineEdit,
@@ -32,6 +36,7 @@ import type {
   ProjectContractEditable,
   ProjectEquipmentEditable,
   ProjectInfoEditable,
+  ProjectLoanReviewEditable,
 } from "@/lib/customer/get-project-info-editable";
 import type {
   EquipmentCategoryKey,
@@ -42,6 +47,7 @@ import type {
   ProjectHearingForDealerDto,
   ProjectInfoDto,
   ProjectInfoForDealerDto,
+  ProjectLoanReviewDto,
   ProjectProfitDto,
 } from "@solar/contracts/dto/project-info";
 
@@ -785,43 +791,24 @@ function CompactCallBlock({ title, children }: { title: string; children: React.
   );
 }
 
-// ローン・団信 1 件分（契約単位）の表示。契約ブロック内と専用「ローン情報」タブの
-// 両方から再利用する。editContract が渡れば見出し右に編集トリガーを描画する。
-function LoanBlock({
-  contract,
-  customerId,
-  editContract,
-}: {
-  contract: AnyContract;
-  customerId: string | null;
-  editContract?: ProjectContractEditable;
-}) {
-  const f = p.fields;
+// ローン審査 1 件分（独立 LoanReview）の read-only 表示。editable が渡らない（二次店/
+// 閲覧のみ）場合に使う。サマリ項目 + 不備内容/解消ステータス。
+function LoanReviewReadonly({ review }: { review: ProjectLoanReviewDto }) {
+  const lt = labels.customer.detail.loanTab;
   return (
-    <div>
-      <div className="mb-2 flex items-center gap-2">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-          {p.sections.loan}
-        </h4>
-        {customerId && editContract ? (
-          <EditContractDialog customerId={customerId} initial={editContract} />
-        ) : null}
-      </div>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-        <MetaItem label={f.loanCompany} value={contract.loanCompany} />
-        <MetaItem label={f.downPayment} value={fmtYen(contract.downPayment)} />
-        <MetaItem label={f.creditLife} value={fmtBool(contract.creditLifeInsurance)} />
-        <MetaItem
-          label={f.loanReviewStatus}
-          value={
-            contract.loanReviewStatus
-              ? (p.loanReviewStatusLabels[contract.loanReviewStatus] ?? contract.loanReviewStatus)
-              : null
-          }
-        />
-        <MetaItem label={f.loanNote} value={contract.loanNote} />
-      </dl>
-    </div>
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+      <MetaItem label={lt.status} value={lt.statusLabels[review.status] ?? review.status} />
+      <MetaItem label={lt.loanCompany} value={review.loanCompany} />
+      <MetaItem label={lt.downPayment} value={fmtYen(review.downPayment)} />
+      <MetaItem label={lt.creditLife} value={fmtBool(review.creditLifeInsurance)} />
+      <MetaItem label={lt.reviewedAt} value={fmtDate(review.reviewedAt)} />
+      <MetaItem label={lt.note} value={review.note} />
+      <MetaItem
+        label={lt.defectStatus}
+        value={review.defectStatus ? lt.defectStatusLabels[review.defectStatus] ?? review.defectStatus : null}
+      />
+      <MetaItem label={lt.defectContent} value={review.defectContent} />
+    </dl>
   );
 }
 
@@ -934,8 +921,10 @@ export function ProjectConstructionList({
   );
 }
 
-// 専用「ローン情報」タブ — 顧客に紐づく全契約のローン・団信を契約ごとに一覧表示。
-// 契約が無ければ空状態。loanReviewStatus 含む編集は LoanBlock 内の EditContractDialog。
+// 専用「ローン審査」タブ — 独立 LoanReview を審査ごとのサブタブ（ローン審査 #1/#2…）で
+// 表示・編集する（契約タブと同型）。各審査サブタブ内: インライン編集（editable 時）/
+// read-only（二次店・閲覧のみ）+ 過去の審査履歴ログ一覧 + 追加フォーム。審査 0 件は
+// 空状態 + 「審査を追加」。customerId は editable 由来（編集導線は customer.update のみ）。
 export function ProjectLoanInfoList({
   data,
   editable = null,
@@ -944,13 +933,23 @@ export function ProjectLoanInfoList({
   editable?: ProjectInfoEditable | null;
 }) {
   const lt = labels.customer.detail.loanTab;
-  const contracts = data.contracts as AnyContract[];
+  const reviews = data.loanReviews;
   const customerId = editable?.customerId ?? null;
-  const editContractById = new Map<string, ProjectContractEditable>(
-    (editable?.contracts ?? []).map((ec) => [ec.contractId, ec]),
+  const editReviewById = new Map<string, ProjectLoanReviewEditable>(
+    (editable?.loanReviews ?? []).map((r) => [r.loanReviewId, r]),
   );
 
-  if (contracts.length === 0) {
+  if (reviews.length === 0) {
+    if (customerId) {
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-mute-light">{lt.empty}</p>
+            <AddLoanReviewButton customerId={customerId} />
+          </div>
+        </div>
+      );
+    }
     return (
       <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
         {lt.empty}
@@ -958,18 +957,74 @@ export function ProjectLoanInfoList({
     );
   }
 
+  const tabs = reviews.map((review, idx) => {
+    const edit = editReviewById.get(review.loanReviewId);
+    return {
+      id: review.loanReviewId,
+      label: `${lt.subtabHeading} #${idx + 1}`,
+      content: (
+        <div className="space-y-5">
+          <div>
+            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+              {lt.summaryTitle}
+            </h4>
+            {customerId && edit ? (
+              <LoanReviewInlineEdit customerId={customerId} initial={edit} />
+            ) : (
+              <LoanReviewReadonly review={review} />
+            )}
+          </div>
+          <div>
+            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+              {lt.historyTitle}
+            </h4>
+            <div className="space-y-3">
+              {customerId ? (
+                <>
+                  <LoanReviewLogList
+                    customerId={customerId}
+                    loanReviewId={review.loanReviewId}
+                    logs={review.logs}
+                  />
+                  <LoanReviewLogAddForm customerId={customerId} loanReviewId={review.loanReviewId} />
+                </>
+              ) : review.logs.length === 0 ? (
+                <p className="text-sm text-mute-light">{lt.historyEmpty}</p>
+              ) : (
+                <ul className="divide-y divide-hairline-light">
+                  {review.logs.map((log) => (
+                    <li key={log.id} className="flex items-center gap-2 py-2 text-sm text-ink">
+                      <span className="tabular-nums">
+                        {fmtDateTime(log.reviewedAt)}
+                      </span>
+                      <span className="rounded-sm bg-surface-soft px-1.5 py-0.5 text-xs font-medium">
+                        {lt.resultLabels[log.result] ?? log.result}
+                      </span>
+                      {log.note ? <span className="text-xs text-mute-light">{log.note}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      ),
+    };
+  });
+
+  // 編集可能（customer.update）のときはサブタブ client ラッパー（審査追加/削除導線つき）。
+  if (customerId) {
+    return <LoanReviewSubTabs customerId={customerId} tabs={tabs} />;
+  }
+  // 二次店・閲覧のみのときは追加/削除導線を出さず、審査ごとにカードで縦積み表示。
   return (
     <div className="space-y-4">
-      {contracts.map((c, idx) => (
-        <div key={c.contractId} className="space-y-3 rounded-md border border-hairline-light p-4">
+      {tabs.map((t) => (
+        <div key={t.id} className="space-y-3 rounded-md border border-hairline-light p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
-            {`${lt.contractHeading} #${idx + 1}`}
+            {t.label}
           </h3>
-          <LoanBlock
-            contract={c}
-            customerId={customerId}
-            editContract={editContractById.get(c.contractId)}
-          />
+          {t.content}
         </div>
       ))}
     </div>
@@ -1379,9 +1434,6 @@ export function CustomerProjectInfo({
   const customerId = editable?.customerId ?? null;
 
   // contractId → 編集用 raw 値の引き当て（表示 DTO と editable は同順だが id で堅牢に対応）。
-  const editContractById = new Map<string, ProjectContractEditable>(
-    (editable?.contracts ?? []).map((ec) => [ec.contractId, ec]),
-  );
   const editConstructionById = new Map<string, ProjectConstructionEditable>(
     (editable?.constructions ?? []).map((c) => [c.constructionId, c]),
   );
@@ -1414,24 +1466,8 @@ export function CustomerProjectInfo({
       )}
 
       {/* 契約・金額/契約明細/認定（単一ソース。embedded（基本情報）では readOnly で pull 表示）。
-          ローン・団信は embedded 時は専用「ローン情報」タブに集約するため非 embedded のみ展開。 */}
+          ローン審査は独立 LoanReview エンティティの専用「ローン審査」タブに集約（ProjectLoanInfoList）。 */}
       <ProjectContractList data={data} editable={editable} readOnly={contractReadOnly} />
-
-      {/* 非 embedded（フル表示）でのみローン・団信を契約ごとに展開。 */}
-      {!embedded
-        ? (data.contracts as AnyContract[]).map((c, idx) => (
-            <div key={`loan-${c.contractId}`} className="rounded-md border border-hairline-light p-4">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
-                {`${p.sections.loan} #${idx + 1}`}
-              </h3>
-              <LoanBlock
-                contract={c}
-                customerId={customerId}
-                editContract={editContractById.get(c.contractId)}
-              />
-            </div>
-          ))
-        : null}
 
       {/* 工事・完工（施工コスト含む。embedded 時は専用「施工コスト」タブに集約するため抑制） */}
       {!embedded ? (

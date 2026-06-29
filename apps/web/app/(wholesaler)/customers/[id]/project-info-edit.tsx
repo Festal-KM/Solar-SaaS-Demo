@@ -6,7 +6,11 @@
 //
 // 編集対象は既存列のみ。仕入値スナップショット（ContractItem.snapshot*）は扱わない。
 
-import { LOAN_REVIEW_STATUS_VALUES } from "@solar/contracts";
+import {
+  LOAN_REVIEW_DEFECT_STATUS_VALUES,
+  LOAN_REVIEW_RESULT_VALUES,
+  LOAN_REVIEW_STATUS_VALUES,
+} from "@solar/contracts";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -31,10 +35,15 @@ import { cn } from "@/lib/utils";
 import {
   createContractAction,
   createCustomerCallLogAction,
+  createLoanReviewAction,
+  createLoanReviewLogAction,
   deleteContractAction,
   deleteContractEquipmentAction,
   deleteCustomerCallLogAction,
+  deleteLoanReviewAction,
+  deleteLoanReviewLogAction,
   saveCustomerHearingAction,
+  saveLoanReviewAction,
   saveProjectCallStatusAction,
   saveProjectConstructionAction,
   saveProjectContractAction,
@@ -49,13 +58,17 @@ import type {
   ProjectContractEditable,
   ProjectEquipmentEditable,
   ProjectHearingEditable,
+  ProjectLoanReviewEditable,
   ProjectOverviewEditable,
 } from "@/lib/customer/get-project-info-editable";
 import type {
   CallStatusValue,
   EquipmentCategoryValue,
+  LoanReviewDefectStatusValue,
+  LoanReviewResultValue,
   LoanReviewStatusValue,
 } from "@solar/contracts";
+import type { ProjectLoanReviewLogDto } from "@solar/contracts/dto/project-info";
 
 const p = labels.customer.detail.projectInfo;
 const ed = p.edit;
@@ -965,137 +978,6 @@ export function HearingInlineEdit({
   );
 }
 
-/* ── 契約・支払・ローン（Contract + ContractPayment）。架電関連（callStatus /
-   loanReviewCallAt）と契約金額の手動入力は除去した。契約金額は商材ライン amount の
-   合計が正であり、設備保存のたびにサーバーが再計算する（要件A/B）。 ── */
-export function EditContractDialog({
-  customerId,
-  initial,
-}: {
-  customerId: string;
-  initial: ProjectContractEditable;
-}) {
-  const [open, setOpen] = useState(false);
-  const [contractDate, setContractDate] = useState(toDateInput(initial.contractDate));
-  const [equipmentSerialId, setEquipmentSerialId] = useState(initial.equipmentSerialId ?? "");
-  const [paymentCount, setPaymentCount] = useState(initial.paymentCount != null ? String(initial.paymentCount) : "");
-  const [paymentStatus, setPaymentStatus] = useState(initial.paymentStatus ?? "UNPAID");
-  const [depositDate, setDepositDate] = useState(toDateInput(initial.depositDate));
-  const [dealerPayoutDate, setDealerPayoutDate] = useState(toDateInput(initial.dealerPayoutDate));
-  const [loanCompany, setLoanCompany] = useState(initial.loanCompany ?? "");
-  const [downPayment, setDownPayment] = useState(initial.downPayment != null ? String(initial.downPayment) : "");
-  const [creditLifeInsurance, setCreditLifeInsurance] = useState(boolToSelect(initial.creditLifeInsurance));
-  const [loanNote, setLoanNote] = useState(initial.loanNote ?? "");
-  const [loanReviewStatus, setLoanReviewStatus] = useState(initial.loanReviewStatus ?? "");
-  const { pending, run } = useSaver(() => setOpen(false));
-
-  function reset() {
-    setContractDate(toDateInput(initial.contractDate));
-    setEquipmentSerialId(initial.equipmentSerialId ?? "");
-    setPaymentCount(initial.paymentCount != null ? String(initial.paymentCount) : "");
-    setPaymentStatus(initial.paymentStatus ?? "UNPAID");
-    setDepositDate(toDateInput(initial.depositDate));
-    setDealerPayoutDate(toDateInput(initial.dealerPayoutDate));
-    setLoanCompany(initial.loanCompany ?? "");
-    setDownPayment(initial.downPayment != null ? String(initial.downPayment) : "");
-    setCreditLifeInsurance(boolToSelect(initial.creditLifeInsurance));
-    setLoanNote(initial.loanNote ?? "");
-    setLoanReviewStatus(initial.loanReviewStatus ?? "");
-  }
-
-  function onOpenChange(next: boolean) {
-    if (next) reset();
-    setOpen(next);
-  }
-
-  function save() {
-    run(() =>
-      saveProjectContractAction({
-        customerId,
-        contractId: initial.contractId,
-        contractDate: contractDate || null,
-        equipmentSerialId: strOrNull(equipmentSerialId),
-        paymentCount: numOrNull(paymentCount),
-        paymentStatus: paymentStatus as "UNPAID" | "PARTIAL" | "PAID",
-        depositDate: depositDate || null,
-        dealerPayoutDate: dealerPayoutDate || null,
-        loanCompany: strOrNull(loanCompany),
-        downPayment: numOrNull(downPayment),
-        creditLifeInsurance: selectToBool(creditLifeInsurance),
-        loanNote: strOrNull(loanNote),
-        loanReviewStatus: (loanReviewStatus || null) as LoanReviewStatusValue | null,
-      }),
-    );
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <EditTrigger label={ed.editContract} />
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{ed.editContract}</DialogTitle>
-        </DialogHeader>
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={f.contractDate} htmlFor="ct-date">
-              <input id="ct-date" type="date" className={FIELD} value={contractDate} onChange={(e) => setContractDate(e.target.value)} />
-            </FormField>
-            <FormField label={f.equipmentId} htmlFor="ct-serial">
-              <Input id="ct-serial" value={equipmentSerialId} onChange={(e) => setEquipmentSerialId(e.target.value)} />
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={f.paymentCount} htmlFor="ct-paycount">
-              <Input id="ct-paycount" type="number" min={0} value={paymentCount} onChange={(e) => setPaymentCount(e.target.value)} />
-            </FormField>
-            <FormField label={f.paymentStatus} htmlFor="ct-paystatus">
-              <select id="ct-paystatus" className={FIELD} value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}>
-                <option value="UNPAID">{p.paymentStatusLabels.UNPAID}</option>
-                <option value="PARTIAL">{p.paymentStatusLabels.PARTIAL}</option>
-                <option value="PAID">{p.paymentStatusLabels.PAID}</option>
-              </select>
-            </FormField>
-            <FormField label={f.depositDate} htmlFor="ct-deposit">
-              <input id="ct-deposit" type="date" className={FIELD} value={depositDate} onChange={(e) => setDepositDate(e.target.value)} />
-            </FormField>
-            <FormField label={f.dealerPayoutDate} htmlFor="ct-payout">
-              <input id="ct-payout" type="date" className={FIELD} value={dealerPayoutDate} onChange={(e) => setDealerPayoutDate(e.target.value)} />
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={f.loanCompany} htmlFor="ct-loanco">
-              <Input id="ct-loanco" value={loanCompany} onChange={(e) => setLoanCompany(e.target.value)} />
-            </FormField>
-            <FormField label={f.downPayment} htmlFor="ct-down">
-              <MoneyInput id="ct-down" value={downPayment} onChange={setDownPayment} />
-            </FormField>
-            <FormField label={f.creditLife} htmlFor="ct-credit">
-              <select id="ct-credit" className={FIELD} value={creditLifeInsurance} onChange={(e) => setCreditLifeInsurance(e.target.value)}>
-                <option value={BOOL_UNSET}>{ed.unset}</option>
-                <option value="true">{ed.presence.true}</option>
-                <option value="false">{ed.presence.false}</option>
-              </select>
-            </FormField>
-            <FormField label={f.loanReviewStatus} htmlFor="ct-loanreview">
-              <select id="ct-loanreview" className={FIELD} value={loanReviewStatus} onChange={(e) => setLoanReviewStatus(e.target.value)}>
-                <option value="">{ed.unset}</option>
-                {LOAN_REVIEW_STATUS_VALUES.map((v) => (
-                  <option key={v} value={v}>
-                    {p.loanReviewStatusLabels[v]}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </div>
-          <FormField label={f.loanNote} htmlFor="ct-loannote">
-            <Textarea id="ct-loannote" rows={2} value={loanNote} onChange={(e) => setLoanNote(e.target.value)} />
-          </FormField>
-        </div>
-        <Footer onSave={save} onCancel={() => setOpen(false)} pending={pending} />
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /* ── 設備明細（ContractEquipment の非価格フィールドのみ。契約 find-or-create 方式） ──
    契約状況タブで PV/BT/付帯の設備を追加・編集する。initial が null（空カテゴリ）の
@@ -1984,5 +1866,389 @@ export function SpecialNoteInlineEdit({
         </Button>
       </div>
     </div>
+  );
+}
+
+/* ── ローン審査（独立 LoanReview）のインライン編集（各審査サブタブ内・契約タブと同型）。
+   ステータス / ローン会社 / 頭金(MoneyInput) / 団信 / メモ / 不備内容 / 解消ステータス /
+   審査日 を直接編集。dirty 追跡 + Save/キャンセル + saveLoanReviewAction（部分更新）+
+   toast + router.refresh。customer.update 権限保持者のみ呼び出される（呼び出し側でゲート）。 ── */
+export function LoanReviewInlineEdit({
+  customerId,
+  initial,
+}: {
+  customerId: string;
+  initial: ProjectLoanReviewEditable;
+}) {
+  const lt = labels.customer.detail.loanTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [status, setStatus] = useState(initial.status);
+  const [loanCompany, setLoanCompany] = useState(initial.loanCompany ?? "");
+  const [downPayment, setDownPayment] = useState(initial.downPayment != null ? String(initial.downPayment) : "");
+  const [creditLifeInsurance, setCreditLifeInsurance] = useState(boolToSelect(initial.creditLifeInsurance));
+  const [note, setNote] = useState(initial.note ?? "");
+  const [defectContent, setDefectContent] = useState(initial.defectContent ?? "");
+  const [defectStatus, setDefectStatus] = useState(initial.defectStatus ?? "");
+  const [reviewedAt, setReviewedAt] = useState(toDateInput(initial.reviewedAt));
+
+  const initDown = initial.downPayment != null ? String(initial.downPayment) : "";
+  const initCredit = boolToSelect(initial.creditLifeInsurance);
+  const initReviewedAt = toDateInput(initial.reviewedAt);
+  const dirty =
+    status !== initial.status ||
+    loanCompany !== (initial.loanCompany ?? "") ||
+    downPayment !== initDown ||
+    creditLifeInsurance !== initCredit ||
+    note !== (initial.note ?? "") ||
+    defectContent !== (initial.defectContent ?? "") ||
+    defectStatus !== (initial.defectStatus ?? "") ||
+    reviewedAt !== initReviewedAt;
+
+  function reset() {
+    setStatus(initial.status);
+    setLoanCompany(initial.loanCompany ?? "");
+    setDownPayment(initDown);
+    setCreditLifeInsurance(initCredit);
+    setNote(initial.note ?? "");
+    setDefectContent(initial.defectContent ?? "");
+    setDefectStatus(initial.defectStatus ?? "");
+    setReviewedAt(initReviewedAt);
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveLoanReviewAction({
+          customerId,
+          loanReviewId: initial.loanReviewId,
+          status: status as LoanReviewStatusValue,
+          loanCompany: strOrNull(loanCompany),
+          downPayment: numOrNull(downPayment),
+          creditLifeInsurance: selectToBool(creditLifeInsurance),
+          note: strOrNull(note),
+          defectContent: strOrNull(defectContent),
+          defectStatus: (defectStatus || null) as LoanReviewDefectStatusValue | null,
+          reviewedAt: reviewedAt || null,
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <FormField label={lt.status} htmlFor={`lr-status-${initial.loanReviewId}`}>
+          <select id={`lr-status-${initial.loanReviewId}`} className={FIELD} value={status} onChange={(e) => setStatus(e.target.value)}>
+            {LOAN_REVIEW_STATUS_VALUES.map((v) => (
+              <option key={v} value={v}>
+                {lt.statusLabels[v]}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label={lt.loanCompany} htmlFor={`lr-company-${initial.loanReviewId}`}>
+          <Input id={`lr-company-${initial.loanReviewId}`} value={loanCompany} onChange={(e) => setLoanCompany(e.target.value)} />
+        </FormField>
+        <FormField label={lt.downPayment} htmlFor={`lr-down-${initial.loanReviewId}`}>
+          <MoneyInput id={`lr-down-${initial.loanReviewId}`} value={downPayment} onChange={setDownPayment} />
+        </FormField>
+        <FormField label={lt.creditLife} htmlFor={`lr-credit-${initial.loanReviewId}`}>
+          <select id={`lr-credit-${initial.loanReviewId}`} className={FIELD} value={creditLifeInsurance} onChange={(e) => setCreditLifeInsurance(e.target.value)}>
+            <option value={BOOL_UNSET}>{ed.unset}</option>
+            <option value="true">{ed.presence.true}</option>
+            <option value="false">{ed.presence.false}</option>
+          </select>
+        </FormField>
+        <FormField label={lt.reviewedAt} htmlFor={`lr-at-${initial.loanReviewId}`}>
+          <input id={`lr-at-${initial.loanReviewId}`} type="date" className={FIELD} value={reviewedAt} onChange={(e) => setReviewedAt(e.target.value)} />
+        </FormField>
+      </div>
+      <FormField label={lt.note} htmlFor={`lr-note-${initial.loanReviewId}`}>
+        <Textarea id={`lr-note-${initial.loanReviewId}`} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+      </FormField>
+      <div>
+        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+          {lt.defectTitle}
+        </h4>
+        <div className="space-y-3">
+          <FormField label={lt.defectStatus} htmlFor={`lr-defstatus-${initial.loanReviewId}`}>
+            <select id={`lr-defstatus-${initial.loanReviewId}`} className={FIELD} value={defectStatus} onChange={(e) => setDefectStatus(e.target.value)}>
+              <option value="">{ed.unset}</option>
+              {LOAN_REVIEW_DEFECT_STATUS_VALUES.map((v) => (
+                <option key={v} value={v}>
+                  {lt.defectStatusLabels[v]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label={lt.defectContent} htmlFor={`lr-defcontent-${initial.loanReviewId}`}>
+            <Textarea id={`lr-defcontent-${initial.loanReviewId}`} rows={2} value={defectContent} onChange={(e) => setDefectContent(e.target.value)} />
+          </FormField>
+        </div>
+      </div>
+      <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+    </div>
+  );
+}
+
+/* 過去の審査履歴ログ（LoanReviewLog）の追加フォーム。日時 + 結果 select + メモ。
+   記録者は createdByUserId（操作ユーザー）でサーバーが自動付与する（フォームに無し）。 */
+export function LoanReviewLogAddForm({
+  customerId,
+  loanReviewId,
+}: {
+  customerId: string;
+  loanReviewId: string;
+}) {
+  const lt = labels.customer.detail.loanTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [reviewedAt, setReviewedAt] = useState("");
+  const [result, setResult] = useState<string>(LOAN_REVIEW_RESULT_VALUES[0]);
+  const [note, setNote] = useState("");
+
+  function onAdd() {
+    if (!reviewedAt) {
+      toast.error(lt.logReviewedAt);
+      return;
+    }
+    start(async () => {
+      try {
+        await createLoanReviewLogAction({
+          customerId,
+          loanReviewId,
+          reviewedAt: new Date(reviewedAt).toISOString(),
+          result: result as LoanReviewResultValue,
+          note: strOrNull(note),
+        });
+        toast.success(c.saved);
+        setReviewedAt("");
+        setNote("");
+        setResult(LOAN_REVIEW_RESULT_VALUES[0]);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="rounded-md border border-hairline-light bg-surface-soft/40 p-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <FormField label={lt.logReviewedAt} htmlFor={`lrl-at-${loanReviewId}`}>
+          <input id={`lrl-at-${loanReviewId}`} type="datetime-local" className={FIELD} value={reviewedAt} onChange={(e) => setReviewedAt(e.target.value)} />
+        </FormField>
+        <FormField label={lt.logResult} htmlFor={`lrl-result-${loanReviewId}`}>
+          <select id={`lrl-result-${loanReviewId}`} className={FIELD} value={result} onChange={(e) => setResult(e.target.value)}>
+            {LOAN_REVIEW_RESULT_VALUES.map((v) => (
+              <option key={v} value={v}>
+                {lt.resultLabels[v]}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label={lt.logNote} htmlFor={`lrl-note-${loanReviewId}`}>
+          <Input id={`lrl-note-${loanReviewId}`} value={note} onChange={(e) => setNote(e.target.value)} />
+        </FormField>
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Button type="button" size="sm" onClick={onAdd} disabled={pending || !reviewedAt}>
+          {pending ? lt.logAdding : lt.logAdd}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* 過去の審査履歴ログ 1 行の削除ボタン（LoanReviewLog）。 */
+export function LoanReviewLogDeleteButton({
+  customerId,
+  loanReviewId,
+  logId,
+}: {
+  customerId: string;
+  loanReviewId: string;
+  logId: string;
+}) {
+  const lt = labels.customer.detail.loanTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onDelete() {
+    if (!window.confirm(lt.logDeleteConfirm)) return;
+    start(async () => {
+      try {
+        await deleteLoanReviewLogAction({ customerId, loanReviewId, logId });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="size-7 text-mute-light hover:text-destructive"
+      aria-label={lt.logDelete}
+      onClick={onDelete}
+      disabled={pending}
+    >
+      <Trash2 className="size-4" />
+    </Button>
+  );
+}
+
+/* ローン審査を追加するボタン（審査 #2 以降。createLoanReviewAction で最小レコードを生成）。 */
+export function AddLoanReviewButton({ customerId }: { customerId: string }) {
+  const lt = labels.customer.detail.loanTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onAdd() {
+    start(async () => {
+      try {
+        await createLoanReviewAction({ customerId });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onAdd} disabled={pending}>
+      <Plus className="mr-1 size-4" />
+      {pending ? lt.addingReview : lt.addReview}
+    </Button>
+  );
+}
+
+/* ローン審査を削除するボタン（アクティブな審査対象）。confirm + destructive 配色。 */
+export function DeleteLoanReviewButton({
+  customerId,
+  loanReviewId,
+}: {
+  customerId: string;
+  loanReviewId: string;
+}) {
+  const lt = labels.customer.detail.loanTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onDelete() {
+    if (!window.confirm(lt.deleteReviewConfirm)) return;
+    start(async () => {
+      try {
+        await deleteLoanReviewAction({ customerId, loanReviewId });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/30"
+      onClick={onDelete}
+      disabled={pending}
+    >
+      <Trash2 className="mr-1 size-4" />
+      {pending ? lt.deletingReview : lt.deleteReviewText}
+    </Button>
+  );
+}
+
+/* ── ローン審査サブタブ（client ラッパー・ContractSubTabs と同型）。アクティブな審査を
+   state で保持し、ヘッダ右に「審査を追加」+「審査を削除」（アクティブ審査対象）を並置する。
+   各タブ本文は server で生成した React element を content として受け取り描画する。 ── */
+export function LoanReviewSubTabs({
+  customerId,
+  tabs,
+}: {
+  customerId: string;
+  tabs: { id: string; label: string; content: React.ReactNode }[];
+}) {
+  const [active, setActive] = useState(tabs[0]?.id ?? "");
+  if (tabs.length === 0) return null;
+
+  return (
+    <Tabs value={active} onValueChange={setActive}>
+      <div className="flex items-center justify-between gap-2">
+        <TabsList variant="underline" className="flex-1">
+          {tabs.map((t) => (
+            <TabsTrigger key={t.id} value={t.id}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <div className="flex shrink-0 items-center gap-2 pb-1">
+          <AddLoanReviewButton customerId={customerId} />
+          <DeleteLoanReviewButton customerId={customerId} loanReviewId={active} />
+        </div>
+      </div>
+      {tabs.map((t) => (
+        <TabsContent key={t.id} value={t.id} className="space-y-4">
+          {t.content}
+        </TabsContent>
+      ))}
+    </Tabs>
+  );
+}
+
+/* 過去の審査履歴ログ一覧（read-only 表示 + 削除）。reviewedAt 降順は DTO 側で確定済み。 */
+export function LoanReviewLogList({
+  customerId,
+  loanReviewId,
+  logs,
+}: {
+  customerId: string;
+  loanReviewId: string;
+  logs: ProjectLoanReviewLogDto[];
+}) {
+  const lt = labels.customer.detail.loanTab;
+  if (logs.length === 0) {
+    return <p className="text-sm text-mute-light">{lt.historyEmpty}</p>;
+  }
+  return (
+    <ul className="divide-y divide-hairline-light">
+      {logs.map((log) => (
+        <li key={log.id} className="flex items-start justify-between gap-3 py-2">
+          <div className="min-w-0 space-y-0.5">
+            <div className="flex items-center gap-2 text-sm text-ink">
+              <span className="tabular-nums">
+                {new Date(log.reviewedAt).toLocaleString("ja-JP")}
+              </span>
+              <span className="rounded-sm bg-surface-soft px-1.5 py-0.5 text-xs font-medium text-ink">
+                {lt.resultLabels[log.result] ?? log.result}
+              </span>
+              {log.handlerName ? (
+                <span className="text-xs text-mute-light">{log.handlerName}</span>
+              ) : null}
+            </div>
+            {log.note ? <p className="text-xs text-mute-light">{log.note}</p> : null}
+          </div>
+          <LoanReviewLogDeleteButton
+            customerId={customerId}
+            loanReviewId={loanReviewId}
+            logId={log.id}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }

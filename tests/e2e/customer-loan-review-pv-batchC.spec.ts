@@ -1,13 +1,28 @@
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
 import { expect, test, type Page } from "@playwright/test";
+
+// 本 spec のローン審査テストは「佐藤 一馬」に新規審査を作る。各テストは自前の審査を削除するが、
+// 取り残しに備え afterAll で当該顧客のローン審査を全削除し、空状態前提の他 spec への汚染を防ぐ。
+function cleanupDemoLoanReviews(): void {
+  const script = resolve(__dirname, "fixtures", "cleanup-demo-loan-reviews.ts");
+  const dbDir = resolve(__dirname, "..", "..", "packages", "db");
+  execFileSync("pnpm", ["exec", "tsx", script], {
+    cwd: dbDir,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+}
 
 // バッチ C ローン審査ステータス + PV設置図面（カテゴリ分離）.
 //
 // 検証対象:
-//   1. ローン審査ステータス: 専用「ローン情報」タブの「ローン・団信」ブロックに
-//      ContractPayment.loanReviewStatus が表示される。F-062 契約編集ダイアログで
-//      4 値（審査前/審査中/完了/不備在り）から選択・保存 → 表示反映。
-//      （旧構成では基本情報タブの案件情報埋め込みビューにあったが、専用「ローン情報」
-//       タブへ集約済みのため、ローン情報タブへ切り替えてから検証する。）
+//   1. ローン審査ステータス: 専用「ローン審査」タブの審査サブタブで独立 LoanReview の
+//      審査ステータスをインライン編集（#lr-status-<id> select）し、4 値
+//      （審査前/審査中/完了/不備在り）から選択・保存 → 値が保持される。
+//      （旧構成では Contract.loanReviewStatus を契約編集ダイアログで編集していたが、
+//       独立 LoanReview とローン審査タブのインライン編集へ移行済み。）
 //   2. PV設置図面: 施工状況タブに「PV設置図面」アップロードセクションが表示され、
 //      seed 投入の PV_DRAWING ファイルがそのスロットに描画される。
 //   3. カテゴリ相互排他: PV_DRAWING は施工状況タブのみ。関連ファイルタブ（GENERAL）/
@@ -47,14 +62,6 @@ async function signInAsDemo(page: Page): Promise<void> {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 120_000 });
 }
 
-async function openContractedCustomer(page: Page): Promise<void> {
-  await page.goto("/customers?contractStatus=contracted");
-  const firstRow = page.getByRole("button", { name: /様$/ }).first();
-  await expect(firstRow).toBeVisible();
-  await firstRow.click();
-  await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
-}
-
 async function gotoSeededCustomerDetail(page: Page): Promise<void> {
   await page.goto(`/customers?query=${encodeURIComponent(SEEDED_CUSTOMER_QUERY)}`);
   const row = page.getByRole("button", { name: /様$/ }).first();
@@ -63,62 +70,56 @@ async function gotoSeededCustomerDetail(page: Page): Promise<void> {
   await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
 }
 
-// 1 つの「ラベル → 値」(MetaItem) について、ラベルに隣接する dd 値テキストを取得。
-async function metaValue(panelLocator: ReturnType<Page["getByRole"]>, label: string): Promise<string> {
-  const dt = panelLocator.locator("dt", { hasText: label }).first();
-  await expect(dt, `MetaItem ラベル「${label}」が存在する`).toBeVisible();
-  const dd = dt.locator("xpath=following-sibling::dd[1]");
-  return ((await dd.textContent()) ?? "").trim();
-}
-
-test.describe("バッチ C ローン審査ステータス（案件情報ローン・団信ブロック）", () => {
+test.describe("バッチ C ローン審査ステータス（独立 LoanReview・審査サブタブ）", () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test("ローン審査ステータスが表示され、契約編集ダイアログで『審査中』に変更保存 → 反映される", async ({
+  test.afterAll(() => {
+    cleanupDemoLoanReviews();
+  });
+
+  test("審査サブタブの審査ステータスを『審査中』に変更保存 → 値が保持される", async ({
     page,
   }) => {
+    // 既存審査の status が既に "reviewing" だとインライン編集が dirty にならず保存ボタンが
+    // disabled のままになり click がハングする。新規追加した審査は既定 "not_reviewed" なので
+    // 「審査中」への変更が必ず dirty になる。空顧客「佐藤 一馬」に新規審査を作って検証する。
     await signInAsDemo(page);
-    await openContractedCustomer(page);
+    await gotoSeededCustomerDetail(page);
 
-    // 専用「ローン情報」タブへ切り替え（ローン・団信は基本情報タブから集約済み）。
-    await page.getByRole("tab", { name: "ローン審査" }).click();
-    const panel = page.getByRole("tabpanel");
+    // 専用「ローン審査」タブへ切り替え。審査サブタブが active のとき tabpanel が入れ子になり
+    // getByRole('tabpanel') が複数解決するため、外側のローン審査タブパネル（accessible name =
+    // "ローン審査" exact）へ scope する。
+    await page.getByRole("tab", { name: "ローン審査", exact: true }).click();
+    const panel = page.getByRole("tabpanel", { name: "ローン審査", exact: true });
     await expect(panel).toBeVisible();
 
-    // ローン・団信ブロック見出し + ローン審査ステータスラベルが描画される。
-    await expect(panel.getByRole("heading", { name: "ローン・団信" }).first()).toBeVisible();
-    await expect(panel.locator("dt", { hasText: "ローン審査ステータス" }).first()).toBeVisible();
+    // 「審査を追加」で新規審査（既定 not_reviewed）を作り、その審査サブタブを対象にする。
+    await panel.getByRole("button", { name: "審査を追加" }).first().click();
+    await expect(panel.getByRole("tab", { name: /ローン審査\s*#1/ })).toBeVisible({
+      timeout: 30_000,
+    });
 
-    // 表示値は 4 値ラベルのいずれか（seed は seq % 4 で確実に設定）。
-    const before = await metaValue(panel, "ローン審査ステータス");
-    expect(
-      before,
-      `ローン審査ステータス「${before}」が 4 値ラベルのいずれか`,
-    ).toMatch(/(審査前|審査中|完了|不備在り)/);
-
-    // 契約編集ダイアログを開く。
-    await panel.getByRole("button", { name: "契約・金額・ローンを編集" }).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    // ローン審査ステータスの select に 4 値 + 未設定が存在する。
-    const select = dialog.locator("#ct-loanreview");
+    // 審査サマリのインライン編集 select（#lr-status-<id>）に 4 値が存在する。
+    const select = panel.locator('select[id^="lr-status-"]').first();
     await expect(select).toBeVisible();
+    const lrId = (await select.getAttribute("id"))!.replace("lr-status-", "");
     const optionTexts = (await select.locator("option").allTextContents()).map((t) => t.trim());
     for (const label of LOAN_REVIEW_LABELS) {
-      expect(optionTexts, `プルダウンに「${label}」が含まれる`).toContain(label);
+      expect(optionTexts, `審査ステータス select に「${label}」が含まれる`).toContain(label);
     }
 
-    // 「審査中」(= reviewing) を選択して保存する。
+    // 「審査中」(= reviewing) を選択して保存する（新規審査は not_reviewed なので必ず dirty）。
     await select.selectOption("reviewing");
-    await dialog.getByRole("button", { name: "保存" }).click();
-    await expect(dialog).toBeHidden({ timeout: 30_000 });
+    await expect(panel.getByRole("button", { name: "保存" }).first()).toBeEnabled();
+    await panel.getByRole("button", { name: "保存" }).first().click();
 
-    // 保存後、ローン・団信ブロックに「審査中」が反映される。
-    await expect(async () => {
-      const after = await metaValue(panel, "ローン審査ステータス");
-      expect(after).toBe("審査中");
-    }).toPass({ timeout: 30_000 });
+    // 保存後の再描画でも当該審査の審査ステータス select が「審査中」(reviewing) を保持する。
+    await expect(panel.locator(`#lr-status-${lrId}`)).toHaveValue("reviewing", { timeout: 30_000 });
+
+    // 後片付け: 追加した審査を削除して原状回復（佐藤 一馬 = 審査 0 件の不変条件）。
+    page.once("dialog", (d) => d.accept());
+    await panel.getByRole("button", { name: "審査を削除" }).click();
+    await expect(panel.locator(`#lr-status-${lrId}`)).toHaveCount(0, { timeout: 30_000 });
   });
 });
 

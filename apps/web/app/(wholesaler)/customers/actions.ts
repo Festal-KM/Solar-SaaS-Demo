@@ -25,6 +25,11 @@ import {
   CustomerCreateSchema,
   CustomerHearingSchema,
   CustomerUpdateSchema,
+  LoanReviewCreateSchema,
+  LoanReviewDeleteSchema,
+  LoanReviewLogCreateSchema,
+  LoanReviewLogDeleteSchema,
+  LoanReviewSaveSchema,
   ProjectApplicationEditSchema,
   ProjectConstructionEditSchema,
   ProjectCallStatusSchema,
@@ -49,6 +54,11 @@ import type {
   CustomerCreateInput,
   CustomerHearingInput,
   CustomerUpdateInput,
+  LoanReviewCreateInput,
+  LoanReviewDeleteInput,
+  LoanReviewLogCreateInput,
+  LoanReviewLogDeleteInput,
+  LoanReviewSaveInput,
   ProjectApplicationEditInput,
   ProjectConstructionEditInput,
   ProjectCallStatusInput,
@@ -572,6 +582,170 @@ export const deleteCustomerCallLogAction = withServerActionContext<
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
     return { id: parsed.callLogId };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// ローン審査（LoanReview）の追加・編集・削除 + 履歴ログ（LoanReviewLog）の追加・削除.
+//
+// 顧客詳細「ローン審査」タブ（契約タブと同型のサブタブ）。独立エンティティを 1 顧客に
+// 複数持てる。createdByUserId（作成者/監査）は ctx 由来であり入力には含めない。customerId /
+// loanReviewId はテナント内（RLS スコープ内）で存在検証して越境作成/編集/削除を防ぐ。
+// 三段イディオム（auth→customer.update→withTenant）+ RLS 二重防御。LoanReview/LoanReviewLog の
+// RLS は Customer.wholesalerId 経由の相関 EXISTS。
+// ---------------------------------------------------------------------------
+export interface LoanReviewResult {
+  customerId: string;
+  loanReviewId: string;
+}
+
+export const createLoanReviewAction = withServerActionContext<
+  LoanReviewCreateInput,
+  LoanReviewResult
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = LoanReviewCreateSchema.parse(input);
+
+    const customer = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true },
+    });
+    if (!customer) throw new NotFoundError("顧客が見つかりません");
+
+    const created = await tx.loanReview.create({
+      data: {
+        customerId: parsed.customerId,
+        status: "not_reviewed",
+        createdByUserId: ctx.actorUserId,
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId, loanReviewId: created.id };
+  },
+);
+
+export const saveLoanReviewAction = withServerActionContext<
+  LoanReviewSaveInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = LoanReviewSaveSchema.parse(input);
+
+    const review = await tx.loanReview.findFirst({
+      where: { id: parsed.loanReviewId, customerId: parsed.customerId },
+      select: { id: true },
+    });
+    if (!review) throw new NotFoundError("ローン審査が見つかりません");
+
+    await tx.loanReview.update({
+      where: { id: parsed.loanReviewId },
+      data: {
+        ...(parsed.status !== undefined ? { status: parsed.status } : {}),
+        ...(parsed.loanCompany !== undefined
+          ? { loanCompany: parsed.loanCompany?.trim() || null }
+          : {}),
+        ...(parsed.downPayment !== undefined ? { downPayment: parsed.downPayment } : {}),
+        ...(parsed.creditLifeInsurance !== undefined
+          ? { creditLifeInsurance: parsed.creditLifeInsurance }
+          : {}),
+        ...(parsed.note !== undefined ? { note: parsed.note?.trim() || null } : {}),
+        ...(parsed.defectContent !== undefined
+          ? { defectContent: parsed.defectContent?.trim() || null }
+          : {}),
+        ...(parsed.defectStatus !== undefined ? { defectStatus: parsed.defectStatus } : {}),
+        ...(parsed.reviewedAt !== undefined
+          ? { reviewedAt: toDateOrNull(parsed.reviewedAt) }
+          : {}),
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
+  },
+);
+
+export const deleteLoanReviewAction = withServerActionContext<
+  LoanReviewDeleteInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = LoanReviewDeleteSchema.parse(input);
+
+    const review = await tx.loanReview.findFirst({
+      where: { id: parsed.loanReviewId, customerId: parsed.customerId },
+      select: { id: true },
+    });
+    if (!review) throw new NotFoundError("ローン審査が見つかりません");
+
+    // 履歴ログ（LoanReviewLog）は onDelete: Cascade で自動削除。
+    await tx.loanReview.delete({ where: { id: parsed.loanReviewId } });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
+  },
+);
+
+export const createLoanReviewLogAction = withServerActionContext<
+  LoanReviewLogCreateInput,
+  { id: string }
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = LoanReviewLogCreateSchema.parse(input);
+
+    // 親 LoanReview が当該 customer 配下であることを RLS スコープ内で検証（越境防止）。
+    const review = await tx.loanReview.findFirst({
+      where: { id: parsed.loanReviewId, customerId: parsed.customerId },
+      select: { id: true },
+    });
+    if (!review) throw new NotFoundError("ローン審査が見つかりません");
+
+    const created = await tx.loanReviewLog.create({
+      data: {
+        loanReviewId: parsed.loanReviewId,
+        customerId: parsed.customerId,
+        reviewedAt: new Date(parsed.reviewedAt),
+        result: parsed.result,
+        note: parsed.note?.trim() || null,
+        createdByUserId: ctx.actorUserId,
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { id: created.id };
+  },
+);
+
+export const deleteLoanReviewLogAction = withServerActionContext<
+  LoanReviewLogDeleteInput,
+  { id: string }
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = LoanReviewLogDeleteSchema.parse(input);
+
+    // 対象ログが当該審査・顧客配下であることを RLS スコープ内で検証（越境防止）。
+    const row = await tx.loanReviewLog.findFirst({
+      where: {
+        id: parsed.logId,
+        loanReviewId: parsed.loanReviewId,
+        customerId: parsed.customerId,
+      },
+      select: { id: true },
+    });
+    if (!row) throw new NotFoundError("審査履歴が見つかりません");
+
+    await tx.loanReviewLog.delete({ where: { id: parsed.logId } });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { id: parsed.logId };
   },
 );
 

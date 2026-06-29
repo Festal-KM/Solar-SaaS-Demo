@@ -2748,6 +2748,38 @@ model ContractPayment {
 
 > **顧客詳細タブ構成（追補）**: 顧客詳細（S-113）は業務フロー順（商談→契約→ローン→施工→申請→コール）でタブを並べる。
 > カテゴリ 4「ローン・団信」とコール状況（バッチ B）は **専用タブ**（「ローン情報」「コール状況」）へ分離集約する。
+> 「ローン審査」タブは **独立エンティティ `LoanReview`（顧客 1:N）** を審査ごとのサブタブ（ローン審査#1/#2…）で表示・編集する
+> （契約タブ `Contract` と同型のサブタブ運用へ再設計／旧 per-contract `loanReviewStatus` 表示から移行）。詳細は §16.11。
+
+### 16.11 ローン審査タブの独立エンティティ化（LoanReview / LoanReviewLog）
+
+> 顧客詳細「ローン審査」タブを、`ContractPayment.loanReviewStatus`（per-contract）の一覧表示から、**独立した「ローン審査」
+> エンティティ `LoanReview`（1 顧客 N 件）のサブタブ構成**へ再設計する（契約タブと同じ作り）。`Contract` のローン列
+> （`ContractPayment.loanCompany/downPayment/creditLifeInsurance/loanNote/loanReviewStatus` 等）は **DB に残置**（破壊しない）。
+
+- **データモデル（新規 2 テーブル・非破壊マイグレーション）**:
+  - `LoanReview`: `id` / `customerId`(FK Customer, ON DELETE CASCADE) / `status` String(既定 `not_reviewed`・値域 `LOAN_REVIEW_STATUS_VALUES`) /
+    `loanCompany` String? / `downPayment` Int? / `creditLifeInsurance` Boolean? / `note` String? / **`defectContent` String?（不備内容）** /
+    **`defectStatus` String?（解消ステータス・値域 `LOAN_REVIEW_DEFECT_STATUS_VALUES`= none/defect(未解消)/resolved）** /
+    `reviewedAt` DateTime?（審査日）/ `createdByUserId` / `createdAt` / `updatedAt`。`@@index([customerId, createdAt])`。
+  - `LoanReviewLog`（過去の審査履歴・画面から追加／`CustomerCallLog` と同型）: `id` / `loanReviewId`(FK LoanReview, ON DELETE CASCADE) /
+    `customerId`（RLS 簡素化のため冗長保持）/ `reviewedAt` DateTime（日時）/ `result` String（値域 `LOAN_REVIEW_RESULT_VALUES`= approved/rejected/defect/other）/
+    `note` String? / `createdByUserId` / `createdAt`。`@@index([loanReviewId, reviewedAt])`。
+  - **enum 追加不要**（status/defectStatus/result は String 列 + `packages/contracts` の Zod enum で値域管理）。
+- **RLS（両テーブル必須）**: `ENABLE`+`FORCE` ROW LEVEL SECURITY + `<Table>_isolation` ポリシー。`Customer.wholesalerId` 経由の
+  相関 EXISTS（`CustomerCallLog_isolation` と同パターン・USING/WITH CHECK 両方）。`saas_admin` バイパス込み。
+- **DTO / ローダ**: `ProjectInfoDto.loanReviews: ProjectLoanReviewDto[]`（各審査 + `logs: ProjectLoanReviewLogDto[]`、reviewedAt 降順）。
+  `getProjectInfo`（§16.10）が `LoanReview→logs` をロード（`createdAt` 昇順＝#1/#2…）。`getCustomerProjectInfoEditable` に各審査の raw 値を供給。
+  ローン会社/頭金/不備は**原価でも PII でもない**ため二次店 DTO でもそのまま保持（物理除外しない・損益ゲート不変）。
+- **UI**: `ProjectLoanInfoList` を `LoanReview` のサブタブ（`LoanReviewSubTabs` client ラッパー・`ContractSubTabs` と同型）へ再構成。
+  ヘッダ右に「審査を追加」「審査を削除」。各審査をインライン編集（`LoanReviewInlineEdit`: status / loanCompany / downPayment(MoneyInput) /
+  creditLifeInsurance(select) / note / **defectContent** / **defectStatus** / reviewedAt(date)、dirty+保存/キャンセル+toast+router.refresh）。
+  各審査サブタブ内に「過去の審査履歴」（日時/結果/メモ 一覧＋追加フォーム＋行削除・`LoanReviewLogAddForm`/`LoanReviewLogDeleteButton`/
+  `LoanReviewLogList`）。審査 0 件は空状態＋「審査を追加」。二次店・閲覧のみは追加/削除導線を出さずカード縦積み read-only。
+- **Server Actions（5 つ・三段イディオム auth→assertCan(customer.update)→withTenant）**: `createLoanReviewAction`（最小作成・
+  status 既定 not_reviewed・createdBy=ctx.actorUserId）/ `saveLoanReviewAction`（部分更新）/ `deleteLoanReviewAction`（LoanReviewLog は cascade）/
+  `createLoanReviewLogAction` / `deleteLoanReviewLogAction`。`customerId`/`loanReviewId`/`logId` は同テナント（RLS スコープ内）で存在検証し越境作成/編集/削除を防ぐ。
+- **旧 `EditContractDialog`（per-contract ローン編集ポップアップ）は完全未使用化につき削除**（dead code）。`Contract` のローン列は残置。
 > 「ローン情報」タブは顧客に紐づく全契約のローン・団信（`loanReviewStatus` 編集含む）を契約ごとに一覧（契約無しは空状態）。
 > 「コール状況（コール）」タブは `ProjectCallsDto`（顧客単位・単一）を **4 セクション**（マエカクコール / サンキューコール /
 > ローン審査完了コール / 施工完了コール）に再構成し、各セクションを **インライン編集**（ポップアップ廃止。`MaekakuCallInlineEdit` /
