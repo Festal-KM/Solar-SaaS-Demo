@@ -35,16 +35,15 @@ import {
   deleteContractEquipmentAction,
   deleteCustomerCallLogAction,
   saveCustomerHearingAction,
-  saveProjectApplicationAction,
   saveProjectCallStatusAction,
   saveProjectConstructionAction,
   saveProjectContractAction,
   saveProjectContractEquipmentAction,
   saveProjectOverviewAction,
+  updateCustomerAction,
 } from "../actions";
 
 import type {
-  ProjectApplicationEditable,
   ProjectCallsEditable,
   ProjectConstructionEditable,
   ProjectContractEditable,
@@ -1671,20 +1670,17 @@ export function ContractDetailInlineEdit({
   const [paymentCount, setPaymentCount] = useState(initial.paymentCount != null ? String(initial.paymentCount) : "");
   const [paymentStatus, setPaymentStatus] = useState(initial.paymentStatus ?? "UNPAID");
   const [depositDate, setDepositDate] = useState(toDateInput(initial.depositDate));
-  const [dealerPayoutDate, setDealerPayoutDate] = useState(toDateInput(initial.dealerPayoutDate));
   const [equipmentSerialId, setEquipmentSerialId] = useState(initial.equipmentSerialId ?? "");
 
   const initDate = toDateInput(initial.contractDate);
   const initCount = initial.paymentCount != null ? String(initial.paymentCount) : "";
   const initStatus = initial.paymentStatus ?? "UNPAID";
   const initDeposit = toDateInput(initial.depositDate);
-  const initPayout = toDateInput(initial.dealerPayoutDate);
   const dirty =
     contractDate !== initDate ||
     paymentCount !== initCount ||
     paymentStatus !== initStatus ||
     depositDate !== initDeposit ||
-    dealerPayoutDate !== initPayout ||
     equipmentSerialId !== (initial.equipmentSerialId ?? "");
 
   function reset() {
@@ -1692,7 +1688,6 @@ export function ContractDetailInlineEdit({
     setPaymentCount(initCount);
     setPaymentStatus(initStatus);
     setDepositDate(initDeposit);
-    setDealerPayoutDate(initPayout);
     setEquipmentSerialId(initial.equipmentSerialId ?? "");
   }
 
@@ -1707,7 +1702,6 @@ export function ContractDetailInlineEdit({
           paymentCount: numOrNull(paymentCount),
           paymentStatus: paymentStatus as "UNPAID" | "PARTIAL" | "PAID",
           depositDate: depositDate || null,
-          dealerPayoutDate: dealerPayoutDate || null,
         });
         toast.success(c.saved);
         router.refresh();
@@ -1742,9 +1736,6 @@ export function ContractDetailInlineEdit({
         </FormField>
         <FormField label={f.depositDate} htmlFor="ct-deposit">
           <input id="ct-deposit" type="date" className={FIELD} value={depositDate} onChange={(e) => setDepositDate(e.target.value)} />
-        </FormField>
-        <FormField label={f.dealerPayoutDate} htmlFor="ct-payout">
-          <input id="ct-payout" type="date" className={FIELD} value={dealerPayoutDate} onChange={(e) => setDealerPayoutDate(e.target.value)} />
         </FormField>
         <FormField label={f.equipmentId} htmlFor="ct-serial">
           <Input id="ct-serial" value={equipmentSerialId} onChange={(e) => setEquipmentSerialId(e.target.value)} />
@@ -1941,84 +1932,57 @@ export function EditConstructionDialog({
   );
 }
 
-/* ── 認定・設備（申請）（Application） ── */
-export function EditApplicationDialog({
+/* ── 特記事項（Customer.specialNote・フリーテキストメモのインライン編集） ── */
+export function SpecialNoteInlineEdit({
   customerId,
   initial,
 }: {
   customerId: string;
-  initial: ProjectApplicationEditable;
+  initial: { specialNote: string | null };
 }) {
-  const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState(initial.status);
-  const [type, setType] = useState(initial.type ?? "");
-  const [submittedDate, setSubmittedDate] = useState(toDateInput(initial.submittedDate));
-  const [approvedDate, setApprovedDate] = useState(toDateInput(initial.approvedDate));
-  const [grantedAmount, setGrantedAmount] = useState(initial.grantedAmount != null ? String(initial.grantedAmount) : "");
-  const { pending, run } = useSaver(() => setOpen(false));
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [value, setValue] = useState(initial.specialNote ?? "");
 
-  function reset() {
-    setStatus(initial.status);
-    setType(initial.type ?? "");
-    setSubmittedDate(toDateInput(initial.submittedDate));
-    setApprovedDate(toDateInput(initial.approvedDate));
-    setGrantedAmount(initial.grantedAmount != null ? String(initial.grantedAmount) : "");
-  }
+  const dirty = value !== (initial.specialNote ?? "");
 
-  function onOpenChange(next: boolean) {
-    if (next) reset();
-    setOpen(next);
-  }
-
-  function save() {
-    run(() =>
-      saveProjectApplicationAction({
-        customerId,
-        contractId: initial.contractId,
-        applicationId: initial.applicationId,
-        status: status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "CANCELLED",
-        type: strOrNull(type),
-        submittedDate: submittedDate || null,
-        approvedDate: approvedDate || null,
-        grantedAmount: numOrNull(grantedAmount),
-      }),
-    );
+  function onSave() {
+    start(async () => {
+      try {
+        await updateCustomerAction({ id: customerId, specialNote: strOrNull(value) });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <EditTrigger label={ed.editApplication} />
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{ed.editApplication}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={f.certApplicationStatus} htmlFor="ap-status">
-              <select id="ap-status" className={FIELD} value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="DRAFT">{p.applicationStatusLabels.DRAFT}</option>
-                <option value="SUBMITTED">{p.applicationStatusLabels.SUBMITTED}</option>
-                <option value="APPROVED">{p.applicationStatusLabels.APPROVED}</option>
-                <option value="REJECTED">{p.applicationStatusLabels.REJECTED}</option>
-                <option value="CANCELLED">{p.applicationStatusLabels.CANCELLED}</option>
-              </select>
-            </FormField>
-            <FormField label={f.applicationType} htmlFor="ap-type">
-              <Input id="ap-type" value={type} onChange={(e) => setType(e.target.value)} />
-            </FormField>
-            <FormField label={f.submittedDate} htmlFor="ap-submitted">
-              <input id="ap-submitted" type="date" className={FIELD} value={submittedDate} onChange={(e) => setSubmittedDate(e.target.value)} />
-            </FormField>
-            <FormField label={f.approvedDate} htmlFor="ap-approved">
-              <input id="ap-approved" type="date" className={FIELD} value={approvedDate} onChange={(e) => setApprovedDate(e.target.value)} />
-            </FormField>
-            <FormField label={f.grantedAmount} htmlFor="ap-granted">
-              <MoneyInput id="ap-granted" value={grantedAmount} onChange={setGrantedAmount} />
-            </FormField>
-          </div>
-        </div>
-        <Footer onSave={save} onCancel={() => setOpen(false)} pending={pending} />
-      </DialogContent>
-    </Dialog>
+    <div className="space-y-3">
+      <Label htmlFor="special-note" className="sr-only">
+        {p.sections.specialNote}
+      </Label>
+      <Textarea
+        id="special-note"
+        rows={5}
+        value={value}
+        placeholder={p.specialNotePlaceholder}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setValue(initial.specialNote ?? "")}
+          disabled={pending || !dirty}
+        >
+          {ed.cancel}
+        </Button>
+        <Button type="button" onClick={onSave} disabled={pending || !dirty}>
+          {pending ? c.saving : ed.save}
+        </Button>
+      </div>
+    </div>
   );
 }

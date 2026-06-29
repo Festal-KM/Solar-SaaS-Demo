@@ -1043,6 +1043,8 @@ model Customer {
   closingRelationshipId      String?
   status                     CustomerStatus     @default(NEW)
   note                       String?
+  // 特記事項（契約タブ・自由記述フリーテキストメモ）。基本情報タブの note とは別概念・別列。
+  specialNote                String?
   // 顧客詳細で手動管理する 3 ステータス + 各詳細項目（自動導出ではなく手動値）。
   contractStatus             String             @default("negotiating")
   contractPlan               String?

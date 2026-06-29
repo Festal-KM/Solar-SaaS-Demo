@@ -15,7 +15,6 @@ import {
   CallLogDeleteButton,
   ContractDetailInlineEdit,
   ContractSubTabs,
-  EditApplicationDialog,
   EditConstructionDialog,
   EditContractDialog,
   EditEquipmentDialog,
@@ -24,11 +23,11 @@ import {
   LoanCompletionCallInlineEdit,
   MaekakuCallInlineEdit,
   PostCompletionCallInlineEdit,
+  SpecialNoteInlineEdit,
   ThankYouCallInlineEdit,
 } from "./project-info-edit";
 
 import type {
-  ProjectApplicationEditable,
   ProjectConstructionEditable,
   ProjectContractEditable,
   ProjectEquipmentEditable,
@@ -1174,9 +1173,6 @@ export function ProjectContractList({
   const editContractById = new Map<string, ProjectContractEditable>(
     (readOnly ? [] : editable?.contracts ?? []).map((ec) => [ec.contractId, ec]),
   );
-  const editApplicationById = new Map<string, ProjectApplicationEditable>(
-    (readOnly ? [] : editable?.applications ?? []).map((a) => [a.applicationId, a]),
-  );
   function editEquipmentById(contractId: string, equipmentId: string): ProjectEquipmentEditable | null {
     if (readOnly || !editable) return null;
     return (editable.equipmentByContract[contractId] ?? []).find((e) => e.id === equipmentId) ?? null;
@@ -1233,7 +1229,6 @@ export function ProjectContractList({
               value={c.paymentStatus ? p.paymentStatusLabels[c.paymentStatus] ?? c.paymentStatus : null}
             />
             <MetaItem label={f.depositDate} value={fmtDate(c.depositDate)} />
-            <MetaItem label={f.dealerPayoutDate} value={fmtDate(c.dealerPayoutDate)} />
             <MetaItem label={f.equipmentId} value={c.equipmentSerialId} />
           </dl>
         )}
@@ -1335,40 +1330,25 @@ export function ProjectContractList({
         ))
       )}
 
-      {/* 認定・設備（申請） */}
+      {/* 特記事項（フリーテキストメモ）。権限保持者はインライン textarea 編集、
+          readOnly/二次店はテキスト表示（空なら空状態文）。 */}
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-mute-light">
-          {p.sections.certification}
+          {p.sections.specialNote}
         </h3>
-        {data.applications.length === 0 ? (
-          <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
-            {p.noApplication}
+        {customerId && editable ? (
+          <SpecialNoteInlineEdit
+            customerId={customerId}
+            initial={{ specialNote: editable.specialNote }}
+          />
+        ) : data.specialNote && data.specialNote.length > 0 ? (
+          <p className="whitespace-pre-wrap rounded-md border border-hairline-light p-4 text-sm text-ink">
+            {data.specialNote}
           </p>
         ) : (
-          <div className="space-y-3">
-            {data.applications.map((a) => {
-              const eap = editApplicationById.get(a.applicationId);
-              return (
-                <div key={a.applicationId} className="rounded-md border border-hairline-light p-4">
-                  {customerId && eap ? (
-                    <div className="mb-1 flex justify-end">
-                      <EditApplicationDialog customerId={customerId} initial={eap} />
-                    </div>
-                  ) : null}
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                    <MetaItem
-                      label={f.certApplicationStatus}
-                      value={p.applicationStatusLabels[a.status] ?? a.status}
-                    />
-                    <MetaItem label={f.applicationType} value={a.type} />
-                    <MetaItem label={f.submittedDate} value={fmtDate(a.submittedDate)} />
-                    <MetaItem label={f.approvedDate} value={fmtDate(a.approvedDate)} />
-                    <MetaItem label={f.grantedAmount} value={fmtYen(a.grantedAmount)} />
-                  </dl>
-                </div>
-              );
-            })}
-          </div>
+          <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+            {p.specialNoteEmpty}
+          </p>
         )}
       </section>
     </div>

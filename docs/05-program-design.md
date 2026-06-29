@@ -2557,11 +2557,17 @@ PM エージェントが優先度を判断する未確定事項。
 | 不備内容 | `Contract.defectDetail` | 拡張(Contract/16-B) |
 | 対応事業者名 | `Construction.installerId`（マスタ）優先 / `Construction.vendorName`（フォールバック） | 既存/拡張(Construction/16-B) |
 
-**カテゴリ 6: 認定・設備（source = `Application` / `Contract`）**
+**カテゴリ 6: 特記事項（source = `Customer.specialNote`）**
+
+> 顧客詳細「契約」タブのこのセクションは旧「認定・設備（申請）」を廃し、**特記事項（フリーテキストメモ）**
+> へ置換した。権限保持者はインライン textarea で編集（`updateCustomerAction` 経由・auth→assertCan→
+> withTenant）、二次店/読み取り pull はテキスト表示（原価でも PII でもないため二次店にも閲覧可）。
+> 認定・設備（`Application`）データ自体は契約詳細ページ（`/contracts/[id]/application`）で従来どおり管理し、
+> Prisma の `Application` / `CustomerApplication` モデルは残置（本変更で DROP しない）。
 
 | 要望項目 | 保存先（1 対 1） | 区分 |
 |---|---|---|
-| 認定申請ステータス | `Application.status`（enum、既存 `ApplicationStatus`） | 既存 |
+| 特記事項（フリーテキスト） | `Customer.specialNote` | 拡張(Customer) |
 | 設備ID | `Contract.equipmentSerialId` | 拡張(Contract/16-B) |
 | 売電開始日 | `Construction.powerSaleStartDate` | 拡張(Construction/16-B) |
 
@@ -2599,6 +2605,7 @@ model Customer {
   buildYear    DateTime? // 築年日
   tossDept     String?   // トス部署
   belongDept   String?   // 所属部署
+  specialNote  String?   // 特記事項（契約タブのフリーテキストメモ。基本情報タブ note とは別概念・別列）
   // 既存（暫定追加済・本設計に吸収）: inflowRoute, tossUpUserId, tossUpRelationshipId,
   //   closingUserId, closingRelationshipId, maekakuStatus, note
   // 移設・廃止予定（§16.6）: contractAmount→Deal/Contract, contractExpectedDate→Contract,
@@ -2893,6 +2900,8 @@ export type ProjectInfoDto = {
     paymentCount: number | null;
     paymentStatus: 'UNPAID' | 'PARTIAL' | 'PAID' | null;
     depositDate: string | null;
+    // 代理店支払日。DB 列（ContractPayment.dealerPayoutDate）・DTO は残置するが、契約サマリ
+    // （ContractDetailInlineEdit / 読み取り dl）の表示・編集からは除外済（UI には出さない）。
     dealerPayoutDate: string | null;
     loanReviewCallAt: string | null;
     loanCompany: string | null;
@@ -2943,6 +2952,9 @@ export type ProjectInfoDto = {
   }>;
   // カテゴリ 9: 備考 + 概況
   note: string | null;
+  // カテゴリ 6: 特記事項（Customer.specialNote・フリーテキストメモ）。原価でも PII でもないため
+  // 二次店レスポンスにもそのまま含める（物理除外しない）。
+  specialNote: string | null;
   overview: {
     electricBill: number | null;
     household: number | null;

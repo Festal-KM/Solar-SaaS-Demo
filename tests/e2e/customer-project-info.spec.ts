@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 //
 // 案件情報は独立タブを廃し「基本情報」タブ内に統合表示する。上段の編集カード
 // （担当者 / 顧客基本情報 / メモ）と重複する 基本情報・体制・備考 セクションは
-// embedded で抑制し、案件固有（契約・金額 / 契約明細 / 工事・完工 / 認定・設備 /
+// embedded で抑制し、案件固有（契約・金額 / 契約明細 / 工事・完工 / 特記事項 /
 // 概況）のみを「案件情報」見出しの下に表示する。
 //
 // 検証対象:
@@ -41,7 +41,7 @@ async function signInAsDemo(page: Page): Promise<void> {
 // embedded で 基本情報・体制・備考 は抑制され、「工事・完工」「ローン」「コール状況」は
 // 各専用タブへ集約、「概況」は現状情報側へ移設されたため embedded（契約情報）には出ない。
 // 残る契約予定情報のカテゴリのみを検証する。
-const PROJECT_INFO_SECTION_HEADINGS = ["契約・金額", "認定・設備"];
+const PROJECT_INFO_SECTION_HEADINGS = ["契約・金額", "特記事項"];
 
 test.describe("F-061 顧客詳細『案件情報』統合ビュー", () => {
   // dev サーバの cold-compile（/login → /customers → /customers/[id]）を吸収するため

@@ -121,6 +121,7 @@ async function loadProjectInfo(
       inflowRoute: true,
       maekakuStatus: true,
       note: true,
+      specialNote: true,
       tossUpUserId: true,
       tossUpRelationshipId: true,
       closingUserId: true,
@@ -502,6 +503,7 @@ async function loadProjectInfo(
       body: a.detail,
     })),
     note: customer.note,
+    specialNote: customer.specialNote,
     overview: {
       electricBill: customer.electricBill,
       household: customer.household,

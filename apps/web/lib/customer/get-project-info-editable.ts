@@ -133,6 +133,8 @@ export interface ProjectApplicationEditable {
 
 export interface ProjectInfoEditable {
   customerId: string;
+  // 特記事項（契約タブのフリーテキストメモ）のインライン編集生値。
+  specialNote: string | null;
   overview: ProjectOverviewEditable;
   hearing: ProjectHearingEditable;
   calls: ProjectCallsEditable;
@@ -186,6 +188,7 @@ export async function getCustomerProjectInfoEditable(
       where: { id: customerId },
       select: {
         id: true,
+        specialNote: true,
         electricBill: true,
         household: true,
         housingType: true,
@@ -359,6 +362,7 @@ export async function getCustomerProjectInfoEditable(
 
     return {
       customerId: customer.id,
+      specialNote: customer.specialNote,
       overview: {
         electricBill: customer.electricBill,
         household: customer.household,

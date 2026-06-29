@@ -211,6 +211,9 @@ export const updateCustomerAction = withServerActionContext<
         ...(parsed.household !== undefined ? { household: parsed.household } : {}),
         ...(parsed.status !== undefined ? { status: parsed.status } : {}),
         ...(parsed.note !== undefined ? { note: parsed.note } : {}),
+        ...(parsed.specialNote !== undefined
+          ? { specialNote: parsed.specialNote?.trim() || null }
+          : {}),
         ...(parsed.inflowRoute !== undefined ? { inflowRoute: parsed.inflowRoute } : {}),
         ...(parsed.maekakuStatus !== undefined ? { maekakuStatus: parsed.maekakuStatus } : {}),
         ...(parsed.nextAction !== undefined

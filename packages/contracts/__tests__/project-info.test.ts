@@ -108,6 +108,7 @@ function baseDto(): ProjectInfoDto {
     applications: [],
     activities: [],
     note: null,
+    specialNote: "特記: 旧型パワコン交換要相談",
     overview: {
       electricBill: null,
       household: null,
@@ -211,6 +212,12 @@ describe("toProjectInfoDealerDto — 仕入値・原価の物理除外（#5）",
         expect(Object.keys(item)).not.toContain("snapshotPurchasePrice");
       }
     }
+  });
+
+  it("特記事項（specialNote）は二次店 DTO にもそのまま残る（原価でも PII でもない）", () => {
+    const dealer = toProjectInfoDealerDto(baseDto());
+    expect(dealer.specialNote).toBe("特記: 旧型パワコン交換要相談");
+    expect(Object.keys(dealer)).toContain("specialNote");
   });
 
   it("損益計算（profitAndLoss）セクションが丸ごと物理除外される（#4・#5）", () => {

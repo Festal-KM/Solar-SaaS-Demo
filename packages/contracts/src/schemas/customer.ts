@@ -164,6 +164,8 @@ export const CustomerUpdateSchema = z.object({
   household: z.string().max(100).optional(),
   status: CustomerStatusEnum.optional(),
   note: z.string().max(2000).optional(),
+  // 特記事項（契約タブのフリーテキストメモ）。基本情報タブの note とは別概念。null でクリア可。
+  specialNote: z.string().max(4000).nullable().optional(),
   // 流入経路（顧客情報で手動選択）。null で未設定にクリアできる。
   inflowRoute: InflowRouteEnum.nullable().optional(),
   // 商談履歴タブの状況入力。マエカク状況 / 次回アクション / 次回アポ日程

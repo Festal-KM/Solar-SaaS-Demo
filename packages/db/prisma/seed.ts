@@ -1466,6 +1466,8 @@ async function seedCustomerHearing(
         thankYouCallPreferredAt: s % 3 === 1 ? day(2 + (s % 4)) : null,
         thankYouCallNote: s % 4 === 1 ? "ご契約御礼コール" : null,
         maekakuCallNote: s % 3 === 0 ? "前確: 在宅時間 夜間希望" : null,
+        specialNote:
+          s % 4 === 0 ? "特記: 旧型パワコン交換要相談。近隣に既設導入実績あり。" : null,
         generalCallPreferredTime: s % 2 === 0 ? "平日19:00以降" : "土日終日",
         maekakuPreferredPhone: `080-2${String(1000 + s).padStart(4, "0")}-${String(4000 + s).padStart(4, "0")}`,
         // 次回アポ担当者（自社社員）。コールタブ read-only / 商談タブ編集のデモ。

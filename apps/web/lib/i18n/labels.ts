@@ -1977,6 +1977,7 @@ export const labels = {
           loan: "ローン・団信",
           construction: "工事・完工",
           certification: "認定・設備",
+          specialNote: "特記事項",
           equipment: "設備明細",
           overview: "概況",
           calls: "コール状況",
@@ -2147,6 +2148,8 @@ export const labels = {
         equipmentAddHint: "＋から設備を追加すると契約が作成されます",
         noConstruction: "施工情報がありません",
         noApplication: "認定・申請情報がありません",
+        specialNotePlaceholder: "特記事項を入力（自由記述）",
+        specialNoteEmpty: "特記事項はありません",
         yes: "有",
         no: "無",
         equipment: {

@@ -255,6 +255,9 @@ export interface ProjectInfoDto {
   applications: ProjectApplicationDto[];
   activities: ProjectActivityDto[];
   note: string | null;
+  // 特記事項（契約タブのフリーテキストメモ）。基本情報タブの note とは別概念。
+  // 原価でも PII でもないため二次店レスポンスにもそのまま含める（物理除外しない）。
+  specialNote: string | null;
   overview: {
     electricBill: string | null;
     household: string | null;
