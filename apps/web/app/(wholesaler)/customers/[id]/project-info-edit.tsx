@@ -2017,7 +2017,7 @@ export function LoanReviewLogAddForm({
     <div className="rounded-md border border-hairline-light bg-surface-soft/40 p-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <FormField label={lt.logReviewedAt} htmlFor={`lrl-at-${loanReviewId}`}>
-          <input id={`lrl-at-${loanReviewId}`} type="datetime-local" className={FIELD} value={reviewedAt} onChange={(e) => setReviewedAt(e.target.value)} />
+          <input id={`lrl-at-${loanReviewId}`} type="date" className={FIELD} value={reviewedAt} onChange={(e) => setReviewedAt(e.target.value)} />
         </FormField>
         <FormField label={lt.logResult} htmlFor={`lrl-result-${loanReviewId}`}>
           <select id={`lrl-result-${loanReviewId}`} className={FIELD} value={result} onChange={(e) => setResult(e.target.value)}>
@@ -2212,7 +2212,7 @@ export function LoanReviewLogList({
           <div className="min-w-0 space-y-0.5">
             <div className="flex items-center gap-2 text-sm text-ink">
               <span className="tabular-nums">
-                {new Date(log.reviewedAt).toLocaleString("ja-JP")}
+                {new Date(log.reviewedAt).toLocaleDateString("ja-JP")}
               </span>
               <span className="rounded-sm bg-surface-soft px-1.5 py-0.5 text-xs font-medium text-ink">
                 {lt.resultLabels[log.result] ?? log.result}
@@ -2222,6 +2222,11 @@ export function LoanReviewLogList({
               ) : null}
             </div>
             {log.note ? <p className="text-xs text-mute-light">{log.note}</p> : null}
+            {log.defectContent ? (
+              <p className="text-xs text-amber-700">
+                {lt.logDefectContent}：{log.defectContent}
+              </p>
+            ) : null}
           </div>
           <LoanReviewLogDeleteButton
             customerId={customerId}
@@ -2251,14 +2256,15 @@ function DefectResolveToggle({
   const router = useRouter();
   const [pending, start] = useTransition();
 
-  function onToggle() {
+  function onChange(next: boolean) {
+    if (next === resolved) return;
     start(async () => {
       try {
         await setLoanReviewLogDefectResolvedAction({
           customerId,
           loanReviewId,
           logId,
-          resolved: !resolved,
+          resolved: next,
         });
         toast.success(c.saved);
         router.refresh();
@@ -2268,21 +2274,29 @@ function DefectResolveToggle({
     });
   }
 
-  // ステータス（可変）チップ。現在の状態（未解消/解消済み）を色付きバッジで表示し、
-  // クリックでトグル。title に操作内容（解消済みにする/未解消に戻す）を持たせる。
+  // ステータス（可変）。未解消/解消済みを選べるセレクトで変更可能であることを明示する。
+  // 現在状態は左のドット（未解消=amber / 解消済み=emerald）で示し、セレクト自体は素直な配色に
+  // して native arrow と背景色のにじみで崩れないようにする。
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={pending}
-      title={resolved ? lt.defectResolveToOpen : lt.defectResolveToResolved}
-      className={cn(
-        "inline-flex w-20 shrink-0 items-center justify-center rounded-sm px-1.5 py-0.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50",
-        resolved ? "badge-success" : "badge-warning",
-      )}
-    >
-      {resolved ? lt.defectResolvedBadge : lt.defectOpenBadge}
-    </button>
+    <div className="flex shrink-0 items-center gap-1.5">
+      <span
+        className={cn(
+          "size-2 shrink-0 rounded-full",
+          resolved ? "bg-emerald-500" : "bg-amber-500",
+        )}
+        aria-hidden
+      />
+      <select
+        id={`lrl-defstatus-${logId}`}
+        value={resolved ? "resolved" : "open"}
+        onChange={(e) => onChange(e.target.value === "resolved")}
+        disabled={pending}
+        className="h-7 w-24 rounded-sm border border-ash-light bg-white px-2 text-xs text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+      >
+        <option value="open">{lt.defectOpenBadge}</option>
+        <option value="resolved">{lt.defectResolvedBadge}</option>
+      </select>
+    </div>
   );
 }
 
@@ -2320,7 +2334,7 @@ export function LoanReviewDefectList({
           ) : (
             <span
               className={cn(
-                "inline-flex w-20 shrink-0 items-center justify-center rounded-sm px-1.5 py-0.5 text-xs font-medium",
+                "inline-flex shrink-0 items-center justify-center rounded-sm px-1.5 py-0.5 text-xs font-medium",
                 log.defectResolved ? "badge-success" : "badge-warning",
               )}
             >

@@ -999,12 +999,17 @@ export function ProjectLoanInfoList({
                   {review.logs.map((log) => (
                     <li key={log.id} className="flex items-center gap-2 py-2 text-sm text-ink">
                       <span className="tabular-nums">
-                        {fmtDateTime(log.reviewedAt)}
+                        {fmtDate(log.reviewedAt)}
                       </span>
                       <span className="rounded-sm bg-surface-soft px-1.5 py-0.5 text-xs font-medium">
                         {lt.resultLabels[log.result] ?? log.result}
                       </span>
                       {log.note ? <span className="text-xs text-mute-light">{log.note}</span> : null}
+                      {log.defectContent ? (
+                        <span className="text-xs text-amber-700">
+                          {lt.logDefectContent}：{log.defectContent}
+                        </span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
