@@ -10,6 +10,7 @@ import { labels } from "@/lib/i18n/labels";
 import {
   AccessoryInlineEdit,
   AddAccessoryButton,
+  AddContractButton,
   AddLoanReviewButton,
   CallLogAddForm,
   CallLogDeleteButton,
@@ -278,11 +279,6 @@ function emptyItem(): AnyEquipmentItem {
     detail: null,
     attributes: null,
   };
-}
-
-// 契約 0 件の顧客の設備追加グリッド用の空カテゴリ集合（全カテゴリ空配列）。
-function emptyAnyEquipment(): AnyEquipment {
-  return { PV: [], BT: [], EQ: [], IH: [], AC: [], ACCESSORY: [], GIFT: [], CONSTRUCTION: [] };
 }
 
 // 商材ライン（カテゴリ）の表示順・タイトル・行ビルダーの単一ソース。CONSTRUCTION
@@ -1330,58 +1326,13 @@ export function ProjectContractList({
           契約 0 件でも、権限保持者には設備の追加導線を出し、保存時にサーバーが最小契約を
           生成する。基本情報タブ（readOnly）は従来どおり契約カードを縦に並べる。 */}
       {contracts.length === 0 ? (
-        customerId ? (
-          useInline ? (
-            // 契約 0 件でも「契約 #1」サブタブを最初から表示する。中身は契約サマリの空表示
-            // ＋商材ライン（contractId=null）。設備を保存するとサーバーが契約を生成し、以降は
-            // 実契約タブに切り替わる。削除対象が無いため「契約を削除」は出さない。
-            <ContractSubTabs
-              customerId={customerId}
-              hasContracts={false}
-              tabs={[
-                {
-                  id: "__new__",
-                  label: `${ct.subtabHeading} #1`,
-                  content: (
-                    <div className="space-y-4">
-                      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                        <MetaItem label={f.contractDate} value={null} />
-                        <MetaItem label={ct.contractAmountAuto} value={fmtYen(null)} />
-                        <MetaItem label={f.paymentCount} value={null} />
-                        <MetaItem label={f.paymentStatus} value={null} />
-                        <MetaItem label={f.depositDate} value={null} />
-                        <MetaItem label={f.equipmentId} value={null} />
-                      </dl>
-                      <div>
-                        <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-                          {ct.equipmentTitle}
-                        </h4>
-                        <p className="mb-2 text-[11px] text-mute-light">{ct.equipmentHint}</p>
-                        <EquipmentInlineGrid
-                          contractId={null}
-                          customerId={customerId}
-                          editFor={inlineEditFor(null)}
-                        />
-                      </div>
-                    </div>
-                  ),
-                },
-              ]}
-            />
-          ) : (
-            <div className="space-y-4 rounded-md border border-hairline-light p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
-                  {p.sections.equipment}
-                </h3>
-                <span className="text-[11px] text-mute-light">{p.equipmentAddHint}</span>
-              </div>
-              <EquipmentGrid
-                equipment={emptyAnyEquipment()}
-                editSlotFor={(category, item, title) => equipmentEditSlot(null, category, item, title)}
-              />
-            </div>
-          )
+        customerId && useInline ? (
+          // 契約 0 件のとき（ローン審査タブと同じ挙動）。タブは出さず、空メッセージ＋
+          // 「契約を追加」のみ。追加を押すとサーバーが契約 #1 を生成しサブタブが現れる。
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-mute-light">{ct.empty}</p>
+            <AddContractButton customerId={customerId} />
+          </div>
         ) : (
           <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
             {p.noContract}

@@ -2299,6 +2299,7 @@ export const labels = {
       // 契約状況タブ — 契約予定情報の単一の表示・編集面（Contract モデル由来 per-contract）。
       // 商材ライン（PV/BT/付帯/施工）をカード内インラインで入力する（概況は廃止）。
       contractTab: {
+        empty: "契約はまだありません。「契約を追加」から作成してください。",
         detailTitle: "契約予定情報（案件詳細）",
         detailHint: "契約・支払・商材ライン・認定を契約ごとに編集（契約金額は商材ライン合計）",
         equipmentTitle: "商材ライン",
