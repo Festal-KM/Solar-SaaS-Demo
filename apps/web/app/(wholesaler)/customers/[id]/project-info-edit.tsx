@@ -2314,7 +2314,7 @@ export function LoanReviewDefectList({
           >
             {log.defectResolved ? lt.defectResolvedBadge : lt.defectOpenBadge}
           </span>
-          <span className="min-w-0 flex-1 truncate" title={log.defectContent ?? undefined}>
+          <span className="min-w-0 truncate" title={log.defectContent ?? undefined}>
             {log.defectContent}
           </span>
           {customerId ? (
