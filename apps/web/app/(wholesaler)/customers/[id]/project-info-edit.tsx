@@ -1634,9 +1634,13 @@ export function ContractDetailInlineEdit({
 export function ContractSubTabs({
   customerId,
   tabs,
+  // 実契約が 0 件のとき false。合成「契約 #1」タブを最初から表示しつつ、削除対象が
+  // 無いため「契約を削除」は出さない（保存時にサーバーが最小契約を生成する）。
+  hasContracts = true,
 }: {
   customerId: string;
   tabs: { id: string; label: string; content: React.ReactNode }[];
+  hasContracts?: boolean;
 }) {
   const [active, setActive] = useState(tabs[0]?.id ?? "");
   if (tabs.length === 0) return null;
@@ -1653,7 +1657,9 @@ export function ContractSubTabs({
         </TabsList>
         <div className="flex shrink-0 items-center gap-2 pb-1">
           <AddContractButton customerId={customerId} />
-          <DeleteContractButton customerId={customerId} contractId={active} />
+          {hasContracts ? (
+            <DeleteContractButton customerId={customerId} contractId={active} />
+          ) : null}
         </div>
       </div>
       {tabs.map((t) => (

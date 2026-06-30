@@ -10,7 +10,6 @@ import { labels } from "@/lib/i18n/labels";
 import {
   AccessoryInlineEdit,
   AddAccessoryButton,
-  AddContractButton,
   AddLoanReviewButton,
   CallLogAddForm,
   CallLogDeleteButton,
@@ -1332,33 +1331,57 @@ export function ProjectContractList({
           生成する。基本情報タブ（readOnly）は従来どおり契約カードを縦に並べる。 */}
       {contracts.length === 0 ? (
         customerId ? (
-          <div className="space-y-4 rounded-md border border-hairline-light p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
-                {useInline ? ct.equipmentTitle : p.sections.equipment}
-              </h3>
-              <span className="text-[11px] text-mute-light">
-                {useInline ? ct.equipmentHint : p.equipmentAddHint}
-              </span>
-              {useInline ? (
-                <div className="ml-auto">
-                  <AddContractButton customerId={customerId} />
-                </div>
-              ) : null}
-            </div>
-            {useInline ? (
-              <EquipmentInlineGrid
-                contractId={null}
-                customerId={customerId}
-                editFor={inlineEditFor(null)}
-              />
-            ) : (
+          useInline ? (
+            // 契約 0 件でも「契約 #1」サブタブを最初から表示する。中身は契約サマリの空表示
+            // ＋商材ライン（contractId=null）。設備を保存するとサーバーが契約を生成し、以降は
+            // 実契約タブに切り替わる。削除対象が無いため「契約を削除」は出さない。
+            <ContractSubTabs
+              customerId={customerId}
+              hasContracts={false}
+              tabs={[
+                {
+                  id: "__new__",
+                  label: `${ct.subtabHeading} #1`,
+                  content: (
+                    <div className="space-y-4">
+                      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                        <MetaItem label={f.contractDate} value={null} />
+                        <MetaItem label={ct.contractAmountAuto} value={fmtYen(null)} />
+                        <MetaItem label={f.paymentCount} value={null} />
+                        <MetaItem label={f.paymentStatus} value={null} />
+                        <MetaItem label={f.depositDate} value={null} />
+                        <MetaItem label={f.equipmentId} value={null} />
+                      </dl>
+                      <div>
+                        <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+                          {ct.equipmentTitle}
+                        </h4>
+                        <p className="mb-2 text-[11px] text-mute-light">{ct.equipmentHint}</p>
+                        <EquipmentInlineGrid
+                          contractId={null}
+                          customerId={customerId}
+                          editFor={inlineEditFor(null)}
+                        />
+                      </div>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          ) : (
+            <div className="space-y-4 rounded-md border border-hairline-light p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+                  {p.sections.equipment}
+                </h3>
+                <span className="text-[11px] text-mute-light">{p.equipmentAddHint}</span>
+              </div>
               <EquipmentGrid
                 equipment={emptyAnyEquipment()}
                 editSlotFor={(category, item, title) => equipmentEditSlot(null, category, item, title)}
               />
-            )}
-          </div>
+            </div>
+          )
         ) : (
           <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
             {p.noContract}
