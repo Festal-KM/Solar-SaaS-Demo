@@ -2268,17 +2268,21 @@ function DefectResolveToggle({
     });
   }
 
+  // ステータス（可変）チップ。現在の状態（未解消/解消済み）を色付きバッジで表示し、
+  // クリックでトグル。title に操作内容（解消済みにする/未解消に戻す）を持たせる。
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
-      size="sm"
-      className="h-6 shrink-0 px-2 text-[11px]"
       onClick={onToggle}
       disabled={pending}
+      title={resolved ? lt.defectResolveToOpen : lt.defectResolveToResolved}
+      className={cn(
+        "inline-flex w-20 shrink-0 items-center justify-center rounded-sm px-1.5 py-0.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50",
+        resolved ? "badge-success" : "badge-warning",
+      )}
     >
-      {resolved ? lt.defectResolveToOpen : lt.defectResolveToResolved}
-    </Button>
+      {resolved ? lt.defectResolvedBadge : lt.defectOpenBadge}
+    </button>
   );
 }
 
@@ -2302,20 +2306,9 @@ export function LoanReviewDefectList({
   return (
     <ul className="divide-y divide-hairline-light">
       {defects.map((log) => (
-        <li key={log.id} className="flex items-center gap-2 py-1.5 text-sm text-ink">
+        <li key={log.id} className="flex items-center gap-3 py-1.5 text-sm text-ink">
           <span className="shrink-0 tabular-nums text-mute-light">
             {new Date(log.reviewedAt).toLocaleDateString("ja-JP")}
-          </span>
-          <span
-            className={cn(
-              "shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium",
-              log.defectResolved ? "badge-success" : "badge-warning",
-            )}
-          >
-            {log.defectResolved ? lt.defectResolvedBadge : lt.defectOpenBadge}
-          </span>
-          <span className="min-w-0 truncate" title={log.defectContent ?? undefined}>
-            {log.defectContent}
           </span>
           {customerId ? (
             <DefectResolveToggle
@@ -2324,7 +2317,19 @@ export function LoanReviewDefectList({
               logId={log.id}
               resolved={log.defectResolved}
             />
-          ) : null}
+          ) : (
+            <span
+              className={cn(
+                "inline-flex w-20 shrink-0 items-center justify-center rounded-sm px-1.5 py-0.5 text-xs font-medium",
+                log.defectResolved ? "badge-success" : "badge-warning",
+              )}
+            >
+              {log.defectResolved ? lt.defectResolvedBadge : lt.defectOpenBadge}
+            </span>
+          )}
+          <span className="min-w-0 truncate" title={log.defectContent ?? undefined}>
+            {log.defectContent}
+          </span>
         </li>
       ))}
     </ul>
