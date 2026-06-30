@@ -704,6 +704,18 @@ export const createLoanReviewLogAction = withServerActionContext<
     });
     if (!review) throw new NotFoundError("ローン審査が見つかりません");
 
+    // 不備の担当者は同テナントの User か検証（RLS スコープ内で解決できなければ拒否）。
+    // 記録者は createdByUserId（操作ユーザー）で別途付与（input には含めない）。
+    let assigneeUserId: string | null = null;
+    if (parsed.assigneeUserId) {
+      const assignee = await tx.user.findUnique({
+        where: { id: parsed.assigneeUserId },
+        select: { id: true },
+      });
+      if (!assignee) throw new NotFoundError("担当者が見つかりません");
+      assigneeUserId = assignee.id;
+    }
+
     const created = await tx.loanReviewLog.create({
       data: {
         loanReviewId: parsed.loanReviewId,
@@ -712,6 +724,7 @@ export const createLoanReviewLogAction = withServerActionContext<
         result: parsed.result,
         note: parsed.note?.trim() || null,
         defectContent: parsed.defectContent?.trim() || null,
+        assigneeUserId,
         createdByUserId: ctx.actorUserId,
       },
       select: { id: true },

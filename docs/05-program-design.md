@@ -2804,6 +2804,22 @@ model ContractPayment {
 - **Server Actions**: `createLoanReviewLogAction` は `defectContent`（空→null）を保存。`saveLoanReviewAction` から不備更新ロジックを削除。
   新規 `setLoanReviewLogDefectResolvedAction`（`LoanReviewLogDefectResolveSchema` で parse → 対象 log が同テナント（`customerId` 経由）であることを
   `findFirst` で検証してから `defectResolved` を update）。既存 `deleteLoanReviewLogAction` と同じテナント検証・RLS 二重防御パターンに倣う。
+
+##### 16.11.1.a 専用の不備追加フォーム + 不備の担当者（`assigneeUserId`）
+
+> 不備は引き続き審査履歴ログ（`LoanReviewLog`・`result="defect"`）として保持しつつ、「不備内容・解消状況」セクションに
+> **専用の不備追加フォーム（不備内容＋発生日＋担当者）** を新設し、審査履歴フォームを経由せず直接・複数登録できるようにする。
+> 各不備に担当者（自社 User）を持たせる。担当者は記録者（`createdByUserId`＝操作ユーザー）とは別概念。
+
+- **マイグレーション（`20260630010000_loan_review_log_assignee`・非破壊範囲）**: `LoanReviewLog` へ
+  **`assigneeUserId` String?（不備の担当者・自社 User・FK 無しの素の String。`Customer.nextAppointmentAssigneeUserId` と同流儀）** を追加。RLS は既存ポリシーのまま（カラム追加のみ）。
+- **Schema**: `LoanReviewLogCreateSchema` へ `assigneeUserId: z.string().min(1).nullable().optional()` を追加。専用フォームは `result="defect"` を渡す。
+- **DTO**: `ProjectLoanReviewLogDto` へ `assigneeUserId: string | null` / `assigneeName: string | null`（ローダで users マップから解決）を追加。
+- **ローダ**: `getCustomerProjectInfo` の logs select に `assigneeUserId` を追加し、`nameByUserId`（自社 User）から `assigneeName` を解決（`createdByUserId`→`handlerName` と同方式）。`getCustomerProjectInfoEditable` は logs を持たないため変更なし。
+- **UI**: `LoanReviewDefectAddForm`（不備内容 textarea＋発生日 date＝既定当日＋担当者 select＝自社ユーザー・未指定可）を新設し、
+  `createLoanReviewLogAction({ result: "defect", defectContent, assigneeUserId, reviewedAt })` を呼ぶ。`LoanReviewLogAddForm`（審査履歴）からは不備内容 textarea を削除し「日時・結果・メモ」のみへ。
+  `LoanReviewDefectList` は各行に担当者名（`assigneeName`）を表示（日付→ステータス→不備内容→担当者）。`ProjectLoanInfoList` に `users` prop を追加し編集可能時にフォームを描画（page.tsx で `listWholesalerUsers()` を渡す）。
+- **Server Actions**: `createLoanReviewLogAction` は `assigneeUserId` を受け取り、指定時は同テナントの User か `tx.user.findUnique` で検証（不正は `NotFoundError`）してから保存。`createdByUserId` は従来どおり `ctx.actorUserId` 由来（input に含めない）。
 > 「ローン情報」タブは顧客に紐づく全契約のローン・団信（`loanReviewStatus` 編集含む）を契約ごとに一覧（契約無しは空状態）。
 > 「コール状況（コール）」タブは `ProjectCallsDto`（顧客単位・単一）を **4 セクション**（マエカクコール / サンキューコール /
 > ローン審査完了コール / 施工完了コール）に再構成し、各セクションを **インライン編集**（ポップアップ廃止。`MaekakuCallInlineEdit` /

@@ -1317,6 +1317,7 @@ model LoanReviewLog {
   note            String?  // メモ（自由記述）
   defectContent   String?  // 不備内容（このログで記録された不備。null=不備なし）
   defectResolved  Boolean  @default(false) // 不備解消フラグ（不備一覧の解消トグル）
+  assigneeUserId  String?  // 不備の担当者（自社 User・FK 無しの素の String）。記録者とは別概念。
   createdByUserId String
   createdAt       DateTime @default(now())
 

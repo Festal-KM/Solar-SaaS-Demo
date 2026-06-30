@@ -390,6 +390,8 @@ export const LoanReviewLogCreateSchema = z.object({
   result: LoanReviewResultEnum,
   note: z.string().max(2000).nullable().optional(),
   defectContent: z.string().max(2000).nullable().optional(),
+  // 不備の担当者（自社 User）。記録者（createdByUserId）とは別概念。未設定は null。
+  assigneeUserId: z.string().min(1).nullable().optional(),
 });
 
 export type LoanReviewLogCreateInput = z.infer<typeof LoanReviewLogCreateSchema>;

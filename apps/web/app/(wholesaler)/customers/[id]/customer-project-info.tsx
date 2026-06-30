@@ -21,6 +21,7 @@ import {
   EquipmentInlineEdit,
   HearingInlineEdit,
   LoanCompletionCallInlineEdit,
+  LoanReviewDefectAddForm,
   LoanReviewDefectList,
   LoanReviewInlineEdit,
   LoanReviewLogAddForm,
@@ -922,9 +923,11 @@ export function ProjectConstructionList({
 export function ProjectLoanInfoList({
   data,
   editable = null,
+  users = [],
 }: {
   data: CustomerProjectInfoData;
   editable?: ProjectInfoEditable | null;
+  users?: { id: string; name: string }[];
 }) {
   const lt = labels.customer.detail.loanTab;
   const reviews = data.loanReviews;
@@ -972,11 +975,20 @@ export function ProjectLoanInfoList({
             <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
               {lt.defectTitle}
             </h4>
-            <LoanReviewDefectList
-              customerId={customerId}
-              loanReviewId={review.loanReviewId}
-              logs={review.logs}
-            />
+            <div className="space-y-3">
+              <LoanReviewDefectList
+                customerId={customerId}
+                loanReviewId={review.loanReviewId}
+                logs={review.logs}
+              />
+              {customerId ? (
+                <LoanReviewDefectAddForm
+                  customerId={customerId}
+                  loanReviewId={review.loanReviewId}
+                  users={users}
+                />
+              ) : null}
+            </div>
           </div>
           <div>
             <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">

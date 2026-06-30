@@ -1968,8 +1968,8 @@ export function LoanReviewInlineEdit({
   );
 }
 
-/* 過去の審査履歴ログ（LoanReviewLog）の追加フォーム。日時 + 結果 select + メモ + 不備内容。
-   不備内容は任意（空可）で、入力したログが「不備内容・解消状況」一覧に出る。記録者は
+/* 過去の審査履歴ログ（LoanReviewLog）の追加フォーム。日時 + 結果 select + メモ。
+   不備の登録は専用の LoanReviewDefectAddForm へ一本化（このフォームからは扱わない）。記録者は
    createdByUserId（操作ユーザー）でサーバーが自動付与する（フォームに無し）。 */
 export function LoanReviewLogAddForm({
   customerId,
@@ -1984,7 +1984,6 @@ export function LoanReviewLogAddForm({
   const [reviewedAt, setReviewedAt] = useState("");
   const [result, setResult] = useState<string>(LOAN_REVIEW_RESULT_VALUES[0]);
   const [note, setNote] = useState("");
-  const [defectContent, setDefectContent] = useState("");
 
   function onAdd() {
     if (!reviewedAt) {
@@ -1999,12 +1998,10 @@ export function LoanReviewLogAddForm({
           reviewedAt: new Date(reviewedAt).toISOString(),
           result: result as LoanReviewResultValue,
           note: strOrNull(note),
-          defectContent: strOrNull(defectContent),
         });
         toast.success(c.saved);
         setReviewedAt("");
         setNote("");
-        setDefectContent("");
         setResult(LOAN_REVIEW_RESULT_VALUES[0]);
         router.refresh();
       } catch (err) {
@@ -2032,14 +2029,102 @@ export function LoanReviewLogAddForm({
           <Input id={`lrl-note-${loanReviewId}`} value={note} onChange={(e) => setNote(e.target.value)} />
         </FormField>
       </div>
-      <div className="mt-3">
-        <FormField label={lt.logDefectContent} htmlFor={`lrl-defect-${loanReviewId}`}>
-          <Textarea id={`lrl-defect-${loanReviewId}`} rows={2} value={defectContent} onChange={(e) => setDefectContent(e.target.value)} />
-        </FormField>
-      </div>
       <div className="mt-3 flex justify-end">
         <Button type="button" size="sm" onClick={onAdd} disabled={pending || !reviewedAt}>
           {pending ? lt.logAdding : lt.logAdd}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* 「不備内容・解消状況」セクション専用の不備追加フォーム。不備内容 + 発生日 + 担当者 select。
+   result="defect" の LoanReviewLog として直接・複数登録できる（審査履歴フォームを経由しない）。
+   担当者は自社ユーザーから選択（未指定可）、記録者は createdByUserId（操作ユーザー）でサーバーが
+   自動付与する（フォームに無し）。成功でフォームをリセットし router.refresh する。 */
+export function LoanReviewDefectAddForm({
+  customerId,
+  loanReviewId,
+  users,
+}: {
+  customerId: string;
+  loanReviewId: string;
+  users: { id: string; name: string }[];
+}) {
+  const lt = labels.customer.detail.loanTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const today = new Date().toISOString().slice(0, 10);
+  const [occurredAt, setOccurredAt] = useState(today);
+  const [defectContent, setDefectContent] = useState("");
+  const [assigneeUserId, setAssigneeUserId] = useState("");
+
+  function onAdd() {
+    if (!defectContent.trim()) {
+      toast.error(lt.defectContentRequired);
+      return;
+    }
+    start(async () => {
+      try {
+        await createLoanReviewLogAction({
+          customerId,
+          loanReviewId,
+          reviewedAt: new Date(occurredAt || today).toISOString(),
+          result: "defect" as LoanReviewResultValue,
+          defectContent: defectContent.trim(),
+          assigneeUserId: assigneeUserId || null,
+        });
+        toast.success(c.saved);
+        setDefectContent("");
+        setAssigneeUserId("");
+        setOccurredAt(today);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <div className="rounded-md border border-hairline-light bg-surface-soft/40 p-3">
+      <FormField label={lt.logDefectContent} htmlFor={`lrl-defect-${loanReviewId}`}>
+        <Textarea
+          id={`lrl-defect-${loanReviewId}`}
+          rows={2}
+          placeholder={lt.defectContentPlaceholder}
+          value={defectContent}
+          onChange={(e) => setDefectContent(e.target.value)}
+        />
+      </FormField>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormField label={lt.defectOccurredAt} htmlFor={`lrl-defect-at-${loanReviewId}`}>
+          <input
+            id={`lrl-defect-at-${loanReviewId}`}
+            type="date"
+            className={FIELD}
+            value={occurredAt}
+            onChange={(e) => setOccurredAt(e.target.value)}
+          />
+        </FormField>
+        <FormField label={lt.defectAssignee} htmlFor={`lrl-defect-assignee-${loanReviewId}`}>
+          <select
+            id={`lrl-defect-assignee-${loanReviewId}`}
+            className={FIELD}
+            value={assigneeUserId}
+            onChange={(e) => setAssigneeUserId(e.target.value)}
+          >
+            <option value="">{lt.defectAssigneeUnset}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </FormField>
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Button type="button" size="sm" onClick={onAdd} disabled={pending || !defectContent.trim()}>
+          {pending ? lt.defectAdding : lt.defectAdd}
         </Button>
       </div>
     </div>
@@ -2341,9 +2426,12 @@ export function LoanReviewDefectList({
               {log.defectResolved ? lt.defectResolvedBadge : lt.defectOpenBadge}
             </span>
           )}
-          <span className="min-w-0 truncate" title={log.defectContent ?? undefined}>
+          <span className="min-w-0 flex-1 truncate" title={log.defectContent ?? undefined}>
             {log.defectContent}
           </span>
+          {log.assigneeName ? (
+            <span className="shrink-0 text-xs text-mute-light">{log.assigneeName}</span>
+          ) : null}
         </li>
       ))}
     </ul>

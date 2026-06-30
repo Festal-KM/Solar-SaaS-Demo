@@ -2352,6 +2352,14 @@ export const labels = {
         defectResolveToOpen: "未解消に戻す",
         defectResolvedBadge: "解消済み",
         defectOpenBadge: "未解消",
+        // 専用の不備追加フォーム（不備内容 + 発生日 + 担当者）。
+        defectAdd: "不備を追加",
+        defectAdding: "追加中…",
+        defectOccurredAt: "発生日",
+        defectAssignee: "担当者",
+        defectAssigneeUnset: "未割当",
+        defectContentPlaceholder: "不備の内容を入力",
+        defectContentRequired: "不備内容を入力してください",
         // 過去の審査履歴ログ（LoanReviewLog・画面から追加）。
         historyTitle: "過去の審査履歴",
         historyEmpty: "履歴はありません",

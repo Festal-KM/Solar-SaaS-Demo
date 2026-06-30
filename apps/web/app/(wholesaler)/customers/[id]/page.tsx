@@ -596,7 +596,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         <TabsContent value="loan">
           <Card className="p-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">{d.tabs.loan}</h2>
-            <ProjectLoanInfoList data={projectInfo} editable={projectInfoEditable} />
+            <ProjectLoanInfoList data={projectInfo} editable={projectInfoEditable} users={users} />
           </Card>
         </TabsContent>
 

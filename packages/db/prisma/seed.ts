@@ -1529,6 +1529,8 @@ async function seedCustomerHearing(
               note: j === 0 ? "一次審査の所見" : null,
               defectContent: isDefect ? "源泉徴収票の年度相違" : null,
               defectResolved: isDefect && (s + i + j) % 2 === 0,
+              // 不備の担当者（自社ユーザーのいずれか）。記録者とは別概念。
+              assigneeUserId: isDefect ? staff[(s + i + j) % staff.length]!.id : null,
               createdByUserId: staff[0]!.id,
             },
           });

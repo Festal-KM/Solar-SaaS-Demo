@@ -178,6 +178,7 @@ async function loadProjectInfo(
               note: true,
               defectContent: true,
               defectResolved: true,
+              assigneeUserId: true,
               createdByUserId: true,
             },
           },
@@ -334,6 +335,9 @@ async function loadProjectInfo(
         customer.nextAppointmentAssigneeUserId,
         ...customer.callLogs.map((l) => l.handlerUserId),
         ...customer.loanReviews.flatMap((r) => r.logs.map((l) => l.createdByUserId)),
+        ...customer.loanReviews.flatMap((r) =>
+          r.logs.map((l) => l.assigneeUserId).filter((v): v is string => !!v),
+        ),
       ].filter((v): v is string => !!v),
     ),
   ];
@@ -535,6 +539,8 @@ async function loadProjectInfo(
         note: l.note,
         defectContent: l.defectContent,
         defectResolved: l.defectResolved,
+        assigneeUserId: l.assigneeUserId,
+        assigneeName: l.assigneeUserId ? nameByUserId.get(l.assigneeUserId) ?? null : null,
         handlerName: nameByUserId.get(l.createdByUserId) ?? null,
       })),
     })),

@@ -138,6 +138,44 @@ describe("LoanReviewLogCreateSchema / DeleteSchema", () => {
       }),
     ).toThrow();
   });
+  it("assigneeUserId: 有効 id 受理 / 空文字 reject / null・省略許容", () => {
+    const withAssignee = LoanReviewLogCreateSchema.parse({
+      customerId: "c1",
+      loanReviewId: "lr1",
+      reviewedAt: "2026-06-01T10:00",
+      result: "defect",
+      defectContent: "源泉徴収票の年度相違",
+      assigneeUserId: "u1",
+    });
+    expect(withAssignee.assigneeUserId).toBe("u1");
+
+    expect(() =>
+      LoanReviewLogCreateSchema.parse({
+        customerId: "c1",
+        loanReviewId: "lr1",
+        reviewedAt: "2026-06-01T10:00",
+        result: "defect",
+        assigneeUserId: "",
+      }),
+    ).toThrow();
+
+    const nullAssignee = LoanReviewLogCreateSchema.parse({
+      customerId: "c1",
+      loanReviewId: "lr1",
+      reviewedAt: "2026-06-01T10:00",
+      result: "approved",
+      assigneeUserId: null,
+    });
+    expect(nullAssignee.assigneeUserId).toBeNull();
+
+    const omitted = LoanReviewLogCreateSchema.parse({
+      customerId: "c1",
+      loanReviewId: "lr1",
+      reviewedAt: "2026-06-01T10:00",
+      result: "approved",
+    });
+    expect(omitted.assigneeUserId).toBeUndefined();
+  });
   it("delete は customerId + loanReviewId + logId で受理", () => {
     expect(
       LoanReviewLogDeleteSchema.parse({ customerId: "c1", loanReviewId: "lr1", logId: "log1" }),

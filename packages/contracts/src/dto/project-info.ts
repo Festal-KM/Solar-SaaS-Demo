@@ -241,6 +241,8 @@ export interface ProjectLoanReviewLogDto {
   note: string | null;
   defectContent: string | null; // 不備内容（null=不備なし。非 null のみ不備一覧に出る）
   defectResolved: boolean; // 不備解消フラグ
+  assigneeUserId: string | null; // 不備の担当者（自社 User ID）。記録者とは別概念。
+  assigneeName: string | null; // 担当者の解決済み表示名（自社 User 名・マスク対象外）
   handlerName: string | null; // 記録者（自社 User 名・マスク対象外）
 }
 
