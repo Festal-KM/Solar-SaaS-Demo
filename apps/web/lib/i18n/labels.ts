@@ -2344,8 +2344,14 @@ export const labels = {
         note: "メモ",
         defectTitle: "不備内容・解消状況",
         defectContent: "不備内容",
-        defectStatus: "解消ステータス",
         reviewedAt: "審査日",
+        // 不備内容・解消状況（審査履歴ログ横断の一覧 + 解消トグル）。
+        logDefectContent: "不備内容",
+        defectListEmpty: "不備はありません",
+        defectResolveToResolved: "解消済みにする",
+        defectResolveToOpen: "未解消に戻す",
+        defectResolvedBadge: "解消済み",
+        defectOpenBadge: "未解消",
         // 過去の審査履歴ログ（LoanReviewLog・画面から追加）。
         historyTitle: "過去の審査履歴",
         historyEmpty: "履歴はありません",
@@ -2363,12 +2369,6 @@ export const labels = {
           reviewing: "審査中",
           completed: "完了",
           defect: "不備在り",
-        } as Record<string, string>,
-        // 不備解消ステータス CODE → ラベル（LOAN_REVIEW_DEFECT_STATUS_VALUES）。
-        defectStatusLabels: {
-          none: "なし",
-          defect: "不備あり（未解消）",
-          resolved: "解消済み",
         } as Record<string, string>,
         // 審査履歴結果 CODE → ラベル（LOAN_REVIEW_RESULT_VALUES）。
         resultLabels: {

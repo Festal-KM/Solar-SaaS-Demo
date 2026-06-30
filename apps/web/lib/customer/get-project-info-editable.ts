@@ -130,8 +130,6 @@ export interface ProjectLoanReviewEditable {
   downPayment: number | null;
   creditLifeInsurance: boolean | null;
   note: string | null;
-  defectContent: string | null;
-  defectStatus: string | null;
   reviewedAt: string | null;
 }
 
@@ -314,8 +312,6 @@ export async function getCustomerProjectInfoEditable(
         downPayment: true,
         creditLifeInsurance: true,
         note: true,
-        defectContent: true,
-        defectStatus: true,
         reviewedAt: true,
       },
     });
@@ -436,8 +432,6 @@ export async function getCustomerProjectInfoEditable(
         downPayment: r.downPayment,
         creditLifeInsurance: r.creditLifeInsurance,
         note: r.note,
-        defectContent: r.defectContent,
-        defectStatus: r.defectStatus,
         reviewedAt: isoOrNull(r.reviewedAt),
       })),
       equipmentByContract,

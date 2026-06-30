@@ -1279,9 +1279,10 @@ model CustomerCallLog {
 }
 
 // ローン審査（顧客 1:N・契約タブと同型のサブタブ運用）。独立エンティティとして
-// 1 顧客に複数の審査（ローン審査#1/#2…）を持てる。status/defectStatus/result は
-// String 列で保持し、値域は packages/contracts の Zod enum（LOAN_REVIEW_*）で管理する
-// （新規 enum を作らない）。downPayment は円整数。creditLifeInsurance は団信加入有無。
+// 1 顧客に複数の審査（ローン審査#1/#2…）を持てる。status/result は String 列で保持し、
+// 値域は packages/contracts の Zod enum（LOAN_REVIEW_*）で管理する（新規 enum を作らない）。
+// 不備は審査履歴ログ単位（LoanReviewLog.defectContent/defectResolved）へ移行した。
+// downPayment は円整数。creditLifeInsurance は団信加入有無。
 // テナント分離は親 Customer.wholesalerId 経由の相関 EXISTS（RLS はマイグレーション参照）。
 // Contract のローン列（ContractPayment.loanReviewStatus 等）とは別概念・別テーブル（残置）。
 model LoanReview {
@@ -1292,8 +1293,6 @@ model LoanReview {
   downPayment         Int?     // 頭金（円）
   creditLifeInsurance Boolean? // 団信加入有無
   note                String?  // メモ（自由記述）
-  defectContent       String?  // 不備内容（不備で返された場合）
-  defectStatus        String?  // 不備解消ステータス: none/defect(未解消)/resolved
   reviewedAt          DateTime? // 審査日
   createdByUserId     String
   createdAt           DateTime @default(now())
@@ -1316,6 +1315,8 @@ model LoanReviewLog {
   reviewedAt      DateTime // 審査日時
   result          String   // approved/rejected/defect/other
   note            String?  // メモ（自由記述）
+  defectContent   String?  // 不備内容（このログで記録された不備。null=不備なし）
+  defectResolved  Boolean  @default(false) // 不備解消フラグ（不備一覧の解消トグル）
   createdByUserId String
   createdAt       DateTime @default(now())
 

@@ -28,6 +28,7 @@ import {
   LoanReviewCreateSchema,
   LoanReviewDeleteSchema,
   LoanReviewLogCreateSchema,
+  LoanReviewLogDefectResolveSchema,
   LoanReviewLogDeleteSchema,
   LoanReviewSaveSchema,
   ProjectApplicationEditSchema,
@@ -57,6 +58,7 @@ import type {
   LoanReviewCreateInput,
   LoanReviewDeleteInput,
   LoanReviewLogCreateInput,
+  LoanReviewLogDefectResolveInput,
   LoanReviewLogDeleteInput,
   LoanReviewSaveInput,
   ProjectApplicationEditInput,
@@ -653,10 +655,6 @@ export const saveLoanReviewAction = withServerActionContext<
           ? { creditLifeInsurance: parsed.creditLifeInsurance }
           : {}),
         ...(parsed.note !== undefined ? { note: parsed.note?.trim() || null } : {}),
-        ...(parsed.defectContent !== undefined
-          ? { defectContent: parsed.defectContent?.trim() || null }
-          : {}),
-        ...(parsed.defectStatus !== undefined ? { defectStatus: parsed.defectStatus } : {}),
         ...(parsed.reviewedAt !== undefined
           ? { reviewedAt: toDateOrNull(parsed.reviewedAt) }
           : {}),
@@ -713,6 +711,7 @@ export const createLoanReviewLogAction = withServerActionContext<
         reviewedAt: new Date(parsed.reviewedAt),
         result: parsed.result,
         note: parsed.note?.trim() || null,
+        defectContent: parsed.defectContent?.trim() || null,
         createdByUserId: ctx.actorUserId,
       },
       select: { id: true },
@@ -743,6 +742,37 @@ export const deleteLoanReviewLogAction = withServerActionContext<
     if (!row) throw new NotFoundError("審査履歴が見つかりません");
 
     await tx.loanReviewLog.delete({ where: { id: parsed.logId } });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { id: parsed.logId };
+  },
+);
+
+// 不備の解消トグル（LoanReviewLog.defectResolved の更新）。不備一覧の解消/未解消切替。
+// 対象ログが当該審査・顧客配下であることを RLS スコープ内で検証してから更新（越境防止）。
+export const setLoanReviewLogDefectResolvedAction = withServerActionContext<
+  LoanReviewLogDefectResolveInput,
+  { id: string }
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = LoanReviewLogDefectResolveSchema.parse(input);
+
+    const row = await tx.loanReviewLog.findFirst({
+      where: {
+        id: parsed.logId,
+        loanReviewId: parsed.loanReviewId,
+        customerId: parsed.customerId,
+      },
+      select: { id: true },
+    });
+    if (!row) throw new NotFoundError("審査履歴が見つかりません");
+
+    await tx.loanReviewLog.update({
+      where: { id: parsed.logId },
+      data: { defectResolved: parsed.resolved },
+      select: { id: true },
+    });
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
     return { id: parsed.logId };

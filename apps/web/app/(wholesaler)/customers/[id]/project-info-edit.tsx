@@ -7,7 +7,6 @@
 // 編集対象は既存列のみ。仕入値スナップショット（ContractItem.snapshot*）は扱わない。
 
 import {
-  LOAN_REVIEW_DEFECT_STATUS_VALUES,
   LOAN_REVIEW_RESULT_VALUES,
   LOAN_REVIEW_STATUS_VALUES,
 } from "@solar/contracts";
@@ -49,6 +48,7 @@ import {
   saveProjectContractAction,
   saveProjectContractEquipmentAction,
   saveProjectOverviewAction,
+  setLoanReviewLogDefectResolvedAction,
   updateCustomerAction,
 } from "../actions";
 
@@ -64,7 +64,6 @@ import type {
 import type {
   CallStatusValue,
   EquipmentCategoryValue,
-  LoanReviewDefectStatusValue,
   LoanReviewResultValue,
   LoanReviewStatusValue,
 } from "@solar/contracts";
@@ -1870,9 +1869,10 @@ export function SpecialNoteInlineEdit({
 }
 
 /* ── ローン審査（独立 LoanReview）のインライン編集（各審査サブタブ内・契約タブと同型）。
-   ステータス / ローン会社 / 頭金(MoneyInput) / 団信 / メモ / 不備内容 / 解消ステータス /
-   審査日 を直接編集。dirty 追跡 + Save/キャンセル + saveLoanReviewAction（部分更新）+
-   toast + router.refresh。customer.update 権限保持者のみ呼び出される（呼び出し側でゲート）。 ── */
+   ステータス / ローン会社 / 頭金(MoneyInput) / 団信 / メモ / 審査日 を直接編集。不備は
+   審査履歴ログ単位（LoanReviewLog）へ移行したため本サマリでは扱わない。dirty 追跡 +
+   Save/キャンセル + saveLoanReviewAction（部分更新）+ toast + router.refresh。
+   customer.update 権限保持者のみ呼び出される（呼び出し側でゲート）。 ── */
 export function LoanReviewInlineEdit({
   customerId,
   initial,
@@ -1888,8 +1888,6 @@ export function LoanReviewInlineEdit({
   const [downPayment, setDownPayment] = useState(initial.downPayment != null ? String(initial.downPayment) : "");
   const [creditLifeInsurance, setCreditLifeInsurance] = useState(boolToSelect(initial.creditLifeInsurance));
   const [note, setNote] = useState(initial.note ?? "");
-  const [defectContent, setDefectContent] = useState(initial.defectContent ?? "");
-  const [defectStatus, setDefectStatus] = useState(initial.defectStatus ?? "");
   const [reviewedAt, setReviewedAt] = useState(toDateInput(initial.reviewedAt));
 
   const initDown = initial.downPayment != null ? String(initial.downPayment) : "";
@@ -1901,8 +1899,6 @@ export function LoanReviewInlineEdit({
     downPayment !== initDown ||
     creditLifeInsurance !== initCredit ||
     note !== (initial.note ?? "") ||
-    defectContent !== (initial.defectContent ?? "") ||
-    defectStatus !== (initial.defectStatus ?? "") ||
     reviewedAt !== initReviewedAt;
 
   function reset() {
@@ -1911,8 +1907,6 @@ export function LoanReviewInlineEdit({
     setDownPayment(initDown);
     setCreditLifeInsurance(initCredit);
     setNote(initial.note ?? "");
-    setDefectContent(initial.defectContent ?? "");
-    setDefectStatus(initial.defectStatus ?? "");
     setReviewedAt(initReviewedAt);
   }
 
@@ -1927,8 +1921,6 @@ export function LoanReviewInlineEdit({
           downPayment: numOrNull(downPayment),
           creditLifeInsurance: selectToBool(creditLifeInsurance),
           note: strOrNull(note),
-          defectContent: strOrNull(defectContent),
-          defectStatus: (defectStatus || null) as LoanReviewDefectStatusValue | null,
           reviewedAt: reviewedAt || null,
         });
         toast.success(c.saved);
@@ -1971,33 +1963,14 @@ export function LoanReviewInlineEdit({
       <FormField label={lt.note} htmlFor={`lr-note-${initial.loanReviewId}`}>
         <Textarea id={`lr-note-${initial.loanReviewId}`} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
       </FormField>
-      <div>
-        <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
-          {lt.defectTitle}
-        </h4>
-        <div className="space-y-3">
-          <FormField label={lt.defectStatus} htmlFor={`lr-defstatus-${initial.loanReviewId}`}>
-            <select id={`lr-defstatus-${initial.loanReviewId}`} className={FIELD} value={defectStatus} onChange={(e) => setDefectStatus(e.target.value)}>
-              <option value="">{ed.unset}</option>
-              {LOAN_REVIEW_DEFECT_STATUS_VALUES.map((v) => (
-                <option key={v} value={v}>
-                  {lt.defectStatusLabels[v]}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label={lt.defectContent} htmlFor={`lr-defcontent-${initial.loanReviewId}`}>
-            <Textarea id={`lr-defcontent-${initial.loanReviewId}`} rows={2} value={defectContent} onChange={(e) => setDefectContent(e.target.value)} />
-          </FormField>
-        </div>
-      </div>
       <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
     </div>
   );
 }
 
-/* 過去の審査履歴ログ（LoanReviewLog）の追加フォーム。日時 + 結果 select + メモ。
-   記録者は createdByUserId（操作ユーザー）でサーバーが自動付与する（フォームに無し）。 */
+/* 過去の審査履歴ログ（LoanReviewLog）の追加フォーム。日時 + 結果 select + メモ + 不備内容。
+   不備内容は任意（空可）で、入力したログが「不備内容・解消状況」一覧に出る。記録者は
+   createdByUserId（操作ユーザー）でサーバーが自動付与する（フォームに無し）。 */
 export function LoanReviewLogAddForm({
   customerId,
   loanReviewId,
@@ -2011,6 +1984,7 @@ export function LoanReviewLogAddForm({
   const [reviewedAt, setReviewedAt] = useState("");
   const [result, setResult] = useState<string>(LOAN_REVIEW_RESULT_VALUES[0]);
   const [note, setNote] = useState("");
+  const [defectContent, setDefectContent] = useState("");
 
   function onAdd() {
     if (!reviewedAt) {
@@ -2025,10 +1999,12 @@ export function LoanReviewLogAddForm({
           reviewedAt: new Date(reviewedAt).toISOString(),
           result: result as LoanReviewResultValue,
           note: strOrNull(note),
+          defectContent: strOrNull(defectContent),
         });
         toast.success(c.saved);
         setReviewedAt("");
         setNote("");
+        setDefectContent("");
         setResult(LOAN_REVIEW_RESULT_VALUES[0]);
         router.refresh();
       } catch (err) {
@@ -2054,6 +2030,11 @@ export function LoanReviewLogAddForm({
         </FormField>
         <FormField label={lt.logNote} htmlFor={`lrl-note-${loanReviewId}`}>
           <Input id={`lrl-note-${loanReviewId}`} value={note} onChange={(e) => setNote(e.target.value)} />
+        </FormField>
+      </div>
+      <div className="mt-3">
+        <FormField label={lt.logDefectContent} htmlFor={`lrl-defect-${loanReviewId}`}>
+          <Textarea id={`lrl-defect-${loanReviewId}`} rows={2} value={defectContent} onChange={(e) => setDefectContent(e.target.value)} />
         </FormField>
       </div>
       <div className="mt-3 flex justify-end">
@@ -2247,6 +2228,105 @@ export function LoanReviewLogList({
             loanReviewId={loanReviewId}
             logId={log.id}
           />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* 不備の解消トグル（LoanReviewLog.defectResolved）。setLoanReviewLogDefectResolvedAction →
+   toast + router.refresh。customer.update 権限保持者のみ呼び出される（呼び出し側でゲート）。 */
+function DefectResolveToggle({
+  customerId,
+  loanReviewId,
+  logId,
+  resolved,
+}: {
+  customerId: string;
+  loanReviewId: string;
+  logId: string;
+  resolved: boolean;
+}) {
+  const lt = labels.customer.detail.loanTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onToggle() {
+    start(async () => {
+      try {
+        await setLoanReviewLogDefectResolvedAction({
+          customerId,
+          loanReviewId,
+          logId,
+          resolved: !resolved,
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="shrink-0"
+      onClick={onToggle}
+      disabled={pending}
+    >
+      {resolved ? lt.defectResolveToOpen : lt.defectResolveToResolved}
+    </Button>
+  );
+}
+
+/* 不備内容・解消状況の一覧（LoanReviewLog 横断）。当該審査の logs から defectContent 非 null
+   のものを日時降順（DTO で確定）で表示し、各行に解消バッジ + 解消/未解消トグルを出す。
+   customerId が null（二次店・閲覧のみ）のときはトグルを描画せずバッジのみ表示する。 */
+export function LoanReviewDefectList({
+  customerId,
+  loanReviewId,
+  logs,
+}: {
+  customerId: string | null;
+  loanReviewId: string;
+  logs: ProjectLoanReviewLogDto[];
+}) {
+  const lt = labels.customer.detail.loanTab;
+  const defects = logs.filter((l) => l.defectContent != null && l.defectContent !== "");
+  if (defects.length === 0) {
+    return <p className="text-sm text-mute-light">{lt.defectListEmpty}</p>;
+  }
+  return (
+    <ul className="divide-y divide-hairline-light">
+      {defects.map((log) => (
+        <li key={log.id} className="flex items-start justify-between gap-3 py-2">
+          <div className="min-w-0 space-y-0.5">
+            <div className="flex items-center gap-2 text-sm text-ink">
+              <span className="tabular-nums">
+                {new Date(log.reviewedAt).toLocaleString("ja-JP")}
+              </span>
+              <span
+                className={cn(
+                  "rounded-sm px-1.5 py-0.5 text-xs font-medium",
+                  log.defectResolved ? "badge-success" : "badge-warning",
+                )}
+              >
+                {log.defectResolved ? lt.defectResolvedBadge : lt.defectOpenBadge}
+              </span>
+            </div>
+            <p className="text-sm text-ink">{log.defectContent}</p>
+          </div>
+          {customerId ? (
+            <DefectResolveToggle
+              customerId={customerId}
+              loanReviewId={loanReviewId}
+              logId={log.id}
+              resolved={log.defectResolved}
+            />
+          ) : null}
         </li>
       ))}
     </ul>

@@ -21,6 +21,7 @@ import {
   EquipmentInlineEdit,
   HearingInlineEdit,
   LoanCompletionCallInlineEdit,
+  LoanReviewDefectList,
   LoanReviewInlineEdit,
   LoanReviewLogAddForm,
   LoanReviewLogList,
@@ -790,7 +791,7 @@ function CompactCallBlock({ title, children }: { title: string; children: React.
 }
 
 // ローン審査 1 件分（独立 LoanReview）の read-only 表示。editable が渡らない（二次店/
-// 閲覧のみ）場合に使う。サマリ項目 + 不備内容/解消ステータス。
+// 閲覧のみ）場合に使う。サマリ項目のみ（不備は審査履歴ログ単位の一覧で別途表示）。
 function LoanReviewReadonly({ review }: { review: ProjectLoanReviewDto }) {
   const lt = labels.customer.detail.loanTab;
   return (
@@ -801,11 +802,6 @@ function LoanReviewReadonly({ review }: { review: ProjectLoanReviewDto }) {
       <MetaItem label={lt.creditLife} value={fmtBool(review.creditLifeInsurance)} />
       <MetaItem label={lt.reviewedAt} value={fmtDate(review.reviewedAt)} />
       <MetaItem label={lt.note} value={review.note} />
-      <MetaItem
-        label={lt.defectStatus}
-        value={review.defectStatus ? lt.defectStatusLabels[review.defectStatus] ?? review.defectStatus : null}
-      />
-      <MetaItem label={lt.defectContent} value={review.defectContent} />
     </dl>
   );
 }
@@ -971,6 +967,16 @@ export function ProjectLoanInfoList({
             ) : (
               <LoanReviewReadonly review={review} />
             )}
+          </div>
+          <div>
+            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+              {lt.defectTitle}
+            </h4>
+            <LoanReviewDefectList
+              customerId={customerId}
+              loanReviewId={review.loanReviewId}
+              logs={review.logs}
+            />
           </div>
           <div>
             <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">

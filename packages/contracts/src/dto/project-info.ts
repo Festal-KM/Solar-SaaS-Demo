@@ -231,19 +231,22 @@ export interface ProjectCallsDto {
   generalCallPreferredTime: string | null;
 }
 
-// ローン審査履歴ログ 1 件（LoanReviewLog・各審査内に画面から追加）。日時/結果/メモ。
+// ローン審査履歴ログ 1 件（LoanReviewLog・各審査内に画面から追加）。日時/結果/メモ/不備。
+// 不備はログ登録時に記録し、「不備内容・解消状況」セクションがログ横断で一覧表示する。
 // 原価でも PII でもないため二次店レスポンスにもそのまま含める（物理除外しない）。
 export interface ProjectLoanReviewLogDto {
   id: string;
   reviewedAt: string;
   result: string; // approved/rejected/defect/other（CODE）
   note: string | null;
+  defectContent: string | null; // 不備内容（null=不備なし。非 null のみ不備一覧に出る）
+  defectResolved: boolean; // 不備解消フラグ
   handlerName: string | null; // 記録者（自社 User 名・マスク対象外）
 }
 
-// ローン審査 1 件（LoanReview・契約タブと同型のサブタブ）。ローン会社/頭金/団信/不備内容/
-// 解消ステータス + 過去の審査履歴ログ。ローン会社・頭金・不備は原価ではない（顧客向け・
-// 通常表示で可）ため二次店レスポンスにもそのまま含める（物理除外しない）。
+// ローン審査 1 件（LoanReview・契約タブと同型のサブタブ）。ローン会社/頭金/団信/メモ +
+// 過去の審査履歴ログ。不備は各ログ（logs[].defectContent）に持つ。ローン会社・頭金は
+// 原価ではない（顧客向け・通常表示で可）ため二次店レスポンスにもそのまま含める（物理除外しない）。
 export interface ProjectLoanReviewDto {
   loanReviewId: string;
   status: string; // not_reviewed/reviewing/completed/defect（CODE）
@@ -251,8 +254,6 @@ export interface ProjectLoanReviewDto {
   downPayment: number | null;
   creditLifeInsurance: boolean | null;
   note: string | null;
-  defectContent: string | null;
-  defectStatus: string | null; // none/defect/resolved（CODE）
   reviewedAt: string | null;
   logs: ProjectLoanReviewLogDto[];
 }

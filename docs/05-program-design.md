@@ -2759,13 +2759,14 @@ model ContractPayment {
 
 - **データモデル（新規 2 テーブル・非破壊マイグレーション）**:
   - `LoanReview`: `id` / `customerId`(FK Customer, ON DELETE CASCADE) / `status` String(既定 `not_reviewed`・値域 `LOAN_REVIEW_STATUS_VALUES`) /
-    `loanCompany` String? / `downPayment` Int? / `creditLifeInsurance` Boolean? / `note` String? / **`defectContent` String?（不備内容）** /
-    **`defectStatus` String?（解消ステータス・値域 `LOAN_REVIEW_DEFECT_STATUS_VALUES`= none/defect(未解消)/resolved）** /
+    `loanCompany` String? / `downPayment` Int? / `creditLifeInsurance` Boolean? / `note` String? /
     `reviewedAt` DateTime?（審査日）/ `createdByUserId` / `createdAt` / `updatedAt`。`@@index([customerId, createdAt])`。
+    （旧 `defectContent`/`defectStatus` 列は §16.11.1 で廃止しログ単位へ移行。）
   - `LoanReviewLog`（過去の審査履歴・画面から追加／`CustomerCallLog` と同型）: `id` / `loanReviewId`(FK LoanReview, ON DELETE CASCADE) /
     `customerId`（RLS 簡素化のため冗長保持）/ `reviewedAt` DateTime（日時）/ `result` String（値域 `LOAN_REVIEW_RESULT_VALUES`= approved/rejected/defect/other）/
-    `note` String? / `createdByUserId` / `createdAt`。`@@index([loanReviewId, reviewedAt])`。
-  - **enum 追加不要**（status/defectStatus/result は String 列 + `packages/contracts` の Zod enum で値域管理）。
+    `note` String? / **`defectContent` String?（不備内容・§16.11.1）** / **`defectResolved` Boolean @default(false)（解消フラグ・§16.11.1）** /
+    `createdByUserId` / `createdAt`。`@@index([loanReviewId, reviewedAt])`。
+  - **enum 追加不要**（status/result は String 列 + `packages/contracts` の Zod enum で値域管理）。
 - **RLS（両テーブル必須）**: `ENABLE`+`FORCE` ROW LEVEL SECURITY + `<Table>_isolation` ポリシー。`Customer.wholesalerId` 経由の
   相関 EXISTS（`CustomerCallLog_isolation` と同パターン・USING/WITH CHECK 両方）。`saas_admin` バイパス込み。
 - **DTO / ローダ**: `ProjectInfoDto.loanReviews: ProjectLoanReviewDto[]`（各審査 + `logs: ProjectLoanReviewLogDto[]`、reviewedAt 降順）。
@@ -2773,13 +2774,36 @@ model ContractPayment {
   ローン会社/頭金/不備は**原価でも PII でもない**ため二次店 DTO でもそのまま保持（物理除外しない・損益ゲート不変）。
 - **UI**: `ProjectLoanInfoList` を `LoanReview` のサブタブ（`LoanReviewSubTabs` client ラッパー・`ContractSubTabs` と同型）へ再構成。
   ヘッダ右に「審査を追加」「審査を削除」。各審査をインライン編集（`LoanReviewInlineEdit`: status / loanCompany / downPayment(MoneyInput) /
-  creditLifeInsurance(select) / note / **defectContent** / **defectStatus** / reviewedAt(date)、dirty+保存/キャンセル+toast+router.refresh）。
+  creditLifeInsurance(select) / note / reviewedAt(date)、dirty+保存/キャンセル+toast+router.refresh。不備はログ単位へ移行・§16.11.1）。
   各審査サブタブ内に「過去の審査履歴」（日時/結果/メモ 一覧＋追加フォーム＋行削除・`LoanReviewLogAddForm`/`LoanReviewLogDeleteButton`/
-  `LoanReviewLogList`）。審査 0 件は空状態＋「審査を追加」。二次店・閲覧のみは追加/削除導線を出さずカード縦積み read-only。
-- **Server Actions（5 つ・三段イディオム auth→assertCan(customer.update)→withTenant）**: `createLoanReviewAction`（最小作成・
-  status 既定 not_reviewed・createdBy=ctx.actorUserId）/ `saveLoanReviewAction`（部分更新）/ `deleteLoanReviewAction`（LoanReviewLog は cascade）/
-  `createLoanReviewLogAction` / `deleteLoanReviewLogAction`。`customerId`/`loanReviewId`/`logId` は同テナント（RLS スコープ内）で存在検証し越境作成/編集/削除を防ぐ。
+  `LoanReviewLogList`）＋「不備内容・解消状況」（`LoanReviewDefectList`・§16.11.1）。審査 0 件は空状態＋「審査を追加」。
+  二次店・閲覧のみは追加/削除導線を出さずカード縦積み read-only。
+- **Server Actions（6 つ・三段イディオム auth→assertCan(customer.update)→withTenant）**: `createLoanReviewAction`（最小作成・
+  status 既定 not_reviewed・createdBy=ctx.actorUserId）/ `saveLoanReviewAction`（部分更新・不備ロジックは §16.11.1 で削除）/ `deleteLoanReviewAction`（LoanReviewLog は cascade）/
+  `createLoanReviewLogAction`（`defectContent` 任意・§16.11.1）/ `deleteLoanReviewLogAction` / `setLoanReviewLogDefectResolvedAction`（解消トグル・§16.11.1）。
+  `customerId`/`loanReviewId`/`logId` は同テナント（RLS スコープ内）で存在検証し越境作成/編集/削除を防ぐ。
 - **旧 `EditContractDialog`（per-contract ローン編集ポップアップ）は完全未使用化につき削除**（dead code）。`Contract` のローン列は残置。
+
+#### 16.11.1 不備管理のログ単位化（LoanReview サマリ → LoanReviewLog 単位へ移行）
+
+> 不備は「審査履歴ログ（`LoanReviewLog`）の登録時に記録」へ再設計する。`LoanReview` サマリの単一
+> `defectContent`/`defectStatus`（1 審査 1 不備・解消ステータス 3 値）を廃止し、不備をログ単位で持つ。
+> 「不備内容・解消状況」セクションは当該審査の logs を横断し `defectContent` 非 null のログを一覧表示する。
+
+- **マイグレーション（`20260630000000_loan_review_log_defect`・非破壊範囲）**: `LoanReviewLog` へ
+  **`defectContent` String?（不備内容・このログで記録された不備。null=不備なし）** + **`defectResolved` Boolean @default(false)（解消フラグ）** を追加。
+  `LoanReview` から `defectContent` / `defectStatus` の 2 列を DROP。`LoanReviewLog` の RLS は既存ポリシー
+  （`customerId`→`Customer.wholesalerId` 相関 EXISTS）のままで、カラム追加のみのため新ポリシー不要。
+  値域 `LOAN_REVIEW_DEFECT_STATUS_VALUES` / `LoanReviewDefectStatusEnum` は未使用化につき削除（`LOAN_REVIEW_RESULT_VALUES` は維持）。
+- **DTO**: `ProjectLoanReviewLogDto` へ `defectContent: string | null` / `defectResolved: boolean` を追加。
+  `ProjectLoanReviewDto` から `defectContent` / `defectStatus` を削除。不備は原価でも PII でもないため二次店レスポンスにもそのまま含める（物理除外しない）。
+- **UI**: `LoanReviewLogAddForm` に「不備内容」textarea（任意・空可）を追加し `createLoanReviewLogAction` へ `defectContent` を渡す。
+  `LoanReviewInlineEdit`（審査サマリ）から不備の state/FormField/save 引数を全削除（status/会社/頭金/団信/メモ/審査日のみ）。
+  各審査サブタブ内に「不備内容・解消状況」セクション（`LoanReviewDefectList`）を新設し、当該審査の logs から `defectContent` 非 null のものを
+  日時 + 不備内容 + 解消バッジ（未解消/解消済み）+ 解消トグル（`setLoanReviewLogDefectResolvedAction` + router.refresh）で表示。閲覧のみ（二次店）はトグル無しでバッジ表示。
+- **Server Actions**: `createLoanReviewLogAction` は `defectContent`（空→null）を保存。`saveLoanReviewAction` から不備更新ロジックを削除。
+  新規 `setLoanReviewLogDefectResolvedAction`（`LoanReviewLogDefectResolveSchema` で parse → 対象 log が同テナント（`customerId` 経由）であることを
+  `findFirst` で検証してから `defectResolved` を update）。既存 `deleteLoanReviewLogAction` と同じテナント検証・RLS 二重防御パターンに倣う。
 > 「ローン情報」タブは顧客に紐づく全契約のローン・団信（`loanReviewStatus` 編集含む）を契約ごとに一覧（契約無しは空状態）。
 > 「コール状況（コール）」タブは `ProjectCallsDto`（顧客単位・単一）を **4 セクション**（マエカクコール / サンキューコール /
 > ローン審査完了コール / 施工完了コール）に再構成し、各セクションを **インライン編集**（ポップアップ廃止。`MaekakuCallInlineEdit` /

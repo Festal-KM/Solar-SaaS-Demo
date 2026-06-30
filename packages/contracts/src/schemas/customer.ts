@@ -93,15 +93,6 @@ export const LoanReviewStatusEnum = z.enum(LOAN_REVIEW_STATUS_VALUES);
 
 export type LoanReviewStatusValue = z.infer<typeof LoanReviewStatusEnum>;
 
-// ローン審査の不備解消ステータス値域（独立 LoanReview エンティティ）。
-// なし / 不備あり(未解消) / 解消済み。Construction.defectStatus（NONE/OPEN/RESOLVED）
-// とは別概念・別 namespace（小文字 code）。選択 UI・バリデーション・DTO が単一参照する真実。
-export const LOAN_REVIEW_DEFECT_STATUS_VALUES = ["none", "defect", "resolved"] as const;
-
-export const LoanReviewDefectStatusEnum = z.enum(LOAN_REVIEW_DEFECT_STATUS_VALUES);
-
-export type LoanReviewDefectStatusValue = z.infer<typeof LoanReviewDefectStatusEnum>;
-
 // ローン審査履歴ログの結果値域（LoanReviewLog.result）。可決 / 否決 / 不備 / その他。
 export const LOAN_REVIEW_RESULT_VALUES = ["approved", "rejected", "defect", "other"] as const;
 
@@ -378,8 +369,6 @@ export const LoanReviewSaveSchema = z.object({
   downPayment: z.number().int().nonnegative().nullable().optional(),
   creditLifeInsurance: z.boolean().nullable().optional(),
   note: z.string().max(2000).nullable().optional(),
-  defectContent: z.string().max(2000).nullable().optional(),
-  defectStatus: LoanReviewDefectStatusEnum.nullable().optional(),
   reviewedAt: z.string().nullable().optional(),
 });
 
@@ -392,13 +381,15 @@ export const LoanReviewDeleteSchema = z.object({
 
 export type LoanReviewDeleteInput = z.infer<typeof LoanReviewDeleteSchema>;
 
-// ローン審査履歴ログ（LoanReviewLog）— 各審査内に追加する日時+結果+メモ。
+// ローン審査履歴ログ（LoanReviewLog）— 各審査内に追加する日時+結果+メモ+不備内容。
+// 不備はログ登録時に記録し、「不備内容・解消状況」セクションがログ横断で一覧表示する。
 export const LoanReviewLogCreateSchema = z.object({
   customerId: z.string().min(1),
   loanReviewId: z.string().min(1),
   reviewedAt: z.string().min(1, "日時を入力してください"),
   result: LoanReviewResultEnum,
   note: z.string().max(2000).nullable().optional(),
+  defectContent: z.string().max(2000).nullable().optional(),
 });
 
 export type LoanReviewLogCreateInput = z.infer<typeof LoanReviewLogCreateSchema>;
@@ -410,6 +401,16 @@ export const LoanReviewLogDeleteSchema = z.object({
 });
 
 export type LoanReviewLogDeleteInput = z.infer<typeof LoanReviewLogDeleteSchema>;
+
+// 不備の解消トグル（LoanReviewLog.defectResolved の更新）。不備一覧の解消/未解消切替で使う。
+export const LoanReviewLogDefectResolveSchema = z.object({
+  customerId: z.string().min(1),
+  loanReviewId: z.string().min(1),
+  logId: z.string().min(1),
+  resolved: z.boolean(),
+});
+
+export type LoanReviewLogDefectResolveInput = z.infer<typeof LoanReviewLogDefectResolveSchema>;
 
 // ---------------------------------------------------------------------------
 // F-063 住環境・家族属性ヒアリング（docs/05 §17.4 / §17.9）.
