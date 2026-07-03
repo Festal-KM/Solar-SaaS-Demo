@@ -2353,6 +2353,7 @@ export const labels = {
         defectResolveToOpen: "未解消に戻す",
         defectResolvedBadge: "解消済み",
         defectOpenBadge: "未解消",
+        defectStatusAria: "不備ステータス",
         // 専用の不備追加フォーム（不備内容 + 発生日 + 担当者）。
         defectAdd: "不備を追加",
         defectAdding: "追加中…",

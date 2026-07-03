@@ -10,7 +10,7 @@ import {
   LOAN_REVIEW_RESULT_VALUES,
   LOAN_REVIEW_STATUS_VALUES,
 } from "@solar/contracts";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -2359,14 +2359,14 @@ function DefectResolveToggle({
     });
   }
 
-  // ステータス（可変）。未解消/解消済みを選べるセレクトで変更可能であることを明示する。
-  // 現在状態は左のドット（未解消=amber / 解消済み=emerald）で示し、セレクト自体は素直な配色に
-  // して native arrow と背景色のにじみで崩れないようにする。
+  // ステータス（可変）。1 つのピル内に「状態ドット + ラベル + chevron」を収める。native arrow は
+  // appearance-none で消し、chevron を右に絶対配置して幅づまり／背景のにじみで崩れないようにする。
+  // 状態は色（ドット）とラベルの両方で示す（color だけに依存しない — a11y）。
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
+    <div className="relative w-full">
       <span
         className={cn(
-          "size-2 shrink-0 rounded-full",
+          "pointer-events-none absolute left-2 top-1/2 size-2 -translate-y-1/2 rounded-full",
           resolved ? "bg-emerald-500" : "bg-amber-500",
         )}
         aria-hidden
@@ -2376,11 +2376,16 @@ function DefectResolveToggle({
         value={resolved ? "resolved" : "open"}
         onChange={(e) => onChange(e.target.value === "resolved")}
         disabled={pending}
-        className="h-7 w-24 rounded-sm border border-ash-light bg-white px-2 text-xs text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+        aria-label={lt.defectStatusAria}
+        className="h-7 w-full cursor-pointer appearance-none rounded-md border border-ash-light bg-white pl-6 pr-7 text-xs text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <option value="open">{lt.defectOpenBadge}</option>
         <option value="resolved">{lt.defectResolvedBadge}</option>
       </select>
+      <ChevronDown
+        className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-mute-light"
+        aria-hidden
+      />
     </div>
   );
 }
@@ -2405,8 +2410,11 @@ export function LoanReviewDefectList({
   return (
     <ul className="divide-y divide-hairline-light">
       {defects.map((log) => (
-        <li key={log.id} className="flex items-center gap-3 py-1.5 text-sm text-ink">
-          <span className="shrink-0 tabular-nums text-mute-light">
+        <li
+          key={log.id}
+          className="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)_auto] items-center gap-3 py-1.5 text-sm text-ink"
+        >
+          <span className="tabular-nums text-mute-light">
             {new Date(log.reviewedAt).toLocaleDateString("ja-JP")}
           </span>
           {customerId ? (
@@ -2419,19 +2427,17 @@ export function LoanReviewDefectList({
           ) : (
             <span
               className={cn(
-                "inline-flex shrink-0 items-center justify-center rounded-sm px-1.5 py-0.5 text-xs font-medium",
+                "inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-xs font-medium",
                 log.defectResolved ? "badge-success" : "badge-warning",
               )}
             >
               {log.defectResolved ? lt.defectResolvedBadge : lt.defectOpenBadge}
             </span>
           )}
-          <span className="min-w-0 flex-1 truncate" title={log.defectContent ?? undefined}>
+          <span className="min-w-0 truncate" title={log.defectContent ?? undefined}>
             {log.defectContent}
           </span>
-          {log.assigneeName ? (
-            <span className="shrink-0 text-xs text-mute-light">{log.assigneeName}</span>
-          ) : null}
+          <span className="text-xs text-mute-light">{log.assigneeName ?? ""}</span>
         </li>
       ))}
     </ul>
