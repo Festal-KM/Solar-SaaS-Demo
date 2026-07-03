@@ -14,19 +14,12 @@ import { labels } from "@/lib/i18n/labels";
 
 import { CustomerFilter } from "./customer-filter";
 import { CustomerTable } from "./customer-table";
-import {
-  CONSTRUCTION_STATUS_VALUES,
-  CONTRACT_STATUS_VALUES,
-  SUBSIDY_STATUS_VALUES,
-} from "./constants";
+import { CONTRACT_STATUS_VALUES } from "./constants";
 import {
   listCustomers,
   listWholesalerUsers,
   normalizePageSize,
   type ContractStatusValue,
-  type ConstructionStatusValue,
-  type MaekakuValue,
-  type SubsidyStatusValue,
 } from "./data";
 import { PageSizeSelect } from "./page-size-select";
 
@@ -37,18 +30,12 @@ interface PageProps {
     query?: string;
     assigneeUserId?: string;
     contractStatus?: string;
-    constructionStatus?: string;
-    subsidyStatus?: string;
-    maekaku?: string;
     page?: string;
     pageSize?: string;
   }>;
 }
 
 const VALID_CONTRACT = CONTRACT_STATUS_VALUES;
-const VALID_CONSTRUCTION = CONSTRUCTION_STATUS_VALUES;
-const VALID_SUBSIDY = SUBSIDY_STATUS_VALUES;
-const VALID_MAEKAKU: MaekakuValue[] = ["present", "absent"];
 
 // Windowed numeric pagination (max 5 buttons centred on the current page).
 function pageWindow(current: number, totalPages: number): number[] {
@@ -65,18 +52,7 @@ export default async function WholesalerCustomerListPage({ searchParams }: PageP
   const contractStatus = VALID_CONTRACT.includes(params.contractStatus as ContractStatusValue)
     ? (params.contractStatus as ContractStatusValue)
     : undefined;
-  const constructionStatus = VALID_CONSTRUCTION.includes(
-    params.constructionStatus as ConstructionStatusValue,
-  )
-    ? (params.constructionStatus as ConstructionStatusValue)
-    : undefined;
-  const subsidyStatus = VALID_SUBSIDY.includes(params.subsidyStatus as SubsidyStatusValue)
-    ? (params.subsidyStatus as SubsidyStatusValue)
-    : undefined;
   const assigneeUserId = params.assigneeUserId?.trim() || undefined;
-  const maekaku = VALID_MAEKAKU.includes(params.maekaku as MaekakuValue)
-    ? (params.maekaku as MaekakuValue)
-    : undefined;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const pageSize = normalizePageSize(parseInt(params.pageSize ?? "", 10) || undefined);
 
@@ -85,9 +61,6 @@ export default async function WholesalerCustomerListPage({ searchParams }: PageP
       query,
       assigneeUserId,
       contractStatus,
-      constructionStatus,
-      subsidyStatus,
-      maekaku,
       page,
       pageSize,
     }),
@@ -102,9 +75,6 @@ export default async function WholesalerCustomerListPage({ searchParams }: PageP
     if (query) sp.set("query", query);
     if (assigneeUserId) sp.set("assigneeUserId", assigneeUserId);
     if (contractStatus) sp.set("contractStatus", contractStatus);
-    if (constructionStatus) sp.set("constructionStatus", constructionStatus);
-    if (subsidyStatus) sp.set("subsidyStatus", subsidyStatus);
-    if (maekaku) sp.set("maekaku", maekaku);
     if (pageSize !== 20) sp.set("pageSize", String(pageSize));
     sp.set("page", String(p));
     return `/customers?${sp.toString()}`;
@@ -131,9 +101,6 @@ export default async function WholesalerCustomerListPage({ searchParams }: PageP
           query={query}
           assigneeUserId={assigneeUserId ?? ""}
           contractStatus={contractStatus ?? ""}
-          constructionStatus={constructionStatus ?? ""}
-          subsidyStatus={subsidyStatus ?? ""}
-          maekaku={maekaku ?? ""}
           assignees={assignees}
         />
       </Card>

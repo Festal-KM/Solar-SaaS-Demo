@@ -6,20 +6,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { labels } from "@/lib/i18n/labels";
 
-import {
-  CONSTRUCTION_STATUS_VALUES,
-  CONTRACT_STATUS_VALUES,
-  SUBSIDY_STATUS_VALUES,
-} from "./constants";
-import type { MaekakuValue } from "./constants";
+import { CONTRACT_STATUS_VALUES } from "./constants";
 
 const SELECT_CLASS =
   "flex h-9 w-full rounded-md border border-hairline-light bg-white px-3 py-1 text-sm text-body-light focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary";
 
 const CONTRACT_OPTIONS = CONTRACT_STATUS_VALUES;
-const CONSTRUCTION_OPTIONS = CONSTRUCTION_STATUS_VALUES;
-const SUBSIDY_OPTIONS = SUBSIDY_STATUS_VALUES;
-const MAEKAKU_OPTIONS: MaekakuValue[] = ["present", "absent"];
 
 interface AssigneeOption {
   id: string;
@@ -30,9 +22,6 @@ interface CustomerFilterProps {
   query: string;
   assigneeUserId: string;
   contractStatus: string;
-  constructionStatus: string;
-  subsidyStatus: string;
-  maekaku: string;
   assignees: AssigneeOption[];
 }
 
@@ -40,9 +29,6 @@ export function CustomerFilter({
   query,
   assigneeUserId,
   contractStatus,
-  constructionStatus,
-  subsidyStatus,
-  maekaku,
   assignees,
 }: CustomerFilterProps) {
   const router = useRouter();
@@ -52,9 +38,6 @@ export function CustomerFilter({
   const [searchValue, setSearchValue] = useState(query);
   const [assigneeValue, setAssigneeValue] = useState(assigneeUserId);
   const [contractValue, setContractValue] = useState(contractStatus);
-  const [constructionValue, setConstructionValue] = useState(constructionStatus);
-  const [subsidyValue, setSubsidyValue] = useState(subsidyStatus);
-  const [maekakuValue, setMaekakuValue] = useState(maekaku);
 
   function applyFilters() {
     const params = new URLSearchParams();
@@ -62,9 +45,6 @@ export function CustomerFilter({
     if (q) params.set("query", q);
     if (assigneeValue) params.set("assigneeUserId", assigneeValue);
     if (contractValue) params.set("contractStatus", contractValue);
-    if (constructionValue) params.set("constructionStatus", constructionValue);
-    if (subsidyValue) params.set("subsidyStatus", subsidyValue);
-    if (maekakuValue) params.set("maekaku", maekakuValue);
     const qs = params.toString();
     router.push(qs ? `/customers?${qs}` : "/customers");
   }
@@ -73,9 +53,6 @@ export function CustomerFilter({
     setSearchValue("");
     setAssigneeValue("");
     setContractValue("");
-    setConstructionValue("");
-    setSubsidyValue("");
-    setMaekakuValue("");
     router.push("/customers");
   }
 
@@ -125,56 +102,6 @@ export function CustomerFilter({
             {CONTRACT_OPTIONS.map((s) => (
               <option key={s} value={s}>
                 {t.contractStatusLabels[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-mute-light">
-            {t.filters.constructionStatus}
-          </label>
-          <select
-            value={constructionValue}
-            onChange={(e) => setConstructionValue(e.target.value)}
-            className={SELECT_CLASS}
-          >
-            <option value="">{t.filters.all}</option>
-            {CONSTRUCTION_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {t.constructionStatusLabels[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-mute-light">{t.filters.subsidyStatus}</label>
-          <select
-            value={subsidyValue}
-            onChange={(e) => setSubsidyValue(e.target.value)}
-            className={SELECT_CLASS}
-          >
-            <option value="">{t.filters.all}</option>
-            {SUBSIDY_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {t.subsidyStatusLabels[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-mute-light">{t.filters.maekaku}</label>
-          <select
-            value={maekakuValue}
-            onChange={(e) => setMaekakuValue(e.target.value)}
-            className={SELECT_CLASS}
-          >
-            <option value="">{t.filters.all}</option>
-            {MAEKAKU_OPTIONS.map((m) => (
-              <option key={m} value={m}>
-                {t.maekakuLabels[m]}
               </option>
             ))}
           </select>

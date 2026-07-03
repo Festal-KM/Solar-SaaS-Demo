@@ -93,9 +93,9 @@ export function CustomerTable({ customers }: CustomerTableProps) {
             <th className={TH}>{t.columns.name}</th>
             <th className={TH}>{t.columns.area}</th>
             <th className={TH}>{t.columns.assignee}</th>
+            <th className={TH}>{t.columns.contractStatus}</th>
             <th className={TH}>{t.columns.nextAppointmentAt}</th>
             <th className={TH}>{t.columns.maekaku}</th>
-            <th className={TH}>{t.columns.contractStatus}</th>
             <th className={TH}>{t.columns.constructionStatus}</th>
             <th className={TH}>{t.columns.subsidyStatus}</th>
             <th className="w-10 px-3 py-3" aria-hidden />
@@ -123,16 +123,16 @@ export function CustomerTable({ customers }: CustomerTableProps) {
               </td>
               <td className="whitespace-nowrap px-6 py-3 text-body-light">{row.area ?? t.none}</td>
               <td className="whitespace-nowrap px-6 py-3 text-body-light">{row.assigneeName}</td>
+              <td className="px-6 py-3">
+                <Badge variant={contractVariant(row.contractStatus)}>
+                  {t.contractStatusLabels[row.contractStatus]}
+                </Badge>
+              </td>
               <td className="whitespace-nowrap px-6 py-3 tabular-nums text-body-light">
                 {formatAppointment(row.nextAppointmentAt)}
               </td>
               <td className="px-6 py-3">
                 <Badge variant={maekakuVariant(row.maekaku)}>{t.maekakuLabels[row.maekaku]}</Badge>
-              </td>
-              <td className="px-6 py-3">
-                <Badge variant={contractVariant(row.contractStatus)}>
-                  {t.contractStatusLabels[row.contractStatus]}
-                </Badge>
               </td>
               <td className="px-6 py-3">
                 <Badge variant={constructionVariant(row.constructionStatus)}>

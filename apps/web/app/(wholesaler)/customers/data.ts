@@ -140,27 +140,14 @@ export async function listCustomers(
     const queryStr = filter.query?.trim();
     const andClauses = buildStatusWhere(filter);
 
-    // Search also matches customers whose assignee (registeredByUserId) name
-    // contains the term. Resolve matching user ids inside the tx so RLS scopes
-    // the lookup to this tenant.
-    const searchOr: Prisma.CustomerWhereInput[] = [];
-    if (queryStr) {
-      searchOr.push(
-        { name: { contains: queryStr, mode: "insensitive" } },
-        { phone: { contains: queryStr, mode: "insensitive" } },
-        { address: { contains: queryStr, mode: "insensitive" } },
-      );
-      const matchedUsers = await tx.user.findMany({
-        where: { name: { contains: queryStr, mode: "insensitive" } },
-        select: { id: true },
-      });
-      if (matchedUsers.length > 0) {
-        searchOr.push({ registeredByUserId: { in: matchedUsers.map((u) => u.id) } });
-      }
-    }
+    // Free-text search matches the customer name only (partial, case-insensitive).
+    // Assignee is filtered separately via the dedicated assignee dropdown.
+    const nameClause: Prisma.CustomerWhereInput | null = queryStr
+      ? { name: { contains: queryStr, mode: "insensitive" } }
+      : null;
 
     const where: Prisma.CustomerWhereInput = {
-      ...(searchOr.length > 0 ? { OR: searchOr } : {}),
+      ...(nameClause ?? {}),
       ...(andClauses.length > 0 ? { AND: andClauses } : {}),
     };
 
