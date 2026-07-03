@@ -118,8 +118,7 @@ export function CustomerTable({ customers }: CustomerTableProps) {
               }}
             >
               <td className="whitespace-nowrap px-6 py-3 font-medium text-ink">
-                {row.name}
-                {t.honorific}
+                {row.name} {t.honorific}
               </td>
               <td className="whitespace-nowrap px-6 py-3 text-body-light">{row.area ?? t.none}</td>
               <td className="whitespace-nowrap px-6 py-3 text-body-light">{row.assigneeName}</td>
