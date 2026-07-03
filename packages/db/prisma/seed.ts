@@ -309,14 +309,19 @@ export async function seedAll(): Promise<SeedSummary> {
       plan: null,
     });
 
-    // WholesalerSettings: PII masking defaults to MASKED per schema, but ensure
-    // the row exists for both wholesaler tenants so downstream features that
-    // read it via include() don't trip on a null relation.
-    for (const wsId of [saasOps.id, pilot.id]) {
+    // WholesalerSettings: ensure the row exists for both wholesaler tenants so
+    // downstream features that read it via include() don't trip on a null
+    // relation. The demo/pilot wholesaler runs in FULL PII mode so the demo
+    // shows real full names (顧客名フルネーム＋様) / phone / address; the SaaS-ops
+    // tenant keeps the schema default (MASKED — forced anyway for SAAS_ADMIN).
+    for (const { wsId, piiMaskingMode } of [
+      { wsId: saasOps.id, piiMaskingMode: undefined },
+      { wsId: pilot.id, piiMaskingMode: "FULL" as const },
+    ]) {
       await tx.wholesalerSettings.upsert({
         where: { wholesalerId: wsId },
-        update: {},
-        create: { wholesalerId: wsId },
+        update: piiMaskingMode ? { piiMaskingMode } : {},
+        create: { wholesalerId: wsId, ...(piiMaskingMode ? { piiMaskingMode } : {}) },
       });
     }
 

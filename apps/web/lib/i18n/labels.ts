@@ -1881,6 +1881,7 @@ export const labels = {
     filterByChannel: "チャネルで絞り込み",
     allChannels: "すべてのチャネル",
     filters: {
+      customerName: "顧客名",
       assignee: "担当者",
       contractStatus: "商談状況",
       constructionStatus: "施工状況",

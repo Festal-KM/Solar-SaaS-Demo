@@ -58,23 +58,25 @@ export function CustomerFilter({
 
   return (
     <form
-      className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
         applyFilters();
       }}
     >
-      {/* 検索 — 単一ボーダー入力（アイコンなし・二重枠/ネイティブ枠を排除） */}
-      <input
-        type="search"
-        value={searchValue}
-        onChange={(e) => setSearchValue(e.target.value)}
-        placeholder={t.searchPlaceholderFull}
-        aria-label={t.searchPlaceholderFull}
-        className="h-10 w-full max-w-sm appearance-none rounded-md border border-cloud-gray bg-white px-3 text-sm text-ink placeholder:text-mute-light focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 [&::-webkit-search-cancel-button]:appearance-none"
-      />
-
       <div className="flex flex-wrap items-end gap-3">
+        {/* 顧客名 — 単一ボーダー入力（アイコンなし・二重枠/ネイティブ枠を排除） */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-mute-light">{t.filters.customerName}</label>
+          <input
+            type="search"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            placeholder={t.searchPlaceholderFull}
+            aria-label={t.searchPlaceholderFull}
+            className="h-9 w-56 appearance-none rounded-md border border-hairline-light bg-white px-3 text-sm text-ink placeholder:text-mute-light focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 [&::-webkit-search-cancel-button]:appearance-none"
+          />
+        </div>
+
         <div className="space-y-1">
           <label className="text-xs font-medium text-mute-light">{t.filters.assignee}</label>
           <select
