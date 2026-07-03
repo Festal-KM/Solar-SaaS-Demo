@@ -122,7 +122,7 @@ export function CustomerTable({ customers }: CustomerTableProps) {
               </td>
               <td className="whitespace-nowrap px-6 py-3 text-body-light">{row.area ?? t.none}</td>
               <td className="whitespace-nowrap px-6 py-3 text-body-light">{row.assigneeName}</td>
-              <td className="px-6 py-3">
+              <td className="whitespace-nowrap px-6 py-3">
                 <Badge variant={contractVariant(row.contractStatus)}>
                   {t.contractStatusLabels[row.contractStatus]}
                 </Badge>
@@ -130,15 +130,15 @@ export function CustomerTable({ customers }: CustomerTableProps) {
               <td className="whitespace-nowrap px-6 py-3 tabular-nums text-body-light">
                 {formatAppointment(row.nextAppointmentAt)}
               </td>
-              <td className="px-6 py-3">
+              <td className="whitespace-nowrap px-6 py-3">
                 <Badge variant={maekakuVariant(row.maekaku)}>{t.maekakuLabels[row.maekaku]}</Badge>
               </td>
-              <td className="px-6 py-3">
+              <td className="whitespace-nowrap px-6 py-3">
                 <Badge variant={constructionVariant(row.constructionStatus)}>
                   {t.constructionStatusLabels[row.constructionStatus]}
                 </Badge>
               </td>
-              <td className="px-6 py-3">
+              <td className="whitespace-nowrap px-6 py-3">
                 <Badge variant={subsidyVariant(row.subsidyStatus)}>
                   {t.subsidyStatusLabels[row.subsidyStatus]}
                 </Badge>
