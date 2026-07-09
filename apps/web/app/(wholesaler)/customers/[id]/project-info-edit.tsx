@@ -34,10 +34,12 @@ import { cn } from "@/lib/utils";
 import { EditableTabTrigger } from "./editable-tab-trigger";
 
 import {
+  createConstructionAction,
   createContractAction,
   createCustomerCallLogAction,
   createLoanReviewAction,
   createLoanReviewLogAction,
+  deleteConstructionAction,
   deleteContractAction,
   deleteContractEquipmentAction,
   deleteCustomerCallLogAction,
@@ -1462,17 +1464,40 @@ export function AddAccessoryButton({
   );
 }
 
-/* 契約を追加するボタン（契約 #2 以降。createContractAction で最小 Deal+Contract を生成）。 */
-export function AddContractButton({ customerId }: { customerId: string }) {
-  const ct = labels.customer.detail.contractTab;
+/* 追加時に名称（タブ名 tabLabel）を入力させる共通「追加」ボタン。トリガーを押すと Dialog が
+   開き、名称入力（空欄可＝デフォルト表記）→ 作成。施工/ローン審査/契約サブタブで共用する。 */
+function NamedAddButton({
+  triggerLabel,
+  addingLabel,
+  dialogTitle,
+  nameLabel,
+  namePlaceholder,
+  onCreate,
+}: {
+  triggerLabel: string;
+  addingLabel: string;
+  dialogTitle: string;
+  nameLabel: string;
+  namePlaceholder: string;
+  onCreate: (label: string) => Promise<unknown>;
+}) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
   const [pending, start] = useTransition();
 
-  function onAdd() {
+  function onOpenChange(next: boolean) {
+    if (!next) setName("");
+    setOpen(next);
+  }
+
+  function submit() {
     start(async () => {
       try {
-        await createContractAction({ customerId });
+        await onCreate(name.trim());
         toast.success(c.saved);
+        setOpen(false);
+        setName("");
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
@@ -1481,10 +1506,59 @@ export function AddContractButton({ customerId }: { customerId: string }) {
   }
 
   return (
-    <Button type="button" variant="outline" size="sm" onClick={onAdd} disabled={pending}>
-      <Plus className="mr-1 size-4" />
-      {pending ? ct.addingContract : ct.addContract}
-    </Button>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <Plus className="mr-1 size-4" />
+          {triggerLabel}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+        </DialogHeader>
+        <FormField label={nameLabel} htmlFor="named-add-input">
+          <Input
+            id="named-add-input"
+            value={name}
+            maxLength={40}
+            autoFocus
+            placeholder={namePlaceholder}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
+        </FormField>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+            {c.cancel}
+          </Button>
+          <Button type="button" onClick={submit} disabled={pending}>
+            {pending ? addingLabel : c.create}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* 契約を追加するボタン（契約 #2 以降。createContractAction で最小 Deal+Contract を生成）。
+   追加時に契約名を入力させ tabLabel に設定する。 */
+export function AddContractButton({ customerId }: { customerId: string }) {
+  const ct = labels.customer.detail.contractTab;
+  return (
+    <NamedAddButton
+      triggerLabel={ct.addContract}
+      addingLabel={ct.addingContract}
+      dialogTitle={ct.addDialogTitle}
+      nameLabel={ct.nameLabel}
+      namePlaceholder={ct.namePlaceholder}
+      onCreate={(label) => createContractAction({ customerId, label: label || undefined })}
+    />
   );
 }
 
@@ -2181,29 +2255,19 @@ export function LoanReviewLogDeleteButton({
   );
 }
 
-/* ローン審査を追加するボタン（審査 #2 以降。createLoanReviewAction で最小レコードを生成）。 */
+/* ローン審査を追加するボタン（審査 #2 以降。createLoanReviewAction で最小レコードを生成）。
+   追加時にローン審査名を入力させ tabLabel に設定する。 */
 export function AddLoanReviewButton({ customerId }: { customerId: string }) {
   const lt = labels.customer.detail.loanTab;
-  const router = useRouter();
-  const [pending, start] = useTransition();
-
-  function onAdd() {
-    start(async () => {
-      try {
-        await createLoanReviewAction({ customerId });
-        toast.success(c.saved);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
-      }
-    });
-  }
-
   return (
-    <Button type="button" variant="outline" size="sm" onClick={onAdd} disabled={pending}>
-      <Plus className="mr-1 size-4" />
-      {pending ? lt.addingReview : lt.addReview}
-    </Button>
+    <NamedAddButton
+      triggerLabel={lt.addReview}
+      addingLabel={lt.addingReview}
+      dialogTitle={lt.addDialogTitle}
+      nameLabel={lt.nameLabel}
+      namePlaceholder={lt.namePlaceholder}
+      onCreate={(label) => createLoanReviewAction({ customerId, label: label || undefined })}
+    />
   );
 }
 
@@ -2290,9 +2354,65 @@ export function LoanReviewSubTabs({
   );
 }
 
+/* 施工を追加するボタン。追加時に施工名を入力させ tabLabel に設定する。契約が無ければ
+   サーバーが最小契約を併せて生成する。 */
+export function AddConstructionButton({ customerId }: { customerId: string }) {
+  const ct = labels.customer.detail.constructionTab;
+  return (
+    <NamedAddButton
+      triggerLabel={ct.addConstruction}
+      addingLabel={ct.addingConstruction}
+      dialogTitle={ct.addDialogTitle}
+      nameLabel={ct.nameLabel}
+      namePlaceholder={ct.namePlaceholder}
+      onCreate={(label) => createConstructionAction({ customerId, label: label || undefined })}
+    />
+  );
+}
+
+/* 施工を削除するボタン（アクティブな施工対象）。confirm + destructive 配色。 */
+export function DeleteConstructionButton({
+  customerId,
+  constructionId,
+}: {
+  customerId: string;
+  constructionId: string;
+}) {
+  const ct = labels.customer.detail.constructionTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onDelete() {
+    if (!window.confirm(ct.deleteConstructionConfirm)) return;
+    start(async () => {
+      try {
+        await deleteConstructionAction({ customerId, constructionId });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/30"
+      onClick={onDelete}
+      disabled={pending}
+    >
+      <Trash2 className="mr-1 size-4" />
+      {pending ? ct.deletingConstruction : ct.deleteConstructionText}
+    </Button>
+  );
+}
+
 /* ── 施工サブタブ（client ラッパー・LoanReviewSubTabs と同型）。施工 1 件 = 1 サブタブ。
-   施工は契約経由で生成されるため追加/削除導線は持たず、タブ名の右クリック改名のみ。各タブ
-   本文は server で生成した React element を content として受け取り描画する。 ── */
+   ヘッダ右に「施工を追加」+「施工を削除」（アクティブ施工対象）を並置。各タブ本文は server で
+   生成した React element を content として受け取り描画する。タブ名は右クリックで改名。 ── */
 export function ConstructionSubTabs({
   customerId,
   tabs,
@@ -2305,19 +2425,25 @@ export function ConstructionSubTabs({
 
   return (
     <Tabs value={active} onValueChange={setActive}>
-      <TabsList variant="underline">
-        {tabs.map((t) => (
-          <EditableTabTrigger
-            key={t.id}
-            value={t.id}
-            label={t.label}
-            customerId={customerId}
-            entity="construction"
-            id={t.id}
-            rawLabel={t.rawLabel}
-          />
-        ))}
-      </TabsList>
+      <div className="flex items-center justify-between gap-2">
+        <TabsList variant="underline" className="flex-1">
+          {tabs.map((t) => (
+            <EditableTabTrigger
+              key={t.id}
+              value={t.id}
+              label={t.label}
+              customerId={customerId}
+              entity="construction"
+              id={t.id}
+              rawLabel={t.rawLabel}
+            />
+          ))}
+        </TabsList>
+        <div className="flex shrink-0 items-center gap-2 pb-1">
+          <AddConstructionButton customerId={customerId} />
+          <DeleteConstructionButton customerId={customerId} constructionId={active} />
+        </div>
+      </div>
       {tabs.map((t) => (
         <TabsContent key={t.id} value={t.id} className="space-y-4">
           {t.content}

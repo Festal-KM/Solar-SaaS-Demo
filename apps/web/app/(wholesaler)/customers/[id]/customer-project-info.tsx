@@ -10,6 +10,7 @@ import { labels } from "@/lib/i18n/labels";
 import {
   AccessoryInlineEdit,
   AddAccessoryButton,
+  AddConstructionButton,
   AddContractButton,
   AddLoanReviewButton,
   CallLogAddForm,
@@ -881,7 +882,17 @@ export function ProjectConstructionList({
     (editable?.constructions ?? []).map((c) => [c.constructionId, c]),
   );
 
+  // 編集可能で施工 0 件のときは空メッセージ + 「施工を追加」。追加でサーバーが Construction を
+  // （必要なら最小契約も）生成し、サブタブが現れる（ローン審査タブと同じ挙動）。
   if (constructions.length === 0) {
+    if (customerId) {
+      return (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-mute-light">{ct.emptyEditable}</p>
+          <AddConstructionButton customerId={customerId} />
+        </div>
+      );
+    }
     return (
       <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
         {ct.empty}

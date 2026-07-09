@@ -2309,6 +2309,10 @@ export const labels = {
         subtabHeading: "契約",
         addContract: "契約を追加",
         addingContract: "契約を追加中…",
+        // 追加時に契約名を入力するダイアログ。
+        addDialogTitle: "契約を追加",
+        nameLabel: "契約名",
+        namePlaceholder: "例）1回目契約（空欄で「契約 #N」）",
         deleteContract: "この契約を削除",
         deleteContractText: "契約を削除",
         deletingContract: "削除中…",
@@ -2332,6 +2336,10 @@ export const labels = {
         subtabHeading: "ローン審査",
         addReview: "審査を追加",
         addingReview: "審査を追加中…",
+        // 追加時にローン審査名を入力するダイアログ。
+        addDialogTitle: "ローン審査を追加",
+        nameLabel: "ローン審査名",
+        namePlaceholder: "例）1回目審査（空欄で「ローン審査 #N」）",
         deleteReview: "この審査を削除",
         deleteReviewText: "審査を削除",
         deletingReview: "削除中…",
@@ -2412,9 +2420,22 @@ export const labels = {
       constructionTab: {
         title: "施工コスト",
         empty: "施工コストを表示できる契約・施工がありません。",
+        // 編集可能（customer.update）で施工が 0 件のときの空状態（追加導線つき）。
+        emptyEditable: "施工はまだありません。「施工を追加」から作成してください。",
         contractHeading: "契約",
         // 施工サブタブ見出し（施工 #1 / #2 …）。
         subtabHeading: "施工",
+        // 施工サブタブの追加/削除。
+        addConstruction: "施工を追加",
+        addingConstruction: "施工を追加中…",
+        deleteConstruction: "この施工を削除",
+        deleteConstructionText: "施工を削除",
+        deletingConstruction: "削除中…",
+        deleteConstructionConfirm: "この施工を削除しますか？",
+        // 追加時に施工名を入力するダイアログ。
+        addDialogTitle: "施工を追加",
+        nameLabel: "施工名",
+        namePlaceholder: "例）1棟目（空欄で「施工 #N」）",
       },
       // サブタブ名の右クリック改名 UX（施工/ローン審査/契約で共用）。
       tabRename: {

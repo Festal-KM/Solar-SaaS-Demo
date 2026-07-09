@@ -357,6 +357,8 @@ export type CustomerCallLogDeleteInput = z.infer<typeof CustomerCallLogDeleteSch
 
 export const LoanReviewCreateSchema = z.object({
   customerId: z.string().min(1),
+  // 追加時に入力するローン審査名（サブタブ表示名 tabLabel）。空欄はデフォルト表記（ローン審査#N）。
+  label: z.string().max(40, "ローン審査名は 40 文字以内で入力してください").optional(),
 });
 
 export type LoanReviewCreateInput = z.infer<typeof LoanReviewCreateSchema>;
@@ -548,9 +550,29 @@ export type ProjectContractEditInput = z.infer<typeof ProjectContractEditSchema>
 // は生成しない）。wholesalerId/ownerRelationshipId は Customer 由来（input から取らない）。
 export const ProjectContractCreateSchema = z.object({
   customerId: z.string().min(1),
+  // 追加時に入力する契約名（サブタブ表示名 tabLabel）。空欄はデフォルト表記（契約#N）。
+  label: z.string().max(40, "契約名は 40 文字以内で入力してください").optional(),
 });
 
 export type ProjectContractCreateInput = z.infer<typeof ProjectContractCreateSchema>;
+
+// 施工の新規作成（施工サブタブの追加）。customerId + 任意の施工名（tabLabel）。Server Action が
+// 顧客の既存契約に紐づけて Construction を生成する（契約が無ければ最小契約も併せて生成）。
+export const ProjectConstructionCreateSchema = z.object({
+  customerId: z.string().min(1),
+  // 追加時に入力する施工名（サブタブ表示名 tabLabel）。空欄はデフォルト表記（施工#N）。
+  label: z.string().max(40, "施工名は 40 文字以内で入力してください").optional(),
+});
+
+export type ProjectConstructionCreateInput = z.infer<typeof ProjectConstructionCreateSchema>;
+
+// 施工の削除。constructionId は customerId 配下（contract.customerId）であることを Server Action が検証する。
+export const ProjectConstructionDeleteSchema = z.object({
+  customerId: z.string().min(1),
+  constructionId: z.string().min(1),
+});
+
+export type ProjectConstructionDeleteInput = z.infer<typeof ProjectConstructionDeleteSchema>;
 
 // 契約の削除（任意）。GrossProfit/Incentive/ContractItem 等の依存がある契約は
 // Server Action 側で削除不可ガードする。

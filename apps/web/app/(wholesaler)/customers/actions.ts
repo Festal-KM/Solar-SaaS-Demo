@@ -32,6 +32,8 @@ import {
   LoanReviewLogDeleteSchema,
   LoanReviewSaveSchema,
   ProjectApplicationEditSchema,
+  ProjectConstructionCreateSchema,
+  ProjectConstructionDeleteSchema,
   ProjectConstructionEditSchema,
   ProjectCallStatusSchema,
   ProjectContractCreateSchema,
@@ -63,6 +65,8 @@ import type {
   LoanReviewLogDeleteInput,
   LoanReviewSaveInput,
   ProjectApplicationEditInput,
+  ProjectConstructionCreateInput,
+  ProjectConstructionDeleteInput,
   ProjectConstructionEditInput,
   ProjectCallStatusInput,
   ProjectContractCreateInput,
@@ -621,6 +625,7 @@ export const createLoanReviewAction = withServerActionContext<
       data: {
         customerId: parsed.customerId,
         status: "not_reviewed",
+        tabLabel: parsed.label?.trim() || null,
         createdByUserId: ctx.actorUserId,
       },
       select: { id: true },
@@ -923,6 +928,7 @@ export const createContractAction = withServerActionContext<
         cancelDeadline: seed.cancelDeadline,
         hasBattery: seed.hasBattery,
         status: seed.status,
+        tabLabel: parsed.label?.trim() || null,
         createdBy: ctx.actorUserId,
       },
       select: { id: true },
@@ -930,6 +936,109 @@ export const createContractAction = withServerActionContext<
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
     return { customerId: parsed.customerId, contractId: contract.id };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// createConstructionAction は施工サブタブを 1 件追加する。Construction は Contract に
+// 属するため、顧客の既存契約（最古）に紐づける。契約が 1 件も無い場合は最小 Deal+Contract を
+// createContractAction と同じ要領で生成してから施工を作る。三段イディオム
+// （auth→customer.update→withTenant）。tabLabel は入力された施工名（空欄はデフォルト表記）。
+// ---------------------------------------------------------------------------
+export interface CreateConstructionResult {
+  customerId: string;
+  constructionId: string;
+}
+
+export const createConstructionAction = withServerActionContext<
+  ProjectConstructionCreateInput,
+  CreateConstructionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = ProjectConstructionCreateSchema.parse(input);
+
+    const customer = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true, wholesalerId: true, ownerRelationshipId: true },
+    });
+    if (!customer) throw new NotFoundError("顧客が見つかりません");
+
+    // 施工を紐づける契約を決める。既存契約（最古）が無ければ最小 Deal+Contract を生成。
+    let contract = await tx.contract.findFirst({
+      where: { customerId: parsed.customerId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (!contract) {
+      const settings = await tx.wholesalerSettings.findUnique({
+        where: { wholesalerId: customer.wholesalerId },
+        select: { cancelDeadlineDays: true },
+      });
+      const seed = buildDemoContractSeed({ cancelDeadlineDays: settings?.cancelDeadlineDays });
+      const ownerType = ctx.dealerId ? "DEALER" : "WHOLESALER";
+      const deal = await tx.deal.create({
+        data: {
+          customerId: parsed.customerId,
+          ownerType,
+          ownerUserId: ctx.actorUserId,
+          ownerRelationshipId: customer.ownerRelationshipId,
+          status: seed.dealStatus,
+        },
+        select: { id: true },
+      });
+      contract = await tx.contract.create({
+        data: {
+          wholesalerId: customer.wholesalerId,
+          dealId: deal.id,
+          customerId: parsed.customerId,
+          ownerRelationshipId: customer.ownerRelationshipId,
+          contractDate: seed.contractDate,
+          contractAmount: seed.contractAmount,
+          cancelDeadline: seed.cancelDeadline,
+          hasBattery: seed.hasBattery,
+          status: seed.status,
+          createdBy: ctx.actorUserId,
+        },
+        select: { id: true },
+      });
+    }
+
+    const created = await tx.construction.create({
+      data: {
+        contractId: contract.id,
+        tabLabel: parsed.label?.trim() || null,
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId, constructionId: created.id };
+  },
+);
+
+// 施工の削除。constructionId が customerId 配下（contract.customerId）であることを検証してから削除。
+export const deleteConstructionAction = withServerActionContext<
+  ProjectConstructionDeleteInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = ProjectConstructionDeleteSchema.parse(input);
+
+    const con = await tx.construction.findFirst({
+      where: {
+        id: parsed.constructionId,
+        contract: { customerId: parsed.customerId },
+      },
+      select: { id: true },
+    });
+    if (!con) throw new NotFoundError("施工情報が見つかりません");
+
+    await tx.construction.delete({ where: { id: parsed.constructionId } });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
   },
 );
 
