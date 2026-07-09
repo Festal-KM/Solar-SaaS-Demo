@@ -103,6 +103,7 @@ const CONTRACT_VARIANT: Record<ContractStatusValue, BadgeVariant> = {
 const CONSTRUCTION_VARIANT: Record<ConstructionStatusValue, BadgeVariant> = {
   done: "success",
   in_progress: "warning",
+  surveyed: "default",
   not_started: "secondary",
 };
 const SUBSIDY_VARIANT: Record<SubsidyStatusValue, BadgeVariant> = {

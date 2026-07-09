@@ -86,10 +86,14 @@ function buildConstructionStatusWhere(
   const hasDone: Prisma.CustomerWhereInput = {
     contracts: { some: { constructions: { some: { status: "DONE" } } } },
   };
+  const hasSurveyed: Prisma.CustomerWhereInput = {
+    contracts: { some: { constructions: { some: { status: "SURVEYED" } } } },
+  };
   const noConstructionFallback: Prisma.CustomerWhereInput = {
     AND: [{ NOT: hasAnyConstruction }, { constructionStatus: value }],
   };
 
+  // 固定優先順位 施工中 > 完工 > 施工前 > 現地調査前 を where で再現（deriveConstructionStatusValue と一致）。
   if (value === "in_progress") {
     return { OR: [hasInProgress, noConstructionFallback] };
   }
@@ -98,10 +102,26 @@ function buildConstructionStatusWhere(
       OR: [{ AND: [{ NOT: hasInProgress }, hasDone] }, noConstructionFallback],
     };
   }
-  // not_started: 施工はあるが進行中も完了も無い（= REQUEST_PENDING のみ）か、施工 0 件で列が未着手。
+  if (value === "surveyed") {
+    return {
+      OR: [
+        { AND: [{ NOT: hasInProgress }, { NOT: hasDone }, hasSurveyed] },
+        noConstructionFallback,
+      ],
+    };
+  }
+  // not_started（現地調査前）: 施工はあるが施工中・完工・施工前が無い（= REQUEST_PENDING/REQUESTED のみ）、
+  // または施工 0 件で列が現地調査前。
   return {
     OR: [
-      { AND: [hasAnyConstruction, { NOT: hasInProgress }, { NOT: hasDone }] },
+      {
+        AND: [
+          hasAnyConstruction,
+          { NOT: hasInProgress },
+          { NOT: hasDone },
+          { NOT: hasSurveyed },
+        ],
+      },
       noConstructionFallback,
     ],
   };

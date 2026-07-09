@@ -198,7 +198,7 @@ export const CustomerUpdateSchema = z.object({
   contractPlan: z.string().max(255).nullable().optional(),
   contractAmount: z.number().int().nonnegative().nullable().optional(),
   contractExpectedDate: z.string().nullable().optional(),
-  constructionStatus: z.enum(["not_started", "in_progress", "done"]).optional(),
+  constructionStatus: z.enum(["not_started", "surveyed", "in_progress", "done"]).optional(),
   constructionPlannedDate: z.string().nullable().optional(),
   constructionCompletedDate: z.string().nullable().optional(),
   constructionVendor: z.string().max(255).nullable().optional(),

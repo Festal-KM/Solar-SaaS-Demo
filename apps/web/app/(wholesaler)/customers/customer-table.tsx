@@ -49,6 +49,8 @@ export function constructionVariant(v: ConstructionStatusValue): BadgeVariant {
       return "success";
     case "in_progress":
       return "warning";
+    case "surveyed":
+      return "default";
     case "not_started":
       return "secondary";
   }

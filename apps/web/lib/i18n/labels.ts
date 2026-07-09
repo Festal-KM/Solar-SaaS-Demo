@@ -1916,9 +1916,10 @@ export const labels = {
       cancelled: "解約",
     },
     constructionStatusLabels: {
-      not_started: "未着工",
-      in_progress: "着工中",
-      done: "施工完了",
+      not_started: "現地調査前",
+      surveyed: "施工前",
+      in_progress: "施工中",
+      done: "完工",
     },
     subsidyStatusLabels: {
       not_applied: "申請前",
@@ -2136,13 +2137,16 @@ export const labels = {
           OPEN: "不備あり（未解消）",
           RESOLVED: "解消済み",
         } as Record<string, string>,
+        // 施工ステータスは 現地調査前 / 施工前 / 施工中 / 完工 の 4 値。既存 enum 6 値は
+        // REQUEST_PENDING・REQUESTED=現地調査前 / SURVEYED=施工前 / CONSTRUCTING・PAUSED=施工中 /
+        // DONE=完工 にマッピング（一覧導出 constructionEnumToStatusValue と一致）。
         constructionStatusLabels: {
-          REQUEST_PENDING: "依頼準備中",
-          REQUESTED: "依頼済み",
-          SURVEYED: "現調済み",
+          REQUEST_PENDING: "現地調査前",
+          REQUESTED: "現地調査前",
+          SURVEYED: "施工前",
           CONSTRUCTING: "施工中",
           DONE: "完工",
-          PAUSED: "保留",
+          PAUSED: "施工中",
         } as Record<string, string>,
         // 現地調査ステータス（施工ステータスとは別管理）。Construction.surveyStatus。
         surveyStatusLabels: {

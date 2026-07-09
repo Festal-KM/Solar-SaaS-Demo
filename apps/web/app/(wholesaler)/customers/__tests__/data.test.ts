@@ -330,7 +330,7 @@ describe("listCustomers (wholesaler)", () => {
                 contracts: {
                   some: {
                     constructions: {
-                      some: { status: { in: ["REQUESTED", "SURVEYED", "CONSTRUCTING", "PAUSED"] } },
+                      some: { status: { in: ["CONSTRUCTING", "PAUSED"] } },
                     },
                   },
                 },

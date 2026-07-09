@@ -1760,7 +1760,7 @@ export function EditConstructionDialog({
   const [startedDate, setStartedDate] = useState(toDateInput(initial.startedDate));
   const [completedDate, setCompletedDate] = useState(toDateInput(initial.completedDate));
   const [powerSaleStartDate, setPowerSaleStartDate] = useState(toDateInput(initial.powerSaleStartDate));
-  const [status, setStatus] = useState(initial.status);
+  const [status, setStatus] = useState<string>(normalizeConstructionStatus4(initial.status));
   const [surveyStatus, setSurveyStatus] = useState(initial.surveyStatus ?? "");
   const [vendorName, setVendorName] = useState(initial.vendorName ?? "");
   const [fee, setFee] = useState(initial.fee != null ? String(initial.fee) : "");
@@ -1776,7 +1776,7 @@ export function EditConstructionDialog({
     setStartedDate(toDateInput(initial.startedDate));
     setCompletedDate(toDateInput(initial.completedDate));
     setPowerSaleStartDate(toDateInput(initial.powerSaleStartDate));
-    setStatus(initial.status);
+    setStatus(normalizeConstructionStatus4(initial.status));
     setSurveyStatus(initial.surveyStatus ?? "");
     setVendorName(initial.vendorName ?? "");
     setFee(initial.fee != null ? String(initial.fee) : "");
@@ -1834,12 +1834,11 @@ export function EditConstructionDialog({
           <div className="grid grid-cols-2 gap-3">
             <FormField label={f.completionStatus} htmlFor="cn-status">
               <select id="cn-status" className={FIELD} value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="REQUEST_PENDING">{p.constructionStatusLabels.REQUEST_PENDING}</option>
-                <option value="REQUESTED">{p.constructionStatusLabels.REQUESTED}</option>
-                <option value="SURVEYED">{p.constructionStatusLabels.SURVEYED}</option>
-                <option value="CONSTRUCTING">{p.constructionStatusLabels.CONSTRUCTING}</option>
-                <option value="DONE">{p.constructionStatusLabels.DONE}</option>
-                <option value="PAUSED">{p.constructionStatusLabels.PAUSED}</option>
+                {CONSTRUCTION_STATUS_4.map((v) => (
+                  <option key={v} value={v}>
+                    {p.constructionStatusLabels[v] ?? v}
+                  </option>
+                ))}
               </select>
             </FormField>
             <FormField label={f.surveyStatus} htmlFor="cn-survey-status">
@@ -2370,6 +2369,18 @@ const CONSTRUCTION_STATUS_ENUM = [
   "PAUSED",
 ] as const;
 
+// 施工ステータスは 現地調査前 / 施工前 / 施工中 / 完工 の 4 値。select は代表 4 値のみ提示し、
+// 既存 enum 6 値を正規化する（一覧の constructionEnumToStatusValue と一致）:
+//   REQUEST_PENDING・REQUESTED → REQUEST_PENDING(現地調査前) / SURVEYED → SURVEYED(施工前)
+//   CONSTRUCTING・PAUSED → CONSTRUCTING(施工中) / DONE → DONE(完工)
+const CONSTRUCTION_STATUS_4 = ["REQUEST_PENDING", "SURVEYED", "CONSTRUCTING", "DONE"] as const;
+function normalizeConstructionStatus4(status: string): (typeof CONSTRUCTION_STATUS_4)[number] {
+  if (status === "DONE") return "DONE";
+  if (status === "SURVEYED") return "SURVEYED";
+  if (status === "CONSTRUCTING" || status === "PAUSED") return "CONSTRUCTING";
+  return "REQUEST_PENDING";
+}
+
 // 読み取り専用の項目表示（インライン編集フォーム内で使う。ラベル + 値）。
 function ReadonlyField({ label, value }: { label: string; value: string | null }) {
   return (
@@ -2393,7 +2404,7 @@ export function ConstructionInlineEdit({
   const cs = p.constructionSections;
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [status, setStatus] = useState(initial.status);
+  const [status, setStatus] = useState<string>(normalizeConstructionStatus4(initial.status));
   const [vendorName, setVendorName] = useState(initial.vendorName ?? "");
   const [surveyDate, setSurveyDate] = useState(toDateInput(initial.surveyDate));
   const [plannedStartDate, setPlannedStartDate] = useState(toDateInput(initial.plannedStartDate));
@@ -2410,7 +2421,7 @@ export function ConstructionInlineEdit({
   const initCompleted = toDateInput(initial.completedDate);
   const initFee = initial.fee != null ? String(initial.fee) : "";
   const dirty =
-    status !== initial.status ||
+    status !== normalizeConstructionStatus4(initial.status) ||
     vendorName !== initVendor ||
     surveyDate !== initSurvey ||
     plannedStartDate !== initPlannedStart ||
@@ -2420,7 +2431,7 @@ export function ConstructionInlineEdit({
     fee !== initFee;
 
   function reset() {
-    setStatus(initial.status);
+    setStatus(normalizeConstructionStatus4(initial.status));
     setVendorName(initVendor);
     setSurveyDate(initSurvey);
     setPlannedStartDate(initPlannedStart);
@@ -2465,7 +2476,7 @@ export function ConstructionInlineEdit({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <FormField label={f.completionStatus} htmlFor={`cn-status-${id}`}>
             <select id={`cn-status-${id}`} className={FIELD} value={status} onChange={(e) => setStatus(e.target.value)}>
-              {CONSTRUCTION_STATUS_ENUM.map((v) => (
+              {CONSTRUCTION_STATUS_4.map((v) => (
                 <option key={v} value={v}>
                   {p.constructionStatusLabels[v] ?? v}
                 </option>
