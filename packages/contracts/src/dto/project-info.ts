@@ -88,6 +88,8 @@ export interface ProjectConstructionDto {
   constructionId: string;
   contractId: string;
   surveyDate: string | null;
+  // 工事予定日（着工前の予定）。原価でないため二次店 DTO にもそのまま残す。
+  plannedDate: string | null;
   surveyCandidates: unknown | null;
   constructionCandidates: unknown | null;
   startedDate: string | null;

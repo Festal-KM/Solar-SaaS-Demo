@@ -55,6 +55,38 @@ export const SURVEY_STATUS_VALUES: SurveyStatusValue[] = [
   "surveyed",
 ];
 
+// Construction.status (enum) の「進行中」相当集合。一覧の施工状況（3 値）導出に使う。
+export const CONSTRUCTION_IN_PROGRESS_ENUMS = [
+  "REQUESTED",
+  "SURVEYED",
+  "CONSTRUCTING",
+  "PAUSED",
+] as const;
+
+// ConstructionStatus(enum) → 一覧列の 3 値（not_started/in_progress/done）マッピング。
+// REQUEST_PENDING=未着手 / DONE=完了 / それ以外=進行中（labels.constructionStatusLabels と整合）。
+export function constructionEnumToStatusValue(status: string): ConstructionStatusValue {
+  if (status === "DONE") return "done";
+  if (status === "REQUEST_PENDING") return "not_started";
+  return "in_progress";
+}
+
+// 顧客の Construction 群から代表施工の状況を導出する。固定優先順位
+// 「進行中(in_progress) > 完了(done) > 未着工(not_started)」で分類し、DB 側の
+// buildConstructionStatusWhere の分岐と完全一致させる（updatedAt 最新のタイブレークは廃止）。
+// これにより一覧の表示ラベルと施工状況フィルタの結果が常に一致する。
+// 施工が無ければ後方互換フォールバック（Customer.constructionStatus）。
+export function deriveConstructionStatusValue(
+  constructions: { status: string }[],
+  fallback: ConstructionStatusValue,
+): ConstructionStatusValue {
+  if (constructions.length === 0) return fallback;
+  const values = constructions.map((c) => constructionEnumToStatusValue(c.status));
+  if (values.includes("in_progress")) return "in_progress";
+  if (values.includes("done")) return "done";
+  return "not_started";
+}
+
 export interface CustomerListFilter {
   query?: string;
   contractStatus?: ContractStatusValue;

@@ -106,6 +106,7 @@ function baseDto(): ProjectInfoDto {
         constructionId: "con1",
         contractId: "ct1",
         surveyDate: null,
+        plannedDate: null,
         surveyCandidates: null,
         constructionCandidates: null,
         startedDate: null,

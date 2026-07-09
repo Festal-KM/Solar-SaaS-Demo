@@ -1327,6 +1327,9 @@ export const saveProjectConstructionAction = withServerActionContext<
       where: { id: parsed.constructionId },
       data: {
         ...(parsed.surveyDate !== undefined ? { surveyDate: toDateOrNull(parsed.surveyDate) } : {}),
+        ...(parsed.plannedDate !== undefined
+          ? { plannedDate: toDateOrNull(parsed.plannedDate) }
+          : {}),
         ...(parsed.startedDate !== undefined
           ? { startedDate: toDateOrNull(parsed.startedDate) }
           : {}),

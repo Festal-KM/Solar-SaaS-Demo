@@ -750,6 +750,7 @@ export const ProjectConstructionEditSchema = z.object({
   constructionId: z.string().min(1),
   // Construction 列
   surveyDate: z.string().nullable().optional(),
+  plannedDate: z.string().nullable().optional(),
   startedDate: z.string().nullable().optional(),
   completedDate: z.string().nullable().optional(),
   powerSaleStartDate: z.string().nullable().optional(),

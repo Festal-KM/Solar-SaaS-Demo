@@ -32,7 +32,11 @@ import type { Prisma } from "@solar/db";
 // the 担当者 dropdown; re-export so callers can import it from "./data" too.
 export { listWholesalerUsers } from "../event-detail/data";
 
-import { normalizePageSize } from "./constants";
+import {
+  CONSTRUCTION_IN_PROGRESS_ENUMS,
+  deriveConstructionStatusValue,
+  normalizePageSize,
+} from "./constants";
 import type {
   ContractStatusValue,
   ConstructionStatusValue,
@@ -63,12 +67,55 @@ export {
   type PagedCustomerResult,
 } from "./constants";
 
+// 施工状況フィルタは代表施工（Construction 群）からの導出に整合させる。分類は固定優先順位
+// 「進行中 > 完了 > 未着工」で、表示側の deriveConstructionStatusValue と同一の意味論:
+//   in_progress = 進行中の施工が 1 件でもある
+//   done        = 進行中は無いが完了の施工がある
+//   not_started = 施工はあるが進行中も完了も無い（REQUEST_PENDING のみ）
+// 施工 0 件の顧客のみ Customer.constructionStatus へフォールバックする。全て DB where 級で
+// 評価するためページネーション件数は正しく保たれる。RLS スコープ内で contracts→constructions を辿る。
+function buildConstructionStatusWhere(
+  value: ConstructionStatusValue,
+): Prisma.CustomerWhereInput {
+  const hasInProgress: Prisma.CustomerWhereInput = {
+    contracts: { some: { constructions: { some: { status: { in: [...CONSTRUCTION_IN_PROGRESS_ENUMS] } } } } },
+  };
+  const hasAnyConstruction: Prisma.CustomerWhereInput = {
+    contracts: { some: { constructions: { some: {} } } },
+  };
+  const hasDone: Prisma.CustomerWhereInput = {
+    contracts: { some: { constructions: { some: { status: "DONE" } } } },
+  };
+  const noConstructionFallback: Prisma.CustomerWhereInput = {
+    AND: [{ NOT: hasAnyConstruction }, { constructionStatus: value }],
+  };
+
+  if (value === "in_progress") {
+    return { OR: [hasInProgress, noConstructionFallback] };
+  }
+  if (value === "done") {
+    return {
+      OR: [{ AND: [{ NOT: hasInProgress }, hasDone] }, noConstructionFallback],
+    };
+  }
+  // not_started: 施工はあるが進行中も完了も無い（= REQUEST_PENDING のみ）か、施工 0 件で列が未着手。
+  return {
+    OR: [
+      { AND: [hasAnyConstruction, { NOT: hasInProgress }, { NOT: hasDone }] },
+      noConstructionFallback,
+    ],
+  };
+}
+
 function buildStatusWhere(filter: CustomerListFilter): Prisma.CustomerWhereInput[] {
   const clauses: Prisma.CustomerWhereInput[] = [];
 
-  // 契約 / 施工 / 設置申請 are manual columns → direct equality.
+  // 契約 / 設置申請 are manual columns → direct equality.
   if (filter.contractStatus) clauses.push({ contractStatus: filter.contractStatus });
-  if (filter.constructionStatus) clauses.push({ constructionStatus: filter.constructionStatus });
+  // 施工状況は代表施工から導出（施工 0 件は Customer 列フォールバック）。
+  if (filter.constructionStatus) {
+    clauses.push(buildConstructionStatusWhere(filter.constructionStatus));
+  }
   if (filter.subsidyStatus) clauses.push({ subsidyStatus: filter.subsidyStatus });
 
   // 担当者 = the user who registered the customer (no Customer→User relation).
@@ -199,6 +246,21 @@ export async function listCustomers(
     });
     const assigneeNameById = new Map(assigneeUsers.map((u) => [u.id, u.name]));
 
+    // 施工状況は代表施工から導出（固定優先順位: 進行中 > 完了 > 未着工）。顧客の全 Construction を
+    // contracts 経由で 1 クエリにまとめて取得（N+1 回避）し、customerId ごとに集約する。
+    // RLS スコープ内（contract.customerId in の相関）で越境しない。
+    const constructionRows = await tx.construction.findMany({
+      where: { contract: { customerId: { in: customerIds } } },
+      select: { status: true, contract: { select: { customerId: true } } },
+    });
+    const constructionsByCustomer = new Map<string, { status: string }[]>();
+    for (const con of constructionRows) {
+      const cid = con.contract.customerId;
+      const list = constructionsByCustomer.get(cid) ?? [];
+      list.push({ status: con.status });
+      constructionsByCustomer.set(cid, list);
+    }
+
     // マエカク + next-appointment selection per customer.
     const now = Date.now();
     const maekakuByCustomer = new Set<string>();
@@ -231,7 +293,11 @@ export async function listCustomers(
           nextAppointmentAt: apptDate ? apptDate.toISOString() : null,
           maekaku: maekakuByCustomer.has(r.id) ? "present" : "absent",
           contractStatus: r.contractStatus as ContractStatusValue,
-          constructionStatus: r.constructionStatus as ConstructionStatusValue,
+          // 代表施工から導出。施工 0 件は Customer.constructionStatus フォールバック。
+          constructionStatus: deriveConstructionStatusValue(
+            constructionsByCustomer.get(r.id) ?? [],
+            r.constructionStatus as ConstructionStatusValue,
+          ),
           subsidyStatus: r.subsidyStatus as SubsidyStatusValue,
           updatedAt: r.updatedAt.toISOString(),
         };

@@ -15,6 +15,7 @@ const authMock = vi.fn();
 const relationshipFindManyMock = vi.fn();
 const customerFindManyMock = vi.fn();
 const customerCountMock = vi.fn();
+const constructionFindManyMock = vi.fn();
 const dealFindManyMock = vi.fn();
 const contractFindManyMock = vi.fn();
 const appointmentFindManyMock = vi.fn();
@@ -35,6 +36,9 @@ vi.mock("@solar/db", async (orig) => {
     customer: {
       findMany: (...args: unknown[]) => customerFindManyMock(...args),
       count: (...args: unknown[]) => customerCountMock(...args),
+    },
+    construction: {
+      findMany: (...args: unknown[]) => constructionFindManyMock(...args),
     },
     deal: {
       findMany: (...args: unknown[]) => dealFindManyMock(...args),
@@ -123,6 +127,7 @@ function defaultRelatedEmpty() {
   contractFindManyMock.mockResolvedValue([]);
   appointmentFindManyMock.mockResolvedValue([]);
   userFindManyMock.mockResolvedValue([]);
+  constructionFindManyMock.mockResolvedValue([]);
 }
 
 beforeEach(() => {
@@ -130,6 +135,8 @@ beforeEach(() => {
   relationshipFindManyMock.mockReset();
   customerFindManyMock.mockReset();
   customerCountMock.mockReset();
+  constructionFindManyMock.mockReset();
+  constructionFindManyMock.mockResolvedValue([]);
   dealFindManyMock.mockReset();
   contractFindManyMock.mockReset();
   appointmentFindManyMock.mockReset();
@@ -309,10 +316,58 @@ describe("listCustomers (wholesaler)", () => {
     };
     expect(Array.isArray(callArgs.where.AND)).toBe(true);
     expect(callArgs.where.AND).toHaveLength(3);
-    // Direct column equality (manual status columns), not relation some/none.
+    // 契約 / 設置申請 are manual columns → direct equality.
     expect(callArgs.where.AND).toContainEqual({ contractStatus: "contracted" });
-    expect(callArgs.where.AND).toContainEqual({ constructionStatus: "done" });
     expect(callArgs.where.AND).toContainEqual({ subsidyStatus: "completed" });
+    // 施工状況 is derived from constructions → buildConstructionStatusWhere("done"):
+    // "no in-progress AND has DONE" (fixed priority), OR the 0-construction fallback.
+    expect(callArgs.where.AND).toContainEqual({
+      OR: [
+        {
+          AND: [
+            {
+              NOT: {
+                contracts: {
+                  some: {
+                    constructions: {
+                      some: { status: { in: ["REQUESTED", "SURVEYED", "CONSTRUCTING", "PAUSED"] } },
+                    },
+                  },
+                },
+              },
+            },
+            { contracts: { some: { constructions: { some: { status: "DONE" } } } } },
+          ],
+        },
+        {
+          AND: [
+            { NOT: { contracts: { some: { constructions: { some: {} } } } } },
+            { constructionStatus: "done" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("derives 施工状況=done from constructions using fixed priority (DONE + newer REQUEST_PENDING → done)", async () => {
+    // Regression guard: the derived list label must match the done filter.
+    // A customer with DONE + a REQUEST_PENDING (would-be not_started) must be done.
+    authMock.mockResolvedValue(WS_SESSION);
+    wholesalerSettingsFindUniqueMock.mockResolvedValue({ piiMaskingMode: "FULL" });
+    customerFindManyMock.mockResolvedValue([
+      makeCustomerRow({ id: "cust_multi", constructionStatus: "not_started" }),
+    ]);
+    customerCountMock.mockResolvedValue(1);
+    appointmentFindManyMock.mockResolvedValue([]);
+    userFindManyMock.mockResolvedValue([]);
+    constructionFindManyMock.mockResolvedValue([
+      { status: "DONE", contract: { customerId: "cust_multi" } },
+      { status: "REQUEST_PENDING", contract: { customerId: "cust_multi" } },
+    ]);
+
+    const result = await listCustomers();
+
+    expect(result.items[0]!.constructionStatus).toBe("done");
   });
 
   it("respects pagination: pageSize=50 page=2 skips 50 rows", async () => {

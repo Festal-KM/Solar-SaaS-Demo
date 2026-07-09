@@ -2017,6 +2017,7 @@ export const labels = {
           constructionCandidateAt: "工事日時（候補）",
           surveyAt: "現調日時",
           surveyStatus: "現地調査ステータス",
+          plannedDate: "工事予定日",
           startedDate: "着工日",
           completedDate: "完工日",
           thankYouCallAt: "サンキューコール日時",

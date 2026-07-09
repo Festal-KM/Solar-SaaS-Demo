@@ -43,10 +43,7 @@ import { EditAssigneeDialog } from "./edit-assignee-dialog";
 import { NegotiationStatusPanel } from "./negotiation-status-panel";
 import { NewActivityDialog } from "./new-activity-dialog";
 import { QuoteFiles } from "./quote-files";
-import {
-  ConstructionStatusPanel,
-  SubsidyStatusPanel,
-} from "./status-panels";
+import { SubsidyStatusPanel } from "./status-panels";
 
 import type {
   ContractStatusValue,
@@ -600,25 +597,13 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </Card>
         </TabsContent>
 
-        {/* 施工状況 — ステータス（プルダウン）/ 工事予定日 / 対応事業者 + PV設置図面 */}
+        {/* 施工 — ローン審査タブと同型。施工レコードごとのサブタブをトップに置き、各サブタブで
+            施工状況 / 現地調査 / 工事予定日 / 各日付 / 対応事業者 / 施工コスト(fee)を一括編集。
+            fee は原価系のため二次店（editable=null・fee 物理除外）では非表示。PV設置図面は
+            顧客レベルのため最下部に残す。 */}
         <TabsContent value="construction" className="space-y-4">
           <Card className="p-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.construction}</h2>
-            <ConstructionStatusPanel
-              customerId={detail.id}
-              initial={{
-                status: detail.construction.status,
-                plannedDate: detail.construction.plannedDate,
-                vendor: detail.construction.vendor,
-              }}
-            />
-          </Card>
-          {/* 施工コスト — 顧客に紐づく全契約の Construction.fee を契約ごとに表示・編集。
-              fee は原価系のため二次店（editable=null・fee 物理除外）では非表示。 */}
-          <Card className="p-5">
-            <h2 className="mb-4 text-sm font-semibold text-ink">
-              {d.constructionTab.title}
-            </h2>
             <ProjectConstructionList data={projectInfo} editable={projectInfoEditable} />
           </Card>
           <Card className="p-5">

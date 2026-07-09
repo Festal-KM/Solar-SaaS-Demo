@@ -843,6 +843,7 @@ function ConstructionBlock({
           value={con.surveyStatus ? p.surveyStatusLabels[con.surveyStatus] ?? con.surveyStatus : null}
         />
         <MetaItem label={f.surveyAt} value={fmtDateTime(con.surveyDate)} />
+        <MetaItem label={f.plannedDate} value={fmtDate(con.plannedDate)} />
         <MetaItem label={f.startedDate} value={fmtDate(con.startedDate)} />
         <MetaItem label={f.completedDate} value={fmtDate(con.completedDate)} />
         <MetaItem label={f.powerSaleStartDate} value={fmtDate(con.powerSaleStartDate)} />

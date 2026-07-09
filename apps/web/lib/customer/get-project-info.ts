@@ -421,6 +421,7 @@ async function loadProjectInfo(
         constructionId: con.id,
         contractId: c.id,
         surveyDate: isoOrNull(con.surveyDate),
+        plannedDate: isoOrNull(con.plannedDate),
         surveyCandidates: con.surveyCandidates ?? null,
         constructionCandidates: con.constructionCandidates ?? null,
         startedDate: isoOrNull(con.startedDate),

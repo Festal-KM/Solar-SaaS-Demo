@@ -1,17 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// 顧客詳細「施工状況」タブ — 施工コスト（Construction.fee）セクション（docs/02 §16 / docs/05 §16）.
+// 顧客詳細「施工」タブ — ローン審査タブと同型の per-Construction サブタブ（docs/02 §16 / docs/05 §16）.
 //
-// 検証対象（今回の変更）:
-//   1. 施工状況タブ(value="construction")に per-contract の「施工コスト」セクション
-//      ProjectConstructionList を追加。契約ごとに「契約 #N」見出し + 工事・完工項目
-//      （完工ステータス / 対応事業者 / 施工コスト 等）を表示し、施工コストは ¥ 金額表示。
-//   2. EditConstructionDialog（aria-label「工事・完工を編集」）を開き、工事項目を変更保存
+// 検証対象（新レイアウト）:
+//   1. 施工タブ(value="construction")のトップに施工サブタブ（ProjectConstructionList）を
+//      単一 Card（見出し「施工状況」）で配置。各サブタブ（施工 #N）に完工ステータス / 対応事業者 /
+//      工事予定日 / 施工コスト 等を表示し、施工コストは ¥ 金額表示。単一 ConstructionStatusPanel は撤去。
+//   2. EditConstructionDialog（aria-label「工事・完工を編集」）を開き、施工コストを変更保存
 //      → 再描画後に反映される（saveProjectConstructionAction 経由）。
-//   3. 契約/施工が無い顧客（佐藤 一馬）では施工コストセクションが空状態メッセージを表示。
+//   3. 契約/施工が無い顧客（佐藤 一馬・編集可能）では「施工を追加」導線つき空状態を表示。
 //   4. 重複排除: 基本情報タブ内「案件情報」埋め込みビューに「工事・完工」セクション/施工コスト
-//      編集UIが二重に出ないこと（施工状況タブへ集約済み）。ConstructionStatusPanel と
-//      PV設置図面 は施工状況タブに従来通り表示される。
+//      編集UIが二重に出ないこと（施工タブへ集約済み）。PV設置図面 は施工タブ最下部に残る。
 //
 // 認証は demo@solar-saas.demo / Demo1234!（WHOLESALER_ADMIN, 2FA off, seed 投入済）。
 // Seed は tests/e2e/global-setup.ts で全 spec 起動前に 1 回だけ実行される。
@@ -30,14 +29,14 @@ const DEMO_PASSWORD = "Demo1234!";
 const NO_CONTRACT_CUSTOMER_QUERY = "佐藤 一馬";
 
 const ct = {
-  // labels.customer.detail.constructionTab.* / cards.construction / pvDrawing.title
-  costTitle: "施工コスト",
-  costEmpty: "施工コストを表示できる契約・施工がありません。",
-  contractHeading: "契約",
-  statusCardTitle: "施工状況", // ConstructionStatusPanel カード見出し（= cards.construction）
+  // labels.customer.detail.cards.construction / constructionTab.* / pvDrawing.title
+  cardTitle: "施工状況", // トップ Card 見出し（= cards.construction）
+  emptyEditable: "施工はまだありません。「施工を追加」から作成してください。",
+  addConstruction: "施工を追加",
   pvDrawingTitle: "PV設置図面",
   // 工事・完工 MetaItem ラベル（projectInfo.fields.*）
   completionStatus: "完工ステータス",
+  plannedDate: "工事予定日",
   vendorName: "対応事業者名",
   fee: "施工コスト",
   editTrigger: "工事・完工を編集",
@@ -82,39 +81,36 @@ async function metaValue(
   return ((await dd.textContent()) ?? "").trim();
 }
 
-test.describe("施工状況タブ — 施工コストセクション（per-contract）", () => {
+test.describe("施工タブ — per-Construction サブタブ（ローン審査タブ同型）", () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test("施工状況タブに 施工状況パネル + 施工コスト(per-contract) + PV設置図面 が表示され、施工コストが金額表示される", async ({
+  test("施工タブのトップに施工サブタブ + 各フィールド + PV設置図面 が表示され、施工コストが金額表示される", async ({
     page,
   }) => {
     await signInAsDemo(page);
     await openContractedCustomer(page);
 
-    // 施工状況タブへ切り替え。施工コストは施工レコードごとのサブタブ（施工 #N）を内包する
-    // ため、role=tabpanel が外側（施工）+ 内側（施工 #N）の 2 つ active になる。外側パネル
-    // （id 末尾 -content-construction）にスコープして曖昧さを排除する。
+    // 施工タブへ切り替え。施工サブタブ（施工 #N）を内包するため、role=tabpanel が外側（施工）
+    // + 内側（施工 #N）の 2 つ active になる。外側パネル（id 末尾 -content-construction）に
+    // スコープして曖昧さを排除する。
     await page.getByRole("tab", { name: "施工" }).first().click();
     const panel = page.locator('[role="tabpanel"][id$="-content-construction"]');
     await expect(panel).toBeVisible();
 
-    // ConstructionStatusPanel カード見出し（Customer 手動列）— 従来通り維持。
+    // トップ Card 見出し「施工状況」— 施工サブタブを内包する単一カード。
     await expect(
-      panel.getByRole("heading", { name: ct.statusCardTitle }).first(),
+      panel.getByRole("heading", { name: ct.cardTitle }).first(),
     ).toBeVisible();
-    // PV設置図面 セクション — 従来通り維持。
+    // PV設置図面 セクション — 最下部に残る。
     await expect(panel.getByRole("heading", { name: ct.pvDrawingTitle })).toBeVisible();
 
-    // 施工コストセクション見出し（カード見出し h2）。
-    await expect(panel.getByRole("heading", { name: ct.costTitle }).first()).toBeVisible();
-
-    // 施工レコードごとのサブタブ「施工 #1」が出る（契約済み顧客は施工付き契約を持つ）。
+    // 施工レコードごとのサブタブ「施工 #1」がトップに出る（契約済み顧客は施工付き契約を持つ）。
     await expect(page.getByRole("tab", { name: /^施工 #1$/ })).toBeVisible();
-    // 施工が無い旨の空状態は出ない。
-    await expect(panel.getByText(ct.costEmpty)).toHaveCount(0);
+    // 空状態メッセージは出ない。
+    await expect(panel.getByText(ct.emptyEditable)).toHaveCount(0);
 
-    // 工事・完工 MetaItem ラベル群（完工ステータス / 対応事業者 / 施工コスト）が描画される。
-    for (const label of [ct.completionStatus, ct.vendorName, ct.fee]) {
+    // 工事・完工 MetaItem ラベル群（完工ステータス / 工事予定日 / 対応事業者 / 施工コスト）が描画される。
+    for (const label of [ct.completionStatus, ct.plannedDate, ct.vendorName, ct.fee]) {
       await expect(
         panel.locator("dt", { hasText: label }).first(),
         `工事・完工フィールド「${label}」が表示される`,
@@ -162,7 +158,7 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     }).toPass({ timeout: 30_000 });
   });
 
-  test("契約/施工が無い顧客（佐藤 一馬）では施工コストセクションが空状態メッセージを表示する", async ({
+  test("契約/施工が無い顧客（佐藤 一馬・編集可能）では「施工を追加」導線つき空状態を表示する", async ({
     page,
   }) => {
     await signInAsDemo(page);
@@ -172,15 +168,14 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     const panel = page.locator('[role="tabpanel"][id$="-content-construction"]');
     await expect(panel).toBeVisible();
 
-    // 施工コスト見出しは出るが、空状態メッセージが表示され、施工サブタブは出ない。
-    await expect(panel.getByRole("heading", { name: ct.costTitle }).first()).toBeVisible();
-    await expect(panel.getByText(ct.costEmpty)).toBeVisible();
+    // トップ Card 見出しは出るが、施工 0 件のため編集可能な空状態（追加導線つき）を表示し、
+    // 施工サブタブは出ない。
+    await expect(panel.getByRole("heading", { name: ct.cardTitle }).first()).toBeVisible();
+    await expect(panel.getByText(ct.emptyEditable)).toBeVisible();
+    await expect(panel.getByRole("button", { name: ct.addConstruction })).toBeVisible();
     await expect(page.getByRole("tab", { name: /^施工 #1$/ })).toHaveCount(0);
 
-    // 施工状況パネル（Customer 手動列）と PV設置図面 は契約なしでも従来通り表示される。
-    await expect(
-      panel.getByRole("heading", { name: ct.statusCardTitle }).first(),
-    ).toBeVisible();
+    // PV設置図面 は契約なしでも最下部に表示される。
     await expect(panel.getByRole("heading", { name: ct.pvDrawingTitle })).toBeVisible();
   });
 });

@@ -1756,6 +1756,7 @@ export function EditConstructionDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [surveyDate, setSurveyDate] = useState(toDateTimeInput(initial.surveyDate));
+  const [plannedDate, setPlannedDate] = useState(toDateInput(initial.plannedDate));
   const [startedDate, setStartedDate] = useState(toDateInput(initial.startedDate));
   const [completedDate, setCompletedDate] = useState(toDateInput(initial.completedDate));
   const [powerSaleStartDate, setPowerSaleStartDate] = useState(toDateInput(initial.powerSaleStartDate));
@@ -1771,6 +1772,7 @@ export function EditConstructionDialog({
 
   function reset() {
     setSurveyDate(toDateTimeInput(initial.surveyDate));
+    setPlannedDate(toDateInput(initial.plannedDate));
     setStartedDate(toDateInput(initial.startedDate));
     setCompletedDate(toDateInput(initial.completedDate));
     setPowerSaleStartDate(toDateInput(initial.powerSaleStartDate));
@@ -1796,6 +1798,7 @@ export function EditConstructionDialog({
         contractId: initial.contractId,
         constructionId: initial.constructionId,
         surveyDate: surveyDate ? new Date(surveyDate).toISOString() : null,
+        plannedDate: plannedDate || null,
         startedDate: startedDate || null,
         completedDate: completedDate || null,
         powerSaleStartDate: powerSaleStartDate || null,
@@ -1855,6 +1858,9 @@ export function EditConstructionDialog({
             </FormField>
             <FormField label={f.surveyAt} htmlFor="cn-survey">
               <input id="cn-survey" type="datetime-local" className={FIELD} value={surveyDate} onChange={(e) => setSurveyDate(e.target.value)} />
+            </FormField>
+            <FormField label={f.plannedDate} htmlFor="cn-planned">
+              <input id="cn-planned" type="date" className={FIELD} value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)} />
             </FormField>
             <FormField label={f.startedDate} htmlFor="cn-started">
               <input id="cn-started" type="date" className={FIELD} value={startedDate} onChange={(e) => setStartedDate(e.target.value)} />
