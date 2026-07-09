@@ -1294,6 +1294,8 @@ model LoanReview {
   creditLifeInsurance Boolean? // 団信加入有無
   note                String?  // メモ（自由記述）
   reviewedAt          DateTime? // 審査日
+  // 画面のサブタブ表示名（業務ラベル・PII 非該当）。null はデフォルト表記（ローン審査#N）。
+  tabLabel            String?
   createdByUserId     String
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -1560,6 +1562,8 @@ model Contract {
   defectStatus                DefectStatus         @default(NONE)
   defectDetail                String?
   postCompletionStatus        PostCompletionStatus @default(NONE)
+  // 画面のサブタブ表示名（業務ラベル・PII 非該当）。null はデフォルト表記（契約#N）。
+  tabLabel                    String?
   createdBy                   String
   createdAt                   DateTime             @default(now())
   updatedAt                   DateTime             @updatedAt
@@ -1694,6 +1698,8 @@ model Construction {
   surveyCandidates       Json?
   constructionCandidates Json?
   vendorName             String?
+  // 画面のサブタブ表示名（業務ラベル・PII 非該当）。null はデフォルト表記（施工#N）。
+  tabLabel               String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 

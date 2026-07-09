@@ -79,6 +79,8 @@ export interface ProjectContractDto {
   callStatus: "NONE" | "SCHEDULED" | "DONE" | "CALLBACK_WAIT" | "NG";
   equipmentSerialId: string | null;
   representativeConstructionId: string | null;
+  // 契約サブタブの表示名（ユーザー編集・業務ラベル）。null はデフォルト表記（契約#N）。
+  tabLabel: string | null;
   equipment: EquipmentByCategory;
 }
 
@@ -99,6 +101,8 @@ export interface ProjectConstructionDto {
   defectDetail: string | null;
   vendorName: string | null;
   thankYouCallAt: string | null;
+  // 施工サブタブの表示名（ユーザー編集・業務ラベル）。null はデフォルト表記（施工#N）。
+  tabLabel: string | null;
   // fee は二次店レスポンスで物理除外（DEALER_OMITTED_FINANCIAL_KEYS）。
   fee?: number | null;
 }
@@ -257,6 +261,8 @@ export interface ProjectLoanReviewDto {
   creditLifeInsurance: boolean | null;
   note: string | null;
   reviewedAt: string | null;
+  // ローン審査サブタブの表示名（ユーザー編集・業務ラベル）。null はデフォルト表記（ローン審査#N）。
+  tabLabel: string | null;
   logs: ProjectLoanReviewLogDto[];
 }
 

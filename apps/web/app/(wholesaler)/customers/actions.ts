@@ -40,6 +40,7 @@ import {
   ProjectContractEquipmentDeleteSchema,
   ProjectContractEquipmentUpsertSchema,
   ProjectOverviewSchema,
+  ProjectTabRenameSchema,
   sumEquipmentAmounts,
 } from "@solar/contracts";
 import { Prisma } from "@solar/db";
@@ -70,6 +71,7 @@ import type {
   ProjectContractEquipmentDeleteInput,
   ProjectContractEquipmentUpsertInput,
   ProjectOverviewInput,
+  ProjectTabRenameInput,
 } from "@solar/contracts";
 
 const LIST_PATH = "/customers";
@@ -1257,6 +1259,57 @@ export const saveProjectConstructionAction = withServerActionContext<
             ? { thankYouCallAt: toDateOrNull(parsed.thankYouCallAt) }
             : {}),
         },
+        select: { id: true },
+      });
+    }
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
+  },
+);
+
+// 施工/契約/ローン審査サブタブの表示名（tabLabel）改名。三段イディオム（auth→customer.update
+// →withTenant）+ RLS 二重防御。対象レコードは当該 customer 配下であることを RLS スコープ内で
+// 検証（越境防止）。label は空文字/空白のみで null（デフォルト表記へフォールバック）。
+export const renameProjectTabAction = withServerActionContext<
+  ProjectTabRenameInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = ProjectTabRenameSchema.parse(input);
+
+    if (parsed.entity === "construction") {
+      const con = await tx.construction.findFirst({
+        where: { id: parsed.id, contract: { customerId: parsed.customerId } },
+        select: { id: true },
+      });
+      if (!con) throw new NotFoundError("施工情報が見つかりません");
+      await tx.construction.update({
+        where: { id: parsed.id },
+        data: { tabLabel: parsed.label },
+        select: { id: true },
+      });
+    } else if (parsed.entity === "contract") {
+      const ct = await tx.contract.findFirst({
+        where: { id: parsed.id, customerId: parsed.customerId },
+        select: { id: true },
+      });
+      if (!ct) throw new NotFoundError("契約が見つかりません");
+      await tx.contract.update({
+        where: { id: parsed.id },
+        data: { tabLabel: parsed.label },
+        select: { id: true },
+      });
+    } else {
+      const lr = await tx.loanReview.findFirst({
+        where: { id: parsed.id, customerId: parsed.customerId },
+        select: { id: true },
+      });
+      if (!lr) throw new NotFoundError("ローン審査が見つかりません");
+      await tx.loanReview.update({
+        where: { id: parsed.id },
+        data: { tabLabel: parsed.label },
         select: { id: true },
       });
     }

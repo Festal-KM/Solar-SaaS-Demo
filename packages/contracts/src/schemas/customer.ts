@@ -747,6 +747,21 @@ export const ProjectConstructionEditSchema = z.object({
 
 export type ProjectConstructionEditInput = z.infer<typeof ProjectConstructionEditSchema>;
 
+// 施工/契約/ローン審査サブタブの表示名（tabLabel）改名。空文字/空白のみは null（デフォルト
+// 表記へフォールバック）。業務ラベルのため PII 非該当。認可は customer.update（呼び出し側）。
+export const ProjectTabRenameSchema = z.object({
+  customerId: z.string().min(1),
+  entity: z.enum(["construction", "contract", "loanReview"]),
+  id: z.string().min(1),
+  label: z
+    .string()
+    .max(40, "タブ名は 40 文字以内で入力してください")
+    .transform((s) => s.trim())
+    .transform((s) => (s.length > 0 ? s : null)),
+});
+
+export type ProjectTabRenameInput = z.input<typeof ProjectTabRenameSchema>;
+
 // 認定・設備（申請）（Application）。
 export const ProjectApplicationEditSchema = z.object({
   customerId: z.string().min(1),

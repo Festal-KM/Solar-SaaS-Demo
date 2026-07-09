@@ -91,9 +91,11 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     await signInAsDemo(page);
     await openContractedCustomer(page);
 
-    // 施工状況タブへ切り替え。
-    await page.getByRole("tab", { name: "施工" }).click();
-    const panel = page.getByRole("tabpanel");
+    // 施工状況タブへ切り替え。施工コストは施工レコードごとのサブタブ（施工 #N）を内包する
+    // ため、role=tabpanel が外側（施工）+ 内側（施工 #N）の 2 つ active になる。外側パネル
+    // （id 末尾 -content-construction）にスコープして曖昧さを排除する。
+    await page.getByRole("tab", { name: "施工" }).first().click();
+    const panel = page.locator('[role="tabpanel"][id$="-content-construction"]');
     await expect(panel).toBeVisible();
 
     // ConstructionStatusPanel カード見出し（Customer 手動列）— 従来通り維持。
@@ -106,8 +108,8 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     // 施工コストセクション見出し（カード見出し h2）。
     await expect(panel.getByRole("heading", { name: ct.costTitle }).first()).toBeVisible();
 
-    // per-contract 見出し「契約 #1」が出る（契約済み顧客は施工付き契約を持つ）。
-    await expect(panel.getByText(/契約\s*#1/).first()).toBeVisible();
+    // 施工レコードごとのサブタブ「施工 #1」が出る（契約済み顧客は施工付き契約を持つ）。
+    await expect(page.getByRole("tab", { name: /^施工 #1$/ })).toBeVisible();
     // 施工が無い旨の空状態は出ない。
     await expect(panel.getByText(ct.costEmpty)).toHaveCount(0);
 
@@ -132,12 +134,12 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     await signInAsDemo(page);
     await openContractedCustomer(page);
 
-    await page.getByRole("tab", { name: "施工" }).click();
-    const panel = page.getByRole("tabpanel");
+    await page.getByRole("tab", { name: "施工" }).first().click();
+    const panel = page.locator('[role="tabpanel"][id$="-content-construction"]');
     await expect(panel).toBeVisible();
 
-    // 施工コストセクションの per-contract 工事・完工ブロックの編集トリガーを開く。
-    await expect(panel.getByText(/契約\s*#1/).first()).toBeVisible();
+    // 施工コストセクションの施工サブタブ（施工 #1）の工事・完工ブロックの編集トリガーを開く。
+    await expect(page.getByRole("tab", { name: /^施工 #1$/ })).toBeVisible();
     await panel.getByRole("button", { name: ct.editTrigger }).first().click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -166,14 +168,14 @@ test.describe("施工状況タブ — 施工コストセクション（per-contr
     await signInAsDemo(page);
     await openNoContractCustomer(page);
 
-    await page.getByRole("tab", { name: "施工" }).click();
-    const panel = page.getByRole("tabpanel");
+    await page.getByRole("tab", { name: "施工" }).first().click();
+    const panel = page.locator('[role="tabpanel"][id$="-content-construction"]');
     await expect(panel).toBeVisible();
 
-    // 施工コスト見出しは出るが、空状態メッセージが表示され、契約ブロックは出ない。
+    // 施工コスト見出しは出るが、空状態メッセージが表示され、施工サブタブは出ない。
     await expect(panel.getByRole("heading", { name: ct.costTitle }).first()).toBeVisible();
     await expect(panel.getByText(ct.costEmpty)).toBeVisible();
-    await expect(panel.getByText(/契約\s*#1/)).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: /^施工 #1$/ })).toHaveCount(0);
 
     // 施工状況パネル（Customer 手動列）と PV設置図面 は契約なしでも従来通り表示される。
     await expect(

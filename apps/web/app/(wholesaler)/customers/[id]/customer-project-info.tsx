@@ -14,6 +14,7 @@ import {
   AddLoanReviewButton,
   CallLogAddForm,
   CallLogDeleteButton,
+  ConstructionSubTabs,
   ContractDetailInlineEdit,
   ContractSubTabs,
   EditConstructionDialog,
@@ -861,9 +862,10 @@ function ConstructionBlock({
   );
 }
 
-// 専用「施工コスト」タブ — 顧客に紐づく全契約の Construction を契約ごとに一覧表示し、
-// 施工コスト(fee)を含む工事・完工項目を表示・編集（EditConstructionDialog）する。
-// 契約/施工が無ければ空状態。二次店（editable=null・fee 物理除外）では編集も値も非表示。
+// 専用「施工コスト」タブ — 顧客に紐づく全契約の Construction を表示し、施工コスト(fee)を
+// 含む工事・完工項目を表示・編集（EditConstructionDialog）する。編集可能（customer.update）
+// のときは施工レコードごとのサブタブ（施工 #1/#2…・右クリックで改名）。二次店/read-only
+// （editable=null・fee 物理除外）では従来の契約ごとカード縦積み。施工が無ければ空状態。
 export function ProjectConstructionList({
   data,
   editable = null,
@@ -879,6 +881,33 @@ export function ProjectConstructionList({
     (editable?.constructions ?? []).map((c) => [c.constructionId, c]),
   );
 
+  if (constructions.length === 0) {
+    return (
+      <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+        {ct.empty}
+      </p>
+    );
+  }
+
+  // 編集可能: 施工レコード 1 件 = 1 サブタブ（フラット）。デフォルトは「施工 #N」、
+  // tabLabel があればそれで上書き。右クリック改名（EditableTabTrigger）。
+  if (customerId) {
+    const tabs = constructions.map((con, idx) => ({
+      id: con.constructionId,
+      label: con.tabLabel ?? `${ct.subtabHeading} #${idx + 1}`,
+      rawLabel: con.tabLabel ?? null,
+      content: (
+        <ConstructionBlock
+          con={con}
+          customerId={customerId}
+          editConstruction={editConstructionById.get(con.constructionId)}
+        />
+      ),
+    }));
+    return <ConstructionSubTabs customerId={customerId} tabs={tabs} />;
+  }
+
+  // 読み取り専用（二次店/閲覧）: 従来どおり契約ごとにカードを縦積み。
   const byContract = new Map<string, AnyConstruction[]>();
   for (const con of constructions) {
     const list = byContract.get(con.contractId) ?? [];
@@ -958,7 +987,8 @@ export function ProjectLoanInfoList({
     const edit = editReviewById.get(review.loanReviewId);
     return {
       id: review.loanReviewId,
-      label: `${lt.subtabHeading} #${idx + 1}`,
+      label: review.tabLabel ?? `${lt.subtabHeading} #${idx + 1}`,
+      rawLabel: review.tabLabel ?? null,
       content: (
         <div className="space-y-5">
           <div>
@@ -1368,7 +1398,8 @@ export function ProjectContractList({
           customerId={customerId!}
           tabs={contracts.map((c, idx) => ({
             id: c.contractId,
-            label: `${ct.subtabHeading} #${idx + 1}`,
+            label: c.tabLabel ?? `${ct.subtabHeading} #${idx + 1}`,
+            rawLabel: c.tabLabel ?? null,
             content: <ContractDetailBody c={c} />,
           }))}
         />

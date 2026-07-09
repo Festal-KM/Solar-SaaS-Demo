@@ -107,49 +107,22 @@ test.describe("バッチ A: 顧客ステータス値域の仕様準拠化", () =
     await expect(page.getByText("保存しました").first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test("顧客一覧の設置申請フィルタに新 5 値が出て、適用後も設置申請バッジが既知ラベルで壊れない（F-032）", async ({
-    page,
-  }) => {
+  test("顧客一覧の設置申請バッジが新 5 値の既知ラベルで壊れない（F-032）", async ({ page }) => {
+    // 注: 顧客一覧の検索フィルタは 顧客名/担当者/商談状況 の 3 項目へ再編され
+    // （commit 6bac4b8）、設置申請フィルタは撤去された。F-032 の値域準拠検証は
+    // 一覧テーブルの設置申請バッジが既知 5 ラベルで描画される（未知値崩壊が無い）ことで担保する。
     await signInAsDemo(page);
     await page.goto("/customers");
 
-    // 設置申請状況フィルタ select。customer-filter.tsx の <label> は htmlFor 紐付けが
-    // 無いため getByLabel が効かない。subsidy 固有の option「申請準備中」を持つ
-    // <select> を一意に特定する（contract フィルタは契約値域なので競合しない）。
-    const subsidyFilter = page
-      .locator("form select", { has: page.locator('option:text-is("申請準備中")') })
-      .first();
-    await expect(subsidyFilter).toBeVisible();
-    const opts = await optionTexts(subsidyFilter);
-    for (const label of SUBSIDY_STATUS_LABELS) {
-      expect(opts, `設置申請フィルタに「${label}」が存在する`).toContain(label);
-    }
-    // 「すべて」+ 5 値 = 6 option（旧値域 none/applying/granted 由来の余剰が無い）。
-    expect(opts.length, "設置申請フィルタは すべて + 5 値").toBe(SUBSIDY_STATUS_LABELS.length + 1);
-
-    // 「完了」で絞り込み適用。
-    await subsidyFilter.selectOption({ label: "完了" });
-    await page.getByRole("button", { name: "検索" }).click();
-    await page.waitForURL(/subsidyStatus=completed/, { timeout: 30_000 });
-
-    // 一覧の各行 設置申請列バッジが既知の 5 ラベルのいずれかで描画される。
-    // （未知値 → 灰色一色 / 空バッジ崩壊が無いことを担保）。バッジは <td> 内の
-    // <span>。フィルタ <option> と同テキストになるためテーブル本体に限定して検索する。
+    // 一覧の設置申請列バッジが既知の 5 ラベルのいずれかで描画される。
+    // （未知値 → 灰色一色 / 空バッジ崩壊が無いことを担保）。バッジは <td> 内の <span>。
     const knownPattern = new RegExp(`^(${SUBSIDY_STATUS_LABELS.join("|")})$`);
     const table = page.locator("table");
-    const rows = page.getByRole("button", { name: /様$/ });
-    if ((await rows.count()) > 0) {
-      const subsidyBadge = table.getByText(knownPattern).first();
-      await expect(subsidyBadge, "設置申請バッジが既知ラベル").toBeVisible();
-    }
-
-    // フィルタ未指定（全件）でも一覧が描画され、設置申請バッジが既知ラベルで出る。
-    await page.goto("/customers");
-    const allTable = page.locator("table");
     await expect(page.getByRole("button", { name: /様$/ }).first()).toBeVisible();
-    await expect(allTable.getByText(knownPattern).first()).toBeVisible();
+    await expect(table.getByText(knownPattern).first(), "設置申請バッジが既知ラベル").toBeVisible();
+
     // 旧英語生値（not_applied 等）が一覧テーブルに露出していない（未知値崩壊が無い）。
-    await expect(allTable.getByText(/^(not_applied|applying|granted|none)$/)).toHaveCount(0);
+    await expect(table.getByText(/^(not_applied|applying|granted|none)$/)).toHaveCount(0);
   });
 
   test("F-062 工事編集ダイアログに現地調査ステータス（3 値）が出て、保存→案件情報に表示反映される", async ({
@@ -159,8 +132,10 @@ test.describe("バッチ A: 顧客ステータス値域の仕様準拠化", () =
     await openContractedCustomer(page);
 
     // 工事・完工（施工コスト）編集は専用「施工状況」タブの ProjectConstructionList へ集約済み。
-    await page.getByRole("tab", { name: "施工" }).click();
-    const panel = page.getByRole("tabpanel");
+    // 施工コストは施工レコードごとのサブタブを内包するため tabpanel が 2 つ active になり得る。
+    // 外側パネル（id 末尾 -content-construction）へスコープする。
+    await page.getByRole("tab", { name: "施工" }).first().click();
+    const panel = page.locator('[role="tabpanel"][id$="-content-construction"]');
     await expect(panel).toBeVisible();
 
     // 契約済み顧客は seed で Construction 行を持つ（surveyStatus 含む）。施工情報が

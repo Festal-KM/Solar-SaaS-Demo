@@ -2413,6 +2413,15 @@ export const labels = {
         title: "施工コスト",
         empty: "施工コストを表示できる契約・施工がありません。",
         contractHeading: "契約",
+        // 施工サブタブ見出し（施工 #1 / #2 …）。
+        subtabHeading: "施工",
+      },
+      // サブタブ名の右クリック改名 UX（施工/ローン審査/契約で共用）。
+      tabRename: {
+        editTabName: "タブ名を編集する",
+        placeholder: "タブ名を入力（空欄で既定表記）",
+        menuAria: "タブ操作メニュー",
+        inputAria: "タブ名",
       },
       chat: {
         empty: "まだメッセージはありません。最初のメッセージを送りましょう。",

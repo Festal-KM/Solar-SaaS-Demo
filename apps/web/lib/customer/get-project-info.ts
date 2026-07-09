@@ -169,6 +169,7 @@ async function loadProjectInfo(
           creditLifeInsurance: true,
           note: true,
           reviewedAt: true,
+          tabLabel: true,
           logs: {
             orderBy: { reviewedAt: "desc" },
             select: {
@@ -241,6 +242,7 @@ async function loadProjectInfo(
       equipmentSerialId: true,
       loanReviewCallAt: true,
       callStatus: true,
+      tabLabel: true,
       // 完工後・不備・サンキューコールは Contract が source of truth（§16.2）。
       thankYouCallAt: true,
       postCompletionStatus: true,
@@ -292,6 +294,7 @@ async function loadProjectInfo(
           status: true,
           surveyStatus: true,
           vendorName: true,
+          tabLabel: true,
           fee: true,
           installer: { select: { name: true } },
           updatedAt: true,
@@ -431,6 +434,7 @@ async function loadProjectInfo(
         defectDetail: c.defectDetail,
         vendorName: con.installer?.name ?? con.vendorName ?? null,
         thankYouCallAt: isoOrNull(c.thankYouCallAt),
+        tabLabel: con.tabLabel ?? null,
         fee: decimalToNumber(con.fee),
       });
     }
@@ -459,6 +463,7 @@ async function loadProjectInfo(
       callStatus: c.callStatus,
       equipmentSerialId: c.equipmentSerialId,
       representativeConstructionId: rep?.id ?? null,
+      tabLabel: c.tabLabel ?? null,
       equipment: bucketEquipment(c.equipment),
     });
 
@@ -532,6 +537,7 @@ async function loadProjectInfo(
       creditLifeInsurance: r.creditLifeInsurance,
       note: r.note,
       reviewedAt: isoOrNull(r.reviewedAt),
+      tabLabel: r.tabLabel ?? null,
       logs: r.logs.map((l) => ({
         id: l.id,
         reviewedAt: l.reviewedAt.toISOString(),

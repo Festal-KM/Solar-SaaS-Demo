@@ -26,10 +26,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { labels } from "@/lib/i18n/labels";
 import { cn } from "@/lib/utils";
+
+import { EditableTabTrigger } from "./editable-tab-trigger";
 
 import {
   createContractAction,
@@ -1635,7 +1637,7 @@ export function ContractSubTabs({
   tabs,
 }: {
   customerId: string;
-  tabs: { id: string; label: string; content: React.ReactNode }[];
+  tabs: { id: string; label: string; rawLabel: string | null; content: React.ReactNode }[];
 }) {
   const [active, setActive] = useState(tabs[0]?.id ?? "");
   if (tabs.length === 0) return null;
@@ -1645,9 +1647,15 @@ export function ContractSubTabs({
       <div className="flex items-center justify-between gap-2">
         <TabsList variant="underline" className="flex-1">
           {tabs.map((t) => (
-            <TabsTrigger key={t.id} value={t.id}>
-              {t.label}
-            </TabsTrigger>
+            <EditableTabTrigger
+              key={t.id}
+              value={t.id}
+              label={t.label}
+              customerId={customerId}
+              entity="contract"
+              id={t.id}
+              rawLabel={t.rawLabel}
+            />
           ))}
         </TabsList>
         <div className="flex shrink-0 items-center gap-2 pb-1">
@@ -2247,7 +2255,7 @@ export function LoanReviewSubTabs({
   tabs,
 }: {
   customerId: string;
-  tabs: { id: string; label: string; content: React.ReactNode }[];
+  tabs: { id: string; label: string; rawLabel: string | null; content: React.ReactNode }[];
 }) {
   const [active, setActive] = useState(tabs[0]?.id ?? "");
   if (tabs.length === 0) return null;
@@ -2257,9 +2265,15 @@ export function LoanReviewSubTabs({
       <div className="flex items-center justify-between gap-2">
         <TabsList variant="underline" className="flex-1">
           {tabs.map((t) => (
-            <TabsTrigger key={t.id} value={t.id}>
-              {t.label}
-            </TabsTrigger>
+            <EditableTabTrigger
+              key={t.id}
+              value={t.id}
+              label={t.label}
+              customerId={customerId}
+              entity="loanReview"
+              id={t.id}
+              rawLabel={t.rawLabel}
+            />
           ))}
         </TabsList>
         <div className="flex shrink-0 items-center gap-2 pb-1">
@@ -2267,6 +2281,43 @@ export function LoanReviewSubTabs({
           <DeleteLoanReviewButton customerId={customerId} loanReviewId={active} />
         </div>
       </div>
+      {tabs.map((t) => (
+        <TabsContent key={t.id} value={t.id} className="space-y-4">
+          {t.content}
+        </TabsContent>
+      ))}
+    </Tabs>
+  );
+}
+
+/* ── 施工サブタブ（client ラッパー・LoanReviewSubTabs と同型）。施工 1 件 = 1 サブタブ。
+   施工は契約経由で生成されるため追加/削除導線は持たず、タブ名の右クリック改名のみ。各タブ
+   本文は server で生成した React element を content として受け取り描画する。 ── */
+export function ConstructionSubTabs({
+  customerId,
+  tabs,
+}: {
+  customerId: string;
+  tabs: { id: string; label: string; rawLabel: string | null; content: React.ReactNode }[];
+}) {
+  const [active, setActive] = useState(tabs[0]?.id ?? "");
+  if (tabs.length === 0) return null;
+
+  return (
+    <Tabs value={active} onValueChange={setActive}>
+      <TabsList variant="underline">
+        {tabs.map((t) => (
+          <EditableTabTrigger
+            key={t.id}
+            value={t.id}
+            label={t.label}
+            customerId={customerId}
+            entity="construction"
+            id={t.id}
+            rawLabel={t.rawLabel}
+          />
+        ))}
+      </TabsList>
       {tabs.map((t) => (
         <TabsContent key={t.id} value={t.id} className="space-y-4">
           {t.content}
