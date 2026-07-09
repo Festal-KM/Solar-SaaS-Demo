@@ -2378,7 +2378,7 @@ function DefectResolveToggle({
         disabled={pending}
         aria-label={lt.defectStatusAria}
         className={cn(
-          "h-7 w-full cursor-pointer appearance-none truncate rounded-full border pl-7 pr-8 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-50",
+          "h-8 w-full cursor-pointer appearance-none whitespace-nowrap rounded-full border pl-7 pr-8 text-xs font-medium leading-none focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-50",
           resolved
             ? "border-emerald-200 bg-emerald-50 text-emerald-700"
             : "border-amber-200 bg-amber-50 text-amber-700",
