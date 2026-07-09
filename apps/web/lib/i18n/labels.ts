@@ -1984,6 +1984,12 @@ export const labels = {
           calls: "コール状況",
           note: "備考",
         },
+        // 施工サブタブ本文のセクション見出し（サマリ / スケジュール / コスト）。
+        constructionSections: {
+          summary: "サマリ",
+          schedule: "スケジュール",
+          cost: "コスト",
+        },
         fields: {
           name: "お客様名",
           kana: "フリガナ",

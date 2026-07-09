@@ -824,42 +824,66 @@ function ConstructionBlock({
   editConstruction?: ProjectConstructionEditable;
 }) {
   const f = p.fields;
+  const cs = p.constructionSections;
   // fee キー自体が存在するのは wholesaler/saas のみ（二次店 DTO は物理除外）。
   const showFee = "fee" in con;
+  const sectionHeading = "mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light";
+  const grid = "grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3";
   return (
-    <div className="rounded-md border border-hairline-light p-4">
+    <div className="space-y-5 rounded-md border border-hairline-light p-4">
       {customerId && editConstruction ? (
-        <div className="mb-1 flex justify-end">
+        <div className="flex justify-end">
           <EditConstructionDialog customerId={customerId} initial={editConstruction} />
         </div>
       ) : null}
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-        <MetaItem
-          label={f.completionStatus}
-          value={p.constructionStatusLabels[con.status] ?? con.status}
-        />
-        <MetaItem
-          label={f.surveyStatus}
-          value={con.surveyStatus ? p.surveyStatusLabels[con.surveyStatus] ?? con.surveyStatus : null}
-        />
-        <MetaItem label={f.surveyAt} value={fmtDateTime(con.surveyDate)} />
-        <MetaItem label={f.plannedDate} value={fmtDate(con.plannedDate)} />
-        <MetaItem label={f.startedDate} value={fmtDate(con.startedDate)} />
-        <MetaItem label={f.completedDate} value={fmtDate(con.completedDate)} />
-        <MetaItem label={f.powerSaleStartDate} value={fmtDate(con.powerSaleStartDate)} />
-        <MetaItem label={f.thankYouCallAt} value={fmtDateTime(con.thankYouCallAt)} />
-        <MetaItem
-          label={f.postCompletionStatus}
-          value={p.postCompletionStatusLabels[con.postCompletionStatus] ?? con.postCompletionStatus}
-        />
-        <MetaItem
-          label={f.defectStatus}
-          value={p.defectStatusLabels[con.defectStatus] ?? con.defectStatus}
-        />
-        <MetaItem label={f.defectDetail} value={con.defectDetail} />
-        <MetaItem label={f.vendorName} value={con.vendorName} />
-        {showFee ? <MetaItem label={f.constructionFee} value={fmtYen(con.fee ?? null)} /> : null}
-      </dl>
+
+      {/* サマリ — 状況・現地調査・完工後・不備・対応事業者。 */}
+      <section>
+        <h4 className={sectionHeading}>{cs.summary}</h4>
+        <dl className={grid}>
+          <MetaItem
+            label={f.completionStatus}
+            value={p.constructionStatusLabels[con.status] ?? con.status}
+          />
+          <MetaItem
+            label={f.surveyStatus}
+            value={con.surveyStatus ? p.surveyStatusLabels[con.surveyStatus] ?? con.surveyStatus : null}
+          />
+          <MetaItem
+            label={f.postCompletionStatus}
+            value={p.postCompletionStatusLabels[con.postCompletionStatus] ?? con.postCompletionStatus}
+          />
+          <MetaItem
+            label={f.defectStatus}
+            value={p.defectStatusLabels[con.defectStatus] ?? con.defectStatus}
+          />
+          <MetaItem label={f.defectDetail} value={con.defectDetail} />
+          <MetaItem label={f.vendorName} value={con.vendorName} />
+        </dl>
+      </section>
+
+      {/* スケジュール — 予定日・各日程・サンキューコール。 */}
+      <section>
+        <h4 className={sectionHeading}>{cs.schedule}</h4>
+        <dl className={grid}>
+          <MetaItem label={f.plannedDate} value={fmtDate(con.plannedDate)} />
+          <MetaItem label={f.surveyAt} value={fmtDateTime(con.surveyDate)} />
+          <MetaItem label={f.startedDate} value={fmtDate(con.startedDate)} />
+          <MetaItem label={f.completedDate} value={fmtDate(con.completedDate)} />
+          <MetaItem label={f.powerSaleStartDate} value={fmtDate(con.powerSaleStartDate)} />
+          <MetaItem label={f.thankYouCallAt} value={fmtDateTime(con.thankYouCallAt)} />
+        </dl>
+      </section>
+
+      {/* コスト — 施工コスト(fee)。原価系のため二次店では非表示。 */}
+      {showFee ? (
+        <section>
+          <h4 className={sectionHeading}>{cs.cost}</h4>
+          <dl className={grid}>
+            <MetaItem label={f.constructionFee} value={fmtYen(con.fee ?? null)} />
+          </dl>
+        </section>
+      ) : null}
     </div>
   );
 }
