@@ -2359,14 +2359,14 @@ function DefectResolveToggle({
     });
   }
 
-  // ステータス（可変）。1 つのピル内に「状態ドット + ラベル + chevron」を収める。native arrow は
-  // appearance-none で消し、chevron を右に絶対配置して幅づまり／背景のにじみで崩れないようにする。
-  // 状態は色（ドット）とラベルの両方で示す（color だけに依存しない — a11y）。
+  // ステータス（可変）。状態色のティント背景を持つチップ内に「ドット + ラベル + chevron」を収める。
+  // native arrow は appearance-none で消し、chevron を右に絶対配置。ラベルが chevron に食い込んで
+  // 崩れないよう左右パディングを十分に確保する。状態は色とラベルの両方で示す（color 依存回避 — a11y）。
   return (
-    <div className="relative w-full">
+    <div className="relative inline-block w-full">
       <span
         className={cn(
-          "pointer-events-none absolute left-2 top-1/2 size-2 -translate-y-1/2 rounded-full",
+          "pointer-events-none absolute left-2.5 top-1/2 size-2 -translate-y-1/2 rounded-full",
           resolved ? "bg-emerald-500" : "bg-amber-500",
         )}
         aria-hidden
@@ -2377,13 +2377,21 @@ function DefectResolveToggle({
         onChange={(e) => onChange(e.target.value === "resolved")}
         disabled={pending}
         aria-label={lt.defectStatusAria}
-        className="h-7 w-full cursor-pointer appearance-none rounded-md border border-ash-light bg-white pl-6 pr-7 text-xs text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+        className={cn(
+          "h-7 w-full cursor-pointer appearance-none truncate rounded-full border pl-7 pr-8 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-50",
+          resolved
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-amber-200 bg-amber-50 text-amber-700",
+        )}
       >
         <option value="open">{lt.defectOpenBadge}</option>
         <option value="resolved">{lt.defectResolvedBadge}</option>
       </select>
       <ChevronDown
-        className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-mute-light"
+        className={cn(
+          "pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2",
+          resolved ? "text-emerald-500" : "text-amber-500",
+        )}
         aria-hidden
       />
     </div>
@@ -2412,7 +2420,7 @@ export function LoanReviewDefectList({
       {defects.map((log) => (
         <li
           key={log.id}
-          className="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)_auto] items-center gap-3 py-1.5 text-sm text-ink"
+          className="grid grid-cols-[5.5rem_8rem_minmax(0,1fr)_auto] items-center gap-3 py-1.5 text-sm text-ink"
         >
           <span className="tabular-nums text-mute-light">
             {new Date(log.reviewedAt).toLocaleDateString("ja-JP")}
