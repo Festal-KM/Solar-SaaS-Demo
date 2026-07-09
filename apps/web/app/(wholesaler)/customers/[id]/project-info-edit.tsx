@@ -2360,6 +2360,163 @@ export function LoanReviewSubTabs({
   );
 }
 
+// 施工ステータス（ConstructionStatus enum）の値域。EditConstructionDialog と同一。
+const CONSTRUCTION_STATUS_ENUM = [
+  "REQUEST_PENDING",
+  "REQUESTED",
+  "SURVEYED",
+  "CONSTRUCTING",
+  "DONE",
+  "PAUSED",
+] as const;
+
+// 読み取り専用の項目表示（インライン編集フォーム内で使う。ラベル + 値）。
+function ReadonlyField({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="space-y-1.5">
+      <span className="text-xs font-medium text-mute-light">{label}</span>
+      <p className="text-sm text-ink">{value && value.length > 0 ? value : ed.unset}</p>
+    </div>
+  );
+}
+
+/* 施工 1 件分のインライン編集（ローン審査タブと同型）。サマリ / スケジュール / コストの
+   3 セクションに分けて表示・編集する。事業者名(=施工業者)は vendorName 一本、完工予定日は
+   plannedEndDate（＝工事予定日終了）をサマリに表示。fee は原価系のため wholesaler のみ。 */
+export function ConstructionInlineEdit({
+  customerId,
+  initial,
+}: {
+  customerId: string;
+  initial: ProjectConstructionEditable;
+}) {
+  const cs = p.constructionSections;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [status, setStatus] = useState(initial.status);
+  const [vendorName, setVendorName] = useState(initial.vendorName ?? "");
+  const [surveyDate, setSurveyDate] = useState(toDateInput(initial.surveyDate));
+  const [plannedStartDate, setPlannedStartDate] = useState(toDateInput(initial.plannedStartDate));
+  const [plannedEndDate, setPlannedEndDate] = useState(toDateInput(initial.plannedEndDate));
+  const [startedDate, setStartedDate] = useState(toDateInput(initial.startedDate));
+  const [completedDate, setCompletedDate] = useState(toDateInput(initial.completedDate));
+  const [fee, setFee] = useState(initial.fee != null ? String(initial.fee) : "");
+
+  const initVendor = initial.vendorName ?? "";
+  const initSurvey = toDateInput(initial.surveyDate);
+  const initPlannedStart = toDateInput(initial.plannedStartDate);
+  const initPlannedEnd = toDateInput(initial.plannedEndDate);
+  const initStarted = toDateInput(initial.startedDate);
+  const initCompleted = toDateInput(initial.completedDate);
+  const initFee = initial.fee != null ? String(initial.fee) : "";
+  const dirty =
+    status !== initial.status ||
+    vendorName !== initVendor ||
+    surveyDate !== initSurvey ||
+    plannedStartDate !== initPlannedStart ||
+    plannedEndDate !== initPlannedEnd ||
+    startedDate !== initStarted ||
+    completedDate !== initCompleted ||
+    fee !== initFee;
+
+  function reset() {
+    setStatus(initial.status);
+    setVendorName(initVendor);
+    setSurveyDate(initSurvey);
+    setPlannedStartDate(initPlannedStart);
+    setPlannedEndDate(initPlannedEnd);
+    setStartedDate(initStarted);
+    setCompletedDate(initCompleted);
+    setFee(initFee);
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectConstructionAction({
+          customerId,
+          contractId: initial.contractId,
+          constructionId: initial.constructionId,
+          status: status as (typeof CONSTRUCTION_STATUS_ENUM)[number],
+          vendorName: strOrNull(vendorName),
+          surveyDate: surveyDate || null,
+          plannedStartDate: plannedStartDate || null,
+          plannedEndDate: plannedEndDate || null,
+          startedDate: startedDate || null,
+          completedDate: completedDate || null,
+          fee: numOrNull(fee),
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  const id = initial.constructionId;
+  const sectionHeading = "mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light";
+
+  return (
+    <div className="space-y-5">
+      {/* サマリ — 完工ステータス（編集）/ 事業者名（＝施工業者・表示）/ 完工予定日（＝工事予定日終了・表示）。 */}
+      <section>
+        <h4 className={sectionHeading}>{cs.summary}</h4>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <FormField label={f.completionStatus} htmlFor={`cn-status-${id}`}>
+            <select id={`cn-status-${id}`} className={FIELD} value={status} onChange={(e) => setStatus(e.target.value)}>
+              {CONSTRUCTION_STATUS_ENUM.map((v) => (
+                <option key={v} value={v}>
+                  {p.constructionStatusLabels[v] ?? v}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <ReadonlyField label={f.businessName} value={vendorName} />
+          <ReadonlyField label={f.plannedCompletionDate} value={plannedEndDate} />
+        </div>
+      </section>
+
+      {/* スケジュール — 現地調査日 / 工事予定日(開始・終了) / 工事日(開始・終了)。 */}
+      <section>
+        <h4 className={sectionHeading}>{cs.schedule}</h4>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <FormField label={f.surveyDateField} htmlFor={`cn-survey-${id}`}>
+            <input id={`cn-survey-${id}`} type="date" className={FIELD} value={surveyDate} onChange={(e) => setSurveyDate(e.target.value)} />
+          </FormField>
+          <FormField label={f.plannedStartDate} htmlFor={`cn-pstart-${id}`}>
+            <input id={`cn-pstart-${id}`} type="date" className={FIELD} value={plannedStartDate} onChange={(e) => setPlannedStartDate(e.target.value)} />
+          </FormField>
+          <FormField label={f.plannedEndDate} htmlFor={`cn-pend-${id}`}>
+            <input id={`cn-pend-${id}`} type="date" className={FIELD} value={plannedEndDate} onChange={(e) => setPlannedEndDate(e.target.value)} />
+          </FormField>
+          <FormField label={f.constructionStartDate} htmlFor={`cn-started-${id}`}>
+            <input id={`cn-started-${id}`} type="date" className={FIELD} value={startedDate} onChange={(e) => setStartedDate(e.target.value)} />
+          </FormField>
+          <FormField label={f.constructionEndDate} htmlFor={`cn-completed-${id}`}>
+            <input id={`cn-completed-${id}`} type="date" className={FIELD} value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} />
+          </FormField>
+        </div>
+      </section>
+
+      {/* コスト — 施工業者（＝事業者名・編集）/ 金額(fee)。 */}
+      <section>
+        <h4 className={sectionHeading}>{cs.cost}</h4>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <FormField label={f.installerName} htmlFor={`cn-vendor-${id}`}>
+            <Input id={`cn-vendor-${id}`} value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
+          </FormField>
+          <FormField label={f.amount} htmlFor={`cn-fee-${id}`}>
+            <MoneyInput id={`cn-fee-${id}`} value={fee} onChange={setFee} />
+          </FormField>
+        </div>
+      </section>
+
+      <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+    </div>
+  );
+}
+
 /* 施工を追加するボタン。追加時に施工名を入力させ tabLabel に設定する。契約が無ければ
    サーバーが最小契約を併せて生成する。 */
 export function AddConstructionButton({ customerId }: { customerId: string }) {

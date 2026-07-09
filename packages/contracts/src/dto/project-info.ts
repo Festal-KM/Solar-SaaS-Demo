@@ -90,6 +90,9 @@ export interface ProjectConstructionDto {
   surveyDate: string | null;
   // 工事予定日（着工前の予定）。原価でないため二次店 DTO にもそのまま残す。
   plannedDate: string | null;
+  // 工事予定日（開始/終了）。サマリの「完工予定日」は plannedEndDate を参照。
+  plannedStartDate: string | null;
+  plannedEndDate: string | null;
   surveyCandidates: unknown | null;
   constructionCandidates: unknown | null;
   startedDate: string | null;

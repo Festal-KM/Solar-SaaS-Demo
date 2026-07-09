@@ -751,6 +751,9 @@ export const ProjectConstructionEditSchema = z.object({
   // Construction 列
   surveyDate: z.string().nullable().optional(),
   plannedDate: z.string().nullable().optional(),
+  // 工事予定日（開始/終了）。サマリの「完工予定日」は plannedEndDate を参照。
+  plannedStartDate: z.string().nullable().optional(),
+  plannedEndDate: z.string().nullable().optional(),
   startedDate: z.string().nullable().optional(),
   completedDate: z.string().nullable().optional(),
   powerSaleStartDate: z.string().nullable().optional(),

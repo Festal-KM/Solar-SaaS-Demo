@@ -108,6 +108,8 @@ export interface ProjectConstructionEditable {
   contractId: string;
   surveyDate: string | null;
   plannedDate: string | null;
+  plannedStartDate: string | null;
+  plannedEndDate: string | null;
   startedDate: string | null;
   completedDate: string | null;
   powerSaleStartDate: string | null;
@@ -282,6 +284,8 @@ export async function getCustomerProjectInfoEditable(
             id: true,
             surveyDate: true,
             plannedDate: true,
+            plannedStartDate: true,
+            plannedEndDate: true,
             startedDate: true,
             completedDate: true,
             powerSaleStartDate: true,
@@ -364,6 +368,8 @@ export async function getCustomerProjectInfoEditable(
           contractId: c.id,
           surveyDate: isoOrNull(con.surveyDate),
           plannedDate: isoOrNull(con.plannedDate),
+          plannedStartDate: isoOrNull(con.plannedStartDate),
+          plannedEndDate: isoOrNull(con.plannedEndDate),
           startedDate: isoOrNull(con.startedDate),
           completedDate: isoOrNull(con.completedDate),
           powerSaleStartDate: isoOrNull(con.powerSaleStartDate),

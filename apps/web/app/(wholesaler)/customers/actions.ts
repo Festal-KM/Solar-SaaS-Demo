@@ -1330,6 +1330,12 @@ export const saveProjectConstructionAction = withServerActionContext<
         ...(parsed.plannedDate !== undefined
           ? { plannedDate: toDateOrNull(parsed.plannedDate) }
           : {}),
+        ...(parsed.plannedStartDate !== undefined
+          ? { plannedStartDate: toDateOrNull(parsed.plannedStartDate) }
+          : {}),
+        ...(parsed.plannedEndDate !== undefined
+          ? { plannedEndDate: toDateOrNull(parsed.plannedEndDate) }
+          : {}),
         ...(parsed.startedDate !== undefined
           ? { startedDate: toDateOrNull(parsed.startedDate) }
           : {}),

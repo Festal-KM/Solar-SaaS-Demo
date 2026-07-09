@@ -15,6 +15,7 @@ import {
   AddLoanReviewButton,
   CallLogAddForm,
   CallLogDeleteButton,
+  ConstructionInlineEdit,
   ConstructionSubTabs,
   ContractDetailInlineEdit,
   ContractSubTabs,
@@ -837,7 +838,7 @@ function ConstructionBlock({
         </div>
       ) : null}
 
-      {/* サマリ — 状況・現地調査・完工後・不備・対応事業者。 */}
+      {/* サマリ — 完工ステータス / 事業者名 / 完工予定日(=工事予定日終了)。 */}
       <section>
         <h4 className={sectionHeading}>{cs.summary}</h4>
         <dl className={grid}>
@@ -845,45 +846,31 @@ function ConstructionBlock({
             label={f.completionStatus}
             value={p.constructionStatusLabels[con.status] ?? con.status}
           />
-          <MetaItem
-            label={f.surveyStatus}
-            value={con.surveyStatus ? p.surveyStatusLabels[con.surveyStatus] ?? con.surveyStatus : null}
-          />
-          <MetaItem
-            label={f.postCompletionStatus}
-            value={p.postCompletionStatusLabels[con.postCompletionStatus] ?? con.postCompletionStatus}
-          />
-          <MetaItem
-            label={f.defectStatus}
-            value={p.defectStatusLabels[con.defectStatus] ?? con.defectStatus}
-          />
-          <MetaItem label={f.defectDetail} value={con.defectDetail} />
-          <MetaItem label={f.vendorName} value={con.vendorName} />
+          <MetaItem label={f.businessName} value={con.vendorName} />
+          <MetaItem label={f.plannedCompletionDate} value={fmtDate(con.plannedEndDate)} />
         </dl>
       </section>
 
-      {/* スケジュール — 予定日・各日程・サンキューコール。 */}
+      {/* スケジュール — 現地調査日 / 工事予定日(開始・終了) / 工事日(開始・終了)。 */}
       <section>
         <h4 className={sectionHeading}>{cs.schedule}</h4>
         <dl className={grid}>
-          <MetaItem label={f.plannedDate} value={fmtDate(con.plannedDate)} />
-          <MetaItem label={f.surveyAt} value={fmtDateTime(con.surveyDate)} />
-          <MetaItem label={f.startedDate} value={fmtDate(con.startedDate)} />
-          <MetaItem label={f.completedDate} value={fmtDate(con.completedDate)} />
-          <MetaItem label={f.powerSaleStartDate} value={fmtDate(con.powerSaleStartDate)} />
-          <MetaItem label={f.thankYouCallAt} value={fmtDateTime(con.thankYouCallAt)} />
+          <MetaItem label={f.surveyDateField} value={fmtDate(con.surveyDate)} />
+          <MetaItem label={f.plannedStartDate} value={fmtDate(con.plannedStartDate)} />
+          <MetaItem label={f.plannedEndDate} value={fmtDate(con.plannedEndDate)} />
+          <MetaItem label={f.constructionStartDate} value={fmtDate(con.startedDate)} />
+          <MetaItem label={f.constructionEndDate} value={fmtDate(con.completedDate)} />
         </dl>
       </section>
 
-      {/* コスト — 施工コスト(fee)。原価系のため二次店では非表示。 */}
-      {showFee ? (
-        <section>
-          <h4 className={sectionHeading}>{cs.cost}</h4>
-          <dl className={grid}>
-            <MetaItem label={f.constructionFee} value={fmtYen(con.fee ?? null)} />
-          </dl>
-        </section>
-      ) : null}
+      {/* コスト — 施工業者(=事業者名) / 金額(fee)。原価系のため二次店では fee 非表示。 */}
+      <section>
+        <h4 className={sectionHeading}>{cs.cost}</h4>
+        <dl className={grid}>
+          <MetaItem label={f.installerName} value={con.vendorName} />
+          {showFee ? <MetaItem label={f.amount} value={fmtYen(con.fee ?? null)} /> : null}
+        </dl>
+      </section>
     </div>
   );
 }
@@ -928,18 +915,19 @@ export function ProjectConstructionList({
   // 編集可能: 施工レコード 1 件 = 1 サブタブ（フラット）。デフォルトは「施工 #N」、
   // tabLabel があればそれで上書き。右クリック改名（EditableTabTrigger）。
   if (customerId) {
-    const tabs = constructions.map((con, idx) => ({
-      id: con.constructionId,
-      label: con.tabLabel ?? `${ct.subtabHeading} #${idx + 1}`,
-      rawLabel: con.tabLabel ?? null,
-      content: (
-        <ConstructionBlock
-          con={con}
-          customerId={customerId}
-          editConstruction={editConstructionById.get(con.constructionId)}
-        />
-      ),
-    }));
+    const tabs = constructions.map((con, idx) => {
+      const edit = editConstructionById.get(con.constructionId);
+      return {
+        id: con.constructionId,
+        label: con.tabLabel ?? `${ct.subtabHeading} #${idx + 1}`,
+        rawLabel: con.tabLabel ?? null,
+        content: edit ? (
+          <ConstructionInlineEdit customerId={customerId} initial={edit} />
+        ) : (
+          <ConstructionBlock con={con} customerId={customerId} />
+        ),
+      };
+    });
     return <ConstructionSubTabs customerId={customerId} tabs={tabs} />;
   }
 

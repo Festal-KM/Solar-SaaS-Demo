@@ -1684,7 +1684,11 @@ model Construction {
   contractId    String
   installerId   String?
   surveyDate    DateTime?
+  // 工事予定日（開始/終了）。plannedDate は plannedStartDate へ移行（後方互換で列は残置）。
+  // サマリの「完工予定日」は plannedEndDate を参照する。
   plannedDate   DateTime?
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
   completedDate DateTime?
   status        ConstructionStatus @default(REQUEST_PENDING)
   // 現地調査ステータス（施工ステータスとは別管理）: "not_surveyed" | "scheduled" | "surveyed"。
