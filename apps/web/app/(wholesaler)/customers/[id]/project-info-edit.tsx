@@ -2309,7 +2309,7 @@ export function LoanReviewLogList({
                 {lt.logDefectContent}：{log.defectContent}
               </span>
             ) : log.note ? (
-              <span className="min-w-0 truncate text-xs text-mute-light" title={log.note}>
+              <span className="min-w-0 truncate text-sm text-ink" title={log.note}>
                 {log.note}
               </span>
             ) : null}
