@@ -131,21 +131,60 @@ export interface ProjectActivityDto {
   body: string | null;
 }
 
-// 契約単位の損益（GrossProfit 1:1）。売上・各原価・粗利を機密財務として保持する。
-// セクション丸ごと二次店レスポンスから物理除外（toProjectInfoDealerDto / #4・#5）。
-// GrossProfit 未計算の契約は配列に含めない（UI 側で「未計算」空状態）。
+// 損益タブ 契約別コスト明細 1 件（ContractCost・docs/05 §20）。施工代 CONSTRUCTION_FEE は
+// 施工参照（constructionId/constructionLabel）を持つ。場所代 VENUE_FEE は施工参照なし。
+export interface ProjectCostItemDto {
+  costId: string;
+  category: "CONSTRUCTION_FEE" | "VENUE_FEE";
+  amount: number;
+  constructionId: string | null;
+  // 施工プルダウンの表示値（Construction.tabLabel ?? "施工 #N"）。VENUE_FEE は null。
+  constructionLabel: string | null;
+}
+
+// 施工プルダウン用の選択肢（当該契約配下の Construction）。
+export interface ProjectProfitConstructionOptionDto {
+  constructionId: string;
+  label: string;
+}
+
+// 契約単位の損益（docs/05 §20）。売上（=Contract.contractAmount）− 施工代 − 場所代 = 粗利、
+// 手数料 = 粗利 × 手数料率。売上・コスト・粗利・手数料は機密財務のためセクション丸ごと
+// 二次店レスポンスから物理除外（toProjectInfoDealerDto / #4・#5）。全契約を 1 件ずつ含む。
 export interface ProjectProfitDto {
   contractId: string;
-  contractDate: string | null;
+  // 契約サブタブの表示名（Contract.tabLabel ?? "契約 #N"）。
+  contractLabel: string;
   salesPrice: number;
-  purchaseTotal: number;
-  dealerTotal: number;
-  constructionFee: number;
-  otherCost: number;
-  discount: number;
-  projectProfit: number;
-  wholesaleProfit: number;
-  profitRate: number; // 0..1（UI で % 表示）
+  constructionFeeTotal: number;
+  venueFeeTotal: number;
+  grossProfit: number;
+  // 手数料率（%）。null は未設定。
+  commissionRatePercent: number | null;
+  commission: number;
+  costItems: ProjectCostItemDto[];
+  // 施工代コスト項目の施工プルダウン用選択肢。
+  constructions: ProjectProfitConstructionOptionDto[];
+}
+
+/**
+ * 粗利 = 売上 − 施工代合計 − 場所代合計（docs/05 §20.2）。純関数。
+ */
+export function computeContractGrossProfit(
+  salesPrice: number,
+  constructionFeeTotal: number,
+  venueFeeTotal: number,
+): number {
+  return salesPrice - constructionFeeTotal - venueFeeTotal;
+}
+
+/**
+ * 手数料 = 粗利 × 手数料率（%）。ratePercent が null なら 0。円未満四捨五入（docs/05 §20.2）。
+ * 純関数。
+ */
+export function computeContractCommission(grossProfit: number, ratePercent: number | null): number {
+  if (ratePercent == null) return 0;
+  return Math.round(grossProfit * (ratePercent / 100));
 }
 
 export interface ProjectFinancialsDto {

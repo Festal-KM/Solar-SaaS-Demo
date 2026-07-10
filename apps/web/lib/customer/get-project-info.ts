@@ -14,6 +14,8 @@
 import "server-only";
 
 import {
+  computeContractCommission,
+  computeContractGrossProfit,
   emptyEquipmentByCategory,
   pickRepresentativeConstruction,
   toProjectInfoDealerDto,
@@ -34,6 +36,7 @@ import { presignDownload } from "@solar/storage";
 
 import { auth } from "@/auth";
 import { NotFoundError, UnauthorizedError } from "@/lib/errors";
+import { labels } from "@/lib/i18n/labels";
 import { assertCan } from "@/lib/permissions/can";
 import { getTenantContext } from "@/lib/tenancy/context";
 import { withTenant } from "@/lib/tenancy/with-tenant";
@@ -237,6 +240,7 @@ async function loadProjectInfo(
       dealId: true,
       contractDate: true,
       contractAmount: true,
+      commissionRate: true,
       fileKey: true,
       docsUrl: true,
       equipmentSerialId: true,
@@ -329,6 +333,16 @@ async function loadProjectInfo(
           incentiveTargetProfit: true,
         },
       },
+      // 損益タブ 契約別コスト明細（施工代 / 場所代）。docs/05 §20。
+      costs: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          category: true,
+          amount: true,
+          constructionId: true,
+        },
+      },
       incentives: { select: { amount: true } },
     },
   });
@@ -406,8 +420,12 @@ async function loadProjectInfo(
   // カテゴリ 5: 全 Construction 行を保持しつつ、契約ごとに代表 1 件を選定（§16.2）。
   const constructions: ProjectInfoDto["constructions"] = [];
   const contracts: ProjectInfoDto["contracts"] = [];
-  // 損益計算（GrossProfit 1:1）。未計算契約は配列に含めない（UI が空状態）。
+  // 損益タブ（docs/05 §20）。全契約を 1 件ずつ含む（0 件なら UI で空状態）。
   const profitAndLoss: ProjectInfoDto["profitAndLoss"] = [];
+  // 施工のデフォルト表記（施工タブと同じグローバル連番。tabLabel 未設定時に使う）。
+  const constructionHeading = labels.customer.detail.constructionTab.subtabHeading;
+  const contractHeading = labels.customer.detail.contractTab.subtabHeading;
+  const constructionLabelById = new Map<string, string>();
 
   // 金額サマリ（contracts 全体の合計／代表値）。
   let purchaseTotal = 0;
@@ -444,6 +462,8 @@ async function loadProjectInfo(
         tabLabel: con.tabLabel ?? null,
         fee: decimalToNumber(con.fee),
       });
+      // グローバル連番（施工タブの `施工 #N` と一致）。push 直後の length が 1-based index。
+      constructionLabelById.set(con.id, con.tabLabel ?? `${constructionHeading} #${constructions.length}`);
     }
 
     const rep = pickRepresentativeConstruction(c.constructions);
@@ -474,6 +494,7 @@ async function loadProjectInfo(
       equipment: bucketEquipment(c.equipment),
     });
 
+    // 金額サマリ（financials）は従来どおり GrossProfit を集計（インセンティブ用途・§8）。
     if (c.grossProfit) {
       const gp = c.grossProfit;
       purchaseTotal += decimalToNumber(gp.purchaseTotal) ?? 0;
@@ -482,21 +503,46 @@ async function loadProjectInfo(
       otherCost += decimalToNumber(gp.otherCost) ?? 0;
       const igp = decimalToNumber(gp.incentiveTargetProfit);
       if (igp != null) incentiveGrossProfit = (incentiveGrossProfit ?? 0) + igp;
-
-      profitAndLoss.push({
-        contractId: c.id,
-        contractDate: isoOrNull(c.contractDate),
-        salesPrice: decimalToNumber(gp.salesPrice) ?? 0,
-        purchaseTotal: decimalToNumber(gp.purchaseTotal) ?? 0,
-        dealerTotal: decimalToNumber(gp.dealerTotal) ?? 0,
-        constructionFee: decimalToNumber(gp.constructionFee) ?? 0,
-        otherCost: decimalToNumber(gp.otherCost) ?? 0,
-        discount: decimalToNumber(gp.discount) ?? 0,
-        projectProfit: decimalToNumber(gp.projectProfit) ?? 0,
-        wholesaleProfit: decimalToNumber(gp.wholesaleProfit) ?? 0,
-        profitRate: decimalToNumber(gp.profitRate) ?? 0,
-      });
     }
+
+    // 損益タブ（docs/05 §20）: 売上 = contractAmount、施工代/場所代 = ContractCost 集計、
+    // 粗利 = 売上 − 施工代 − 場所代、手数料 = 粗利 × 手数料率。全契約を 1 件ずつ含む。
+    const salesPrice = amount ?? 0;
+    let constructionFeeTotal = 0;
+    let venueFeeTotal = 0;
+    const costItems = c.costs.map((cost) => {
+      const costAmount = decimalToNumber(cost.amount) ?? 0;
+      if (cost.category === "CONSTRUCTION_FEE") constructionFeeTotal += costAmount;
+      else venueFeeTotal += costAmount;
+      return {
+        costId: cost.id,
+        category: cost.category,
+        amount: costAmount,
+        constructionId: cost.constructionId,
+        constructionLabel: cost.constructionId
+          ? constructionLabelById.get(cost.constructionId) ?? null
+          : null,
+      };
+    });
+    const grossProfit = computeContractGrossProfit(salesPrice, constructionFeeTotal, venueFeeTotal);
+    const rate = decimalToNumber(c.commissionRate);
+    const commissionRatePercent = rate == null ? null : rate * 100;
+    profitAndLoss.push({
+      contractId: c.id,
+      contractLabel: c.tabLabel ?? `${contractHeading} #${contracts.length}`,
+      salesPrice,
+      constructionFeeTotal,
+      venueFeeTotal,
+      grossProfit,
+      commissionRatePercent,
+      commission: computeContractCommission(grossProfit, commissionRatePercent),
+      costItems,
+      constructions: c.constructions.map((con) => ({
+        constructionId: con.id,
+        label: constructionLabelById.get(con.id) ?? con.tabLabel ?? con.id,
+      })),
+    });
+
     for (const inc of c.incentives) {
       const a = decimalToNumber(inc.amount);
       if (a != null) incentiveAmount = (incentiveAmount ?? 0) + a;

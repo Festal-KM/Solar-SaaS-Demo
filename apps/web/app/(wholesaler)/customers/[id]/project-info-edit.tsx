@@ -44,6 +44,7 @@ import {
   deleteApplicationAction,
   deleteConstructionAction,
   deleteContractAction,
+  deleteContractCostAction,
   deleteContractEquipmentAction,
   deleteCustomerCallLogAction,
   deleteLoanReviewAction,
@@ -56,8 +57,10 @@ import {
   saveProjectContractAction,
   saveProjectContractEquipmentAction,
   saveProjectOverviewAction,
+  setContractCommissionRateAction,
   setLoanReviewLogDefectResolvedAction,
   updateCustomerAction,
+  upsertContractCostAction,
 } from "../actions";
 
 import type {
@@ -76,7 +79,14 @@ import type {
   LoanReviewResultValue,
   LoanReviewStatusValue,
 } from "@solar/contracts";
-import type { ProjectLoanReviewLogDto } from "@solar/contracts/dto/project-info";
+import { computeContractCommission, computeContractGrossProfit } from "@solar/contracts/dto/project-info";
+
+import type {
+  ProjectCostItemDto,
+  ProjectLoanReviewLogDto,
+  ProjectProfitConstructionOptionDto,
+  ProjectProfitDto,
+} from "@solar/contracts/dto/project-info";
 
 const p = labels.customer.detail.projectInfo;
 const ed = p.edit;
@@ -3016,5 +3026,410 @@ export function LoanReviewDefectList({
         </li>
       ))}
     </ul>
+  );
+}
+
+/* ── 損益タブ（docs/05 §20）。契約別コスト明細（施工代/場所代）+ 手数料の編集面。
+   customerId が null（read-only）のときは編集トリガーを描画しない。二次店では page.tsx が
+   タブ自体を描画しない（profitAndLoss 物理除外・二重ゲート）。 ── */
+const pt = labels.customer.detail.profitTab;
+
+function fmtYenDisplay(n: number): string {
+  return `¥${n.toLocaleString("ja-JP")}`;
+}
+
+const EMPTY_DASH = "—";
+
+interface ProfitTotals {
+  salesPrice: number;
+  constructionFeeTotal: number;
+  venueFeeTotal: number;
+  grossProfit: number;
+  commission: number;
+}
+
+function ProfitSummaryTable({ rows }: { rows: ProjectProfitDto[] }) {
+  const totals = rows.reduce<ProfitTotals>(
+    (acc, r) => ({
+      salesPrice: acc.salesPrice + r.salesPrice,
+      constructionFeeTotal: acc.constructionFeeTotal + r.constructionFeeTotal,
+      venueFeeTotal: acc.venueFeeTotal + r.venueFeeTotal,
+      grossProfit: acc.grossProfit + r.grossProfit,
+      commission: acc.commission + r.commission,
+    }),
+    { salesPrice: 0, constructionFeeTotal: 0, venueFeeTotal: 0, grossProfit: 0, commission: 0 },
+  );
+
+  const Th = ({ children, numeric = true }: { children: React.ReactNode; numeric?: boolean }) => (
+    <th
+      scope="col"
+      className={cn(
+        "whitespace-nowrap px-3 py-2 text-xs font-semibold text-mute-light",
+        numeric ? "text-right" : "text-left",
+      )}
+    >
+      {children}
+    </th>
+  );
+
+  return (
+    <div className="overflow-x-auto rounded-md border border-hairline-light">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-hairline-light bg-surface-soft/40">
+            <Th numeric={false}>{pt.columns.contract}</Th>
+            <Th>{pt.columns.salesPrice}</Th>
+            <Th>{pt.columns.constructionFee}</Th>
+            <Th>{pt.columns.venueFee}</Th>
+            <Th>{pt.columns.grossProfit}</Th>
+            <Th>{pt.columns.commission}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.contractId} className="border-b border-hairline-light last:border-b-0">
+              <td className="whitespace-nowrap px-3 py-2 text-ink">{r.contractLabel}</td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
+                {fmtYenDisplay(r.salesPrice)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-body-light">
+                {fmtYenDisplay(r.constructionFeeTotal)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-body-light">
+                {fmtYenDisplay(r.venueFeeTotal)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-ink">
+                {fmtYenDisplay(r.grossProfit)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
+                {fmtYenDisplay(r.commission)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        {rows.length > 1 ? (
+          <tfoot>
+            <tr className="border-t-2 border-hairline-light bg-surface-soft/60 font-semibold">
+              <td className="whitespace-nowrap px-3 py-2 text-ink">{pt.totalRow}</td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
+                {fmtYenDisplay(totals.salesPrice)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
+                {fmtYenDisplay(totals.constructionFeeTotal)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
+                {fmtYenDisplay(totals.venueFeeTotal)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
+                {fmtYenDisplay(totals.grossProfit)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
+                {fmtYenDisplay(totals.commission)}
+              </td>
+            </tr>
+          </tfoot>
+        ) : null}
+      </table>
+    </div>
+  );
+}
+
+// 契約 1 件のコスト明細 + 手数料率の編集カード。ローカル状態でライブ計算（粗利/手数料）を
+// 表示し、各行/手数料率の保存で対応するアクションを呼ぶ（→ toast + router.refresh）。
+interface CostRowState {
+  key: string;
+  costId: string | null; // null は未保存の下書き行
+  category: "CONSTRUCTION_FEE" | "VENUE_FEE";
+  amount: string;
+  constructionId: string;
+}
+
+let draftSeq = 0;
+
+function toCostRow(item: ProjectCostItemDto): CostRowState {
+  return {
+    key: item.costId,
+    costId: item.costId,
+    category: item.category,
+    amount: String(item.amount),
+    constructionId: item.constructionId ?? "",
+  };
+}
+
+function ProfitContractCard({
+  row,
+  customerId,
+}: {
+  row: ProjectProfitDto;
+  customerId: string | null;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [rows, setRows] = useState<CostRowState[]>(() => row.costItems.map(toCostRow));
+  const [rate, setRate] = useState<string>(
+    row.commissionRatePercent == null ? "" : String(row.commissionRatePercent),
+  );
+  const editable = !!customerId;
+
+  const constructionFeeTotal = rows
+    .filter((r) => r.category === "CONSTRUCTION_FEE")
+    .reduce((s, r) => s + (numOrNull(r.amount) ?? 0), 0);
+  const venueFeeTotal = rows
+    .filter((r) => r.category === "VENUE_FEE")
+    .reduce((s, r) => s + (numOrNull(r.amount) ?? 0), 0);
+  const grossProfit = computeContractGrossProfit(row.salesPrice, constructionFeeTotal, venueFeeTotal);
+  const parsedRate = rate.trim() === "" ? null : Number(rate);
+  const commission = computeContractCommission(
+    grossProfit,
+    parsedRate != null && Number.isFinite(parsedRate) ? parsedRate : null,
+  );
+
+  function run(fn: () => Promise<unknown>) {
+    start(async () => {
+      try {
+        await fn();
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  function updateRow(key: string, patch: Partial<CostRowState>) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+
+  function addRow(category: "CONSTRUCTION_FEE" | "VENUE_FEE") {
+    draftSeq += 1;
+    setRows((prev) => [
+      ...prev,
+      { key: `draft-${draftSeq}`, costId: null, category, amount: "", constructionId: "" },
+    ]);
+  }
+
+  function saveRow(r: CostRowState) {
+    if (!customerId) return;
+    run(() =>
+      upsertContractCostAction({
+        customerId,
+        contractId: row.contractId,
+        costId: r.costId ?? undefined,
+        category: r.category,
+        amount: numOrNull(r.amount) ?? 0,
+        constructionId: r.category === "CONSTRUCTION_FEE" ? r.constructionId || null : null,
+      }),
+    );
+  }
+
+  function deleteRow(r: CostRowState) {
+    if (!r.costId) {
+      setRows((prev) => prev.filter((x) => x.key !== r.key));
+      return;
+    }
+    if (!customerId) return;
+    if (!window.confirm(pt.deleteCostItemConfirm)) return;
+    const costId = r.costId;
+    run(() =>
+      deleteContractCostAction({ customerId, contractId: row.contractId, costId }),
+    );
+  }
+
+  function saveRate() {
+    if (!customerId) return;
+    const nextRate = rate.trim() === "" ? null : Number(rate);
+    run(() =>
+      setContractCommissionRateAction({
+        customerId,
+        contractId: row.contractId,
+        ratePercent: nextRate != null && Number.isFinite(nextRate) ? nextRate : null,
+      }),
+    );
+  }
+
+  return (
+    <div className="space-y-4 rounded-md border border-hairline-light p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-ink">{row.contractLabel}</h3>
+        <div className="text-right">
+          <span className="text-xs text-mute-light">{pt.salesPrice}</span>
+          <span className="ml-2 text-base font-semibold tabular-nums text-ink">
+            {fmtYenDisplay(row.salesPrice)}
+          </span>
+          <p className="text-[11px] text-mute-light">{pt.salesPriceHint}</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+            {pt.costItems}
+          </span>
+          {editable ? (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addRow("CONSTRUCTION_FEE")}
+                disabled={pending}
+              >
+                <Plus className="mr-1 size-3.5" />
+                {pt.addConstructionFee}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addRow("VENUE_FEE")}
+                disabled={pending}
+              >
+                <Plus className="mr-1 size-3.5" />
+                {pt.addVenueFee}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        {rows.length === 0 ? (
+          <p className="rounded-md border border-hairline-light p-3 text-sm text-mute-light">
+            {pt.costItemsEmpty}
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {rows.map((r) => (
+              <li
+                key={r.key}
+                className="flex flex-wrap items-center gap-2 rounded-md border border-hairline-light p-2"
+              >
+                <span className="w-16 shrink-0 text-xs font-medium text-body-light">
+                  {pt.categoryLabels[r.category]}
+                </span>
+                {r.category === "CONSTRUCTION_FEE" ? (
+                  editable ? (
+                    <select
+                      aria-label={pt.constructionRef}
+                      className={cn(FIELD, "h-8 w-44")}
+                      value={r.constructionId}
+                      onChange={(e) => updateRow(r.key, { constructionId: e.target.value })}
+                    >
+                      <option value="">{pt.constructionRefUnset}</option>
+                      {row.constructions.map((con: ProjectProfitConstructionOptionDto) => (
+                        <option key={con.constructionId} value={con.constructionId}>
+                          {con.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="w-44 text-sm text-body-light">
+                      {row.constructions.find((con) => con.constructionId === r.constructionId)
+                        ?.label ?? EMPTY_DASH}
+                    </span>
+                  )
+                ) : (
+                  <span className="w-44" />
+                )}
+                {editable ? (
+                  <MoneyInput
+                    id={`cost-${r.key}`}
+                    value={r.amount}
+                    onChange={(raw) => updateRow(r.key, { amount: raw })}
+                    className="h-8 w-36"
+                  />
+                ) : (
+                  <span className="w-36 text-right text-sm tabular-nums text-ink">
+                    {fmtYenDisplay(numOrNull(r.amount) ?? 0)}
+                  </span>
+                )}
+                {editable ? (
+                  <div className="ml-auto flex gap-1">
+                    <Button type="button" size="sm" onClick={() => saveRow(r)} disabled={pending}>
+                      {pending ? c.saving : ed.save}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-mute-light hover:text-danger"
+                      aria-label={pt.deleteCostItem}
+                      onClick={() => deleteRow(r)}
+                      disabled={pending}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-4 border-t border-hairline-light pt-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`rate-${row.contractId}`}>{pt.commissionRate}</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id={`rate-${row.contractId}`}
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={100}
+              step="0.1"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              placeholder={pt.commissionRatePlaceholder}
+              disabled={!editable}
+              className="h-9 w-28 text-right tabular-nums"
+            />
+            {editable ? (
+              <Button type="button" size="sm" onClick={saveRate} disabled={pending}>
+                {pending ? c.saving : ed.save}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex gap-6 text-right">
+          <div>
+            <p className="text-xs text-mute-light">{pt.grossProfit}</p>
+            <p className="text-base font-semibold tabular-nums text-ink">
+              {fmtYenDisplay(grossProfit)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-mute-light">{pt.commission}</p>
+            <p className="text-base font-semibold tabular-nums text-ink">
+              {fmtYenDisplay(commission)}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ProjectProfitEditor({
+  rows,
+  customerId,
+}: {
+  rows: ProjectProfitDto[];
+  customerId: string | null;
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+        {pt.empty}
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-6">
+      <ProfitSummaryTable rows={rows} />
+      <div className="space-y-4">
+        {rows.map((r) => (
+          <ProfitContractCard key={r.contractId} row={r} customerId={customerId} />
+        ))}
+      </div>
+    </div>
   );
 }

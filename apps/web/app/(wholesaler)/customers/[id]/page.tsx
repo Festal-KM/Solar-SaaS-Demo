@@ -36,8 +36,8 @@ import {
   ProjectConstructionList,
   ProjectContractList,
   ProjectLoanInfoList,
-  ProjectProfitList,
 } from "./customer-project-info";
+import { ProjectProfitEditor } from "./project-info-edit";
 import { CustomerTasks } from "./customer-tasks";
 import { getCustomerDetail } from "./data";
 import { EditAssigneeDialog } from "./edit-assignee-dialog";
@@ -645,7 +645,10 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           <TabsContent value="profit">
             <Card className="p-5">
               <h2 className="mb-4 text-sm font-semibold text-ink">{d.profitTab.title}</h2>
-              <ProjectProfitList rows={profitRows} />
+              <ProjectProfitEditor
+              rows={profitRows}
+              customerId={projectInfoEditable?.customerId ?? null}
+            />
             </Card>
           </TabsContent>
         ) : null}

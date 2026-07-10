@@ -58,7 +58,6 @@ import type {
   ProjectInfoDto,
   ProjectInfoForDealerDto,
   ProjectLoanReviewDto,
-  ProjectProfitDto,
 } from "@solar/contracts/dto/project-info";
 
 const p = labels.customer.detail.projectInfo;
@@ -92,11 +91,6 @@ function fmtYen(n: number | null): string {
   return n == null ? EMPTY : `¥${n.toLocaleString("ja-JP")}`;
 }
 
-// 粗利率 0..1 を百分率（小数 1 桁）で表示。
-function fmtPercent(rate: number | null): string {
-  if (rate == null) return EMPTY;
-  return `${(rate * 100).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}%`;
-}
 
 function fmtBool(b: boolean | null): string {
   if (b == null) return EMPTY;
@@ -1192,165 +1186,6 @@ export function ProjectLoanInfoList({
           {t.content}
         </div>
       ))}
-    </div>
-  );
-}
-
-// 専用「損益計算」タブ — 顧客に紐づく全契約の GrossProfit（売上・原価・粗利）を
-// 契約ごとに 1 行で表で表示し、最終行に合計を出す。機密財務（売上・仕入値・原価・
-// 粗利）のため卸業者/SaaS 限定。二次店 DTO には profitAndLoss キー自体が存在せず
-// （物理除外）、page.tsx 側でも当該タブを描画しない二重ゲート。GrossProfit 未計算の
-// 契約は profitAndLoss に含まれず、0 件なら空状態を表示する。
-export function ProjectProfitList({ rows }: { rows: ProjectProfitDto[] }) {
-  const pt = labels.customer.detail.profitTab;
-  const col = pt.columns;
-
-  if (rows.length === 0) {
-    return (
-      <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
-        {pt.empty}
-      </p>
-    );
-  }
-
-  const totals = rows.reduce(
-    (acc, r) => ({
-      salesPrice: acc.salesPrice + r.salesPrice,
-      purchaseTotal: acc.purchaseTotal + r.purchaseTotal,
-      dealerTotal: acc.dealerTotal + r.dealerTotal,
-      constructionFee: acc.constructionFee + r.constructionFee,
-      otherCost: acc.otherCost + r.otherCost,
-      discount: acc.discount + r.discount,
-      projectProfit: acc.projectProfit + r.projectProfit,
-      wholesaleProfit: acc.wholesaleProfit + r.wholesaleProfit,
-    }),
-    {
-      salesPrice: 0,
-      purchaseTotal: 0,
-      dealerTotal: 0,
-      constructionFee: 0,
-      otherCost: 0,
-      discount: 0,
-      projectProfit: 0,
-      wholesaleProfit: 0,
-    },
-  );
-  // 合計の粗利率は合計売上に対する案件粗利の比（売上 0 のときは表示しない）。
-  const totalProfitRate = totals.salesPrice > 0 ? totals.projectProfit / totals.salesPrice : null;
-
-  const Th = ({
-    children,
-    numeric = true,
-  }: {
-    children: React.ReactNode;
-    numeric?: boolean;
-  }) => (
-    <th
-      scope="col"
-      className={[
-        "whitespace-nowrap px-3 py-2 text-xs font-semibold text-mute-light",
-        numeric ? "text-right" : "text-left",
-      ].join(" ")}
-    >
-      {children}
-    </th>
-  );
-
-  return (
-    <div className="overflow-x-auto rounded-md border border-hairline-light">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-hairline-light bg-surface-soft/40">
-            <Th numeric={false}>{col.contract}</Th>
-            <Th numeric={false}>{col.contractDate}</Th>
-            <Th>{col.salesPrice}</Th>
-            <Th>{col.purchaseTotal}</Th>
-            <Th>{col.dealerTotal}</Th>
-            <Th>{col.constructionFee}</Th>
-            <Th>{col.otherCost}</Th>
-            <Th>{col.discount}</Th>
-            <Th>{col.projectProfit}</Th>
-            <Th>{col.wholesaleProfit}</Th>
-            <Th>{col.profitRate}</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, idx) => (
-            <tr
-              key={r.contractId}
-              className="border-b border-hairline-light last:border-b-0"
-            >
-              <td className="whitespace-nowrap px-3 py-2 text-ink">{`${pt.contractHeading} #${idx + 1}`}</td>
-              <td className="whitespace-nowrap px-3 py-2 tabular-nums text-body-light">
-                {fmtDate(r.contractDate)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(r.salesPrice)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-body-light">
-                {fmtYen(r.purchaseTotal)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-body-light">
-                {fmtYen(r.dealerTotal)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-body-light">
-                {fmtYen(r.constructionFee)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-body-light">
-                {fmtYen(r.otherCost)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-body-light">
-                {fmtYen(r.discount)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-ink">
-                {fmtYen(r.projectProfit)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(r.wholesaleProfit)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtPercent(r.profitRate)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        {rows.length > 1 ? (
-          <tfoot>
-            <tr className="border-t-2 border-hairline-light bg-surface-soft/60 font-semibold">
-              <td className="whitespace-nowrap px-3 py-2 text-ink" colSpan={2}>
-                {pt.totalRow}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(totals.salesPrice)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(totals.purchaseTotal)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(totals.dealerTotal)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(totals.constructionFee)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(totals.otherCost)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(totals.discount)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(totals.projectProfit)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtYen(totals.wholesaleProfit)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">
-                {fmtPercent(totalProfitRate)}
-              </td>
-            </tr>
-          </tfoot>
-        ) : null}
-      </table>
     </div>
   );
 }

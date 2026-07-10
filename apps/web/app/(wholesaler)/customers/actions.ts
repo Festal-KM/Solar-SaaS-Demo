@@ -20,6 +20,9 @@
 
 import {
   buildDemoContractSeed,
+  ContractCommissionRateSchema,
+  ContractCostDeleteSchema,
+  ContractCostUpsertSchema,
   CustomerCallLogCreateSchema,
   CustomerCallLogDeleteSchema,
   CustomerCreateSchema,
@@ -50,7 +53,7 @@ import {
 import { Prisma } from "@solar/db";
 import { revalidatePath } from "next/cache";
 
-import { NotFoundError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { withServerActionContext } from "@/lib/tenancy/server-action";
 
 import { deriveSubsidyStatusValue } from "./constants";
@@ -82,9 +85,20 @@ import type {
   ProjectContractEquipmentUpsertInput,
   ProjectOverviewInput,
   ProjectTabRenameInput,
+  ContractCommissionRateInput,
+  ContractCostDeleteInput,
+  ContractCostUpsertInput,
 } from "@solar/contracts";
 
 const LIST_PATH = "/customers";
+
+// 損益タブ（施工代/場所代/手数料）は原価・機密財務。二次店（DEALER）呼び出しを拒否する
+// （SaaS 運営者は許可）。DTO 物理除外（#4/#5）に加えた書き込み経路の二重ゲート。docs/05 §20.3。
+function assertNotDealer(ctx: { dealerId?: string | null; isSaasAdmin: boolean }): void {
+  if (ctx.dealerId && !ctx.isSaasAdmin) {
+    throw new ForbiddenError("損益タブの原価情報は卸業者/SaaS 運営者のみ編集できます");
+  }
+}
 
 export interface CreateCustomerResult {
   id: string;
@@ -1624,6 +1638,127 @@ export const saveProjectApplicationAction = withServerActionContext<
     });
 
     await recomputeCustomerSubsidyStatus(tx, parsed.customerId);
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 損益タブ 契約別コスト明細（ContractCost）+ 手数料率（docs/05 §20）.
+//
+// 施工代（CONSTRUCTION_FEE）/ 場所代（VENUE_FEE）を契約ごとに追加/編集/削除し、手数料率
+// （%）を Contract.commissionRate に保存する。全て三段イディオム（auth→customer.update→
+// withTenant）+ RLS 二重防御。原価・機密財務のため二次店（DEALER）呼び出しは拒否する
+// （assertNotDealer）。contractId/costId/constructionId は customerId スコープで越境検証。
+// ---------------------------------------------------------------------------
+
+// コスト項目の追加/更新。CONSTRUCTION_FEE のとき constructionId が当該 contract 配下の
+// Construction か検証（越境不可）、VENUE_FEE のとき constructionId は強制的に null。
+export const upsertContractCostAction = withServerActionContext<
+  ContractCostUpsertInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    assertNotDealer(ctx);
+    const parsed = ContractCostUpsertSchema.parse(input);
+
+    const contract = await tx.contract.findFirst({
+      where: { id: parsed.contractId, customerId: parsed.customerId },
+      select: { id: true },
+    });
+    if (!contract) throw new NotFoundError("契約が見つかりません");
+
+    // 施工代のみ施工参照を許可。指定時は当該 contract 配下の Construction か越境検証。
+    let constructionId: string | null = null;
+    if (parsed.category === "CONSTRUCTION_FEE" && parsed.constructionId) {
+      const con = await tx.construction.findFirst({
+        where: { id: parsed.constructionId, contractId: parsed.contractId },
+        select: { id: true },
+      });
+      if (!con) throw new NotFoundError("施工が見つかりません");
+      constructionId = con.id;
+    }
+
+    if (parsed.costId) {
+      // 更新対象が当該 contract 配下か検証してから更新（越境不可）。
+      const existing = await tx.contractCost.findFirst({
+        where: { id: parsed.costId, contractId: parsed.contractId },
+        select: { id: true },
+      });
+      if (!existing) throw new NotFoundError("コスト項目が見つかりません");
+      await tx.contractCost.update({
+        where: { id: parsed.costId },
+        data: { category: parsed.category, amount: parsed.amount, constructionId },
+        select: { id: true },
+      });
+    } else {
+      await tx.contractCost.create({
+        data: {
+          contractId: parsed.contractId,
+          category: parsed.category,
+          amount: parsed.amount,
+          constructionId,
+        },
+        select: { id: true },
+      });
+    }
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
+  },
+);
+
+// コスト項目の削除。cost が当該 contract（customerId 配下）配下か検証してから削除。
+export const deleteContractCostAction = withServerActionContext<
+  ContractCostDeleteInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    assertNotDealer(ctx);
+    const parsed = ContractCostDeleteSchema.parse(input);
+
+    const cost = await tx.contractCost.findFirst({
+      where: {
+        id: parsed.costId,
+        contractId: parsed.contractId,
+        contract: { customerId: parsed.customerId },
+      },
+      select: { id: true },
+    });
+    if (!cost) throw new NotFoundError("コスト項目が見つかりません");
+
+    await tx.contractCost.delete({ where: { id: parsed.costId } });
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
+  },
+);
+
+// 手数料率（%）の保存。ratePercent(0..100) を /100 して Contract.commissionRate に保存。
+// null でクリア。contract が customerId 配下か検証（越境不可）。
+export const setContractCommissionRateAction = withServerActionContext<
+  ContractCommissionRateInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    assertNotDealer(ctx);
+    const parsed = ContractCommissionRateSchema.parse(input);
+
+    const contract = await tx.contract.findFirst({
+      where: { id: parsed.contractId, customerId: parsed.customerId },
+      select: { id: true },
+    });
+    if (!contract) throw new NotFoundError("契約が見つかりません");
+
+    await tx.contract.update({
+      where: { id: parsed.contractId },
+      data: { commissionRate: parsed.ratePercent == null ? null : parsed.ratePercent / 100 },
+      select: { id: true },
+    });
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
     return { customerId: parsed.customerId };

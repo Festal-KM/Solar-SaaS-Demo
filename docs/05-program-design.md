@@ -3940,6 +3940,65 @@ sequenceDiagram
 
 ---
 
+## 20. 損益タブ 契約別コスト明細（ContractCost）と手数料モデル
+
+顧客詳細「損益計算」タブを、契約ごとに手入力するコスト明細（施工代・場所代）＋粗利・手数料の
+シンプル計算へ刷新する。従来の `GrossProfit`（仕入合計/二次店仕入/値引/卸粗利/粗利率）ベースの
+損益タブ表示は撤去し、`GrossProfit` はインセンティブ集計（§8）用途に限定して残置する。
+
+### 20.1 データモデル（新規 `ContractCost` + `Contract.commissionRate`）
+
+```prisma
+enum ContractCostCategory {
+  CONSTRUCTION_FEE // 施工代（施工参照あり）
+  VENUE_FEE        // 場所代（施工参照なし）
+}
+
+model ContractCost {
+  id             String               @id @default(cuid())
+  contractId     String
+  category       ContractCostCategory
+  amount         Decimal              @db.Decimal(14, 2)
+  constructionId String?              // CONSTRUCTION_FEE のみ。VENUE_FEE は null
+  note           String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  contract     Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  construction Construction? @relation(fields: [constructionId], references: [id], onDelete: SetNull)
+
+  @@index([contractId])
+}
+// Contract に commissionRate Decimal(5,4)?（0.10 = 10%・null 可）を追加。
+// Contract.costs ContractCost[] / Construction.costItems ContractCost[] 逆リレーション。
+```
+
+- **テナント分離**: 親 `Contract.wholesalerId` 経由の相関 EXISTS（§16.4 と同パターン）。全アクセスは
+  `withTenant(ctx, ...)` + RLS の二重防御。`customerId`/`contractId`/`constructionId` は ctx スコープ内で
+  越境検証（施工代の `constructionId` は当該 `contract` 配下の `Construction` に限定）。
+
+### 20.2 計算式（純関数・`@solar/contracts`）
+
+- 売上 `salesPrice` = `Contract.contractAmount`（商材ライン合計の自動値・損益タブでは read-only）
+- 施工代合計 `constructionFeeTotal` = Σ ContractCost(category=CONSTRUCTION_FEE).amount
+- 場所代合計 `venueFeeTotal` = Σ ContractCost(category=VENUE_FEE).amount
+- **粗利** `grossProfit` = salesPrice − constructionFeeTotal − venueFeeTotal
+- 手数料率 `commissionRate`（%）= 契約ごとに損益タブで手入力
+- **手数料** `commission` = grossProfit × 手数料率（円未満四捨五入）
+
+損益タブの表示列は **契約 / 売上 / 施工代 / 場所代 / 粗利 / 手数料**（合計行つき）へ刷新。
+
+### 20.3 機密方針（二次店物理除外）
+
+施工代・場所代・手数料・手数料率・粗利は原価・機密財務であり **卸業者/SaaS 限定**。二次店（DEALER）
+レスポンスでは損益タブ DTO（`ProjectInfoDto.profitAndLoss`）をセクション丸ごと物理除外（`Object.keys`
+に出さない・§16.9 の `toProjectInfoDealerDto` 踏襲）。`upsertContractCostAction` /
+`deleteContractCostAction` / `setContractCommissionRateAction` は DEALER 呼び出しを `ForbiddenError`
+で拒否（既存の原価系ゲート方針と整合）。マイグレーションは追加列・追加テーブルのみで破壊的変更を避ける
+（§17.10 と同方針、`CREATE TYPE` → `CREATE TABLE` → FK → RLS）。
+
+---
+
 ## 19. 変更履歴
 
 | 日付 | 内容 | 著者 |

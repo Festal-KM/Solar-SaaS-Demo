@@ -827,6 +827,50 @@ export const ProjectApplicationDeleteSchema = z.object({
 export type ProjectApplicationDeleteInput = z.infer<typeof ProjectApplicationDeleteSchema>;
 
 // ---------------------------------------------------------------------------
+// 損益タブ 契約別コスト明細（ContractCost）+ 手数料率（docs/05 §20）.
+//
+// 施工代（CONSTRUCTION_FEE・施工参照あり）/ 場所代（VENUE_FEE・施工参照なし）を
+// 契約ごとに複数追加/編集/削除する。amount は円・整数・0 以上。CONSTRUCTION_FEE の
+// constructionId は当該 contract 配下の Construction を Server Action が越境検証する。
+// 手数料率は % で受け（0..100）、Server Action が /100 して Contract.commissionRate に保存。
+// 原価・機密財務のため卸業者/SaaS 限定（DEALER 呼び出しは Server Action で拒否）。
+// ---------------------------------------------------------------------------
+
+export const ContractCostCategoryEnum = z.enum(["CONSTRUCTION_FEE", "VENUE_FEE"]);
+
+export type ContractCostCategory = z.infer<typeof ContractCostCategoryEnum>;
+
+export const ContractCostUpsertSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+  // 更新対象のコスト項目 ID。未指定は新規作成。
+  costId: z.string().min(1).nullable().optional(),
+  category: ContractCostCategoryEnum,
+  amount: z.number().int().nonnegative(),
+  // CONSTRUCTION_FEE のときの施工参照。VENUE_FEE は null（Server Action が強制）。
+  constructionId: z.string().min(1).nullable().optional(),
+});
+
+export type ContractCostUpsertInput = z.infer<typeof ContractCostUpsertSchema>;
+
+export const ContractCostDeleteSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+  costId: z.string().min(1),
+});
+
+export type ContractCostDeleteInput = z.infer<typeof ContractCostDeleteSchema>;
+
+// 手数料率（%）。0..100、null でクリア（未設定）。Server Action が /100 して保存。
+export const ContractCommissionRateSchema = z.object({
+  customerId: z.string().min(1),
+  contractId: z.string().min(1),
+  ratePercent: z.number().min(0).max(100).nullable(),
+});
+
+export type ContractCommissionRateInput = z.infer<typeof ContractCommissionRateSchema>;
+
+// ---------------------------------------------------------------------------
 // コール状況（コールタブ 4 セクション）（Customer 列）.
 //
 // コールタブのインライン編集ペイロード。4 セクション（マエカクコール / サンキュー

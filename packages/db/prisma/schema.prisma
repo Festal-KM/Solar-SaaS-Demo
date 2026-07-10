@@ -1496,6 +1496,12 @@ enum ContractPaymentStatus {
   PAID
 }
 
+// 損益タブ 契約別コスト明細の区分（施工代 / 場所代）。docs/05 §20。
+enum ContractCostCategory {
+  CONSTRUCTION_FEE
+  VENUE_FEE
+}
+
 // ---------------------------------------------------------------------------
 // Models — deals / contracts / gross profit / construction / application (SP-05)
 // docs/05 §3.6
@@ -1555,6 +1561,8 @@ model Contract {
   cancelDeadline              DateTime
   incentiveRateSnapshot       Decimal?             @db.Decimal(5, 2)
   incentiveTargetTypeSnapshot IncentiveTargetType?
+  // 損益タブ 手数料率（0.10 = 10%）。null 可（未設定）。docs/05 §20。
+  commissionRate              Decimal?             @db.Decimal(5, 4)
   isSelfHosted                Boolean              @default(false)
   status                      ContractStatus       @default(CONTRACTED)
   // 運用ステータス・コール・設備ID（docs/05 §16-B）
@@ -1582,6 +1590,7 @@ model Contract {
   applications  Application[]
   equipment     ContractEquipment[]
   payment       ContractPayment?
+  costs         ContractCost[]
 
   @@index([wholesalerId, status, contractDate])
   @@index([ownerRelationshipId, status])
@@ -1713,9 +1722,29 @@ model Construction {
 
   contract  Contract   @relation(fields: [contractId], references: [id])
   installer Installer? @relation(fields: [installerId], references: [id])
+  costItems ContractCost[]
 
   @@index([contractId])
   @@index([plannedDate])
+}
+
+// 損益タブ 契約別コスト明細（施工代 / 場所代）。docs/05 §20。テナント分離は
+// 親 Contract.wholesalerId 経由の相関 EXISTS（§16.4 と同パターン）。
+model ContractCost {
+  id             String               @id @default(cuid())
+  contractId     String
+  category       ContractCostCategory
+  amount         Decimal              @db.Decimal(14, 2)
+  // CONSTRUCTION_FEE のとき施工参照（施工タブのサブタブ）。VENUE_FEE は null。
+  constructionId String?
+  note           String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  contract     Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  construction Construction? @relation(fields: [constructionId], references: [id], onDelete: SetNull)
+
+  @@index([contractId])
 }
 
 model Application {
