@@ -34,11 +34,13 @@ import { cn } from "@/lib/utils";
 import { EditableTabTrigger } from "./editable-tab-trigger";
 
 import {
+  createApplicationAction,
   createConstructionAction,
   createContractAction,
   createCustomerCallLogAction,
   createLoanReviewAction,
   createLoanReviewLogAction,
+  deleteApplicationAction,
   deleteConstructionAction,
   deleteContractAction,
   deleteContractEquipmentAction,
@@ -47,6 +49,7 @@ import {
   deleteLoanReviewLogAction,
   saveCustomerHearingAction,
   saveLoanReviewAction,
+  saveProjectApplicationAction,
   saveProjectCallStatusAction,
   saveProjectConstructionAction,
   saveProjectContractAction,
@@ -57,6 +60,7 @@ import {
 } from "../actions";
 
 import type {
+  ProjectApplicationEditable,
   ProjectCallsEditable,
   ProjectConstructionEditable,
   ProjectContractEditable,
@@ -2616,6 +2620,205 @@ export function ConstructionSubTabs({
         <div className="flex shrink-0 items-center gap-2 pb-1">
           <AddConstructionButton customerId={customerId} />
           <DeleteConstructionButton customerId={customerId} constructionId={active} />
+        </div>
+      </div>
+      {tabs.map((t) => (
+        <TabsContent key={t.id} value={t.id} className="space-y-4">
+          {t.content}
+        </TabsContent>
+      ))}
+    </Tabs>
+  );
+}
+
+// 設置申請ステータス（ApplicationStatus enum）の値域。select の提示順。
+const APPLICATION_STATUS_VALUES = [
+  "DRAFT",
+  "SUBMITTED",
+  "APPROVED",
+  "REJECTED",
+  "CANCELLED",
+] as const;
+
+/* 設置申請 1 件分のインライン編集（ローン審査タブと同型のフラットなインライン編集）。
+   設置申請ステータス / 申請種別 / 申請日 / 交付決定日 / 交付額を編集し saveProjectApplicationAction
+   で保存する。保存後サーバー側で Customer.subsidyStatus を再計算。 */
+export function ApplicationInlineEdit({
+  customerId,
+  initial,
+}: {
+  customerId: string;
+  initial: ProjectApplicationEditable;
+}) {
+  const at = labels.customer.detail.applicationTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [status, setStatus] = useState(initial.status);
+  const [type, setType] = useState(initial.type ?? "");
+  const [submittedDate, setSubmittedDate] = useState(toDateInput(initial.submittedDate));
+  const [approvedDate, setApprovedDate] = useState(toDateInput(initial.approvedDate));
+  const [grantedAmount, setGrantedAmount] = useState(
+    initial.grantedAmount != null ? String(initial.grantedAmount) : "",
+  );
+
+  const initSubmitted = toDateInput(initial.submittedDate);
+  const initApproved = toDateInput(initial.approvedDate);
+  const initGranted = initial.grantedAmount != null ? String(initial.grantedAmount) : "";
+  const dirty =
+    status !== initial.status ||
+    type !== (initial.type ?? "") ||
+    submittedDate !== initSubmitted ||
+    approvedDate !== initApproved ||
+    grantedAmount !== initGranted;
+
+  function reset() {
+    setStatus(initial.status);
+    setType(initial.type ?? "");
+    setSubmittedDate(initSubmitted);
+    setApprovedDate(initApproved);
+    setGrantedAmount(initGranted);
+  }
+
+  function onSave() {
+    start(async () => {
+      try {
+        await saveProjectApplicationAction({
+          customerId,
+          contractId: initial.contractId,
+          applicationId: initial.applicationId,
+          status: status as (typeof APPLICATION_STATUS_VALUES)[number],
+          type: strOrNull(type),
+          submittedDate: submittedDate || null,
+          approvedDate: approvedDate || null,
+          grantedAmount: numOrNull(grantedAmount),
+        });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  const id = initial.applicationId;
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <FormField label={at.status} htmlFor={`ap-status-${id}`}>
+          <select id={`ap-status-${id}`} className={FIELD} value={status} onChange={(e) => setStatus(e.target.value)}>
+            {APPLICATION_STATUS_VALUES.map((v) => (
+              <option key={v} value={v}>
+                {at.statusLabels[v]}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label={f.applicationType} htmlFor={`ap-type-${id}`}>
+          <Input id={`ap-type-${id}`} value={type} onChange={(e) => setType(e.target.value)} />
+        </FormField>
+        <FormField label={f.submittedDate} htmlFor={`ap-submitted-${id}`}>
+          <input id={`ap-submitted-${id}`} type="date" className={FIELD} value={submittedDate} onChange={(e) => setSubmittedDate(e.target.value)} />
+        </FormField>
+        <FormField label={f.approvedDate} htmlFor={`ap-approved-${id}`}>
+          <input id={`ap-approved-${id}`} type="date" className={FIELD} value={approvedDate} onChange={(e) => setApprovedDate(e.target.value)} />
+        </FormField>
+        <FormField label={f.grantedAmount} htmlFor={`ap-granted-${id}`}>
+          <MoneyInput id={`ap-granted-${id}`} value={grantedAmount} onChange={setGrantedAmount} />
+        </FormField>
+      </div>
+      <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+    </div>
+  );
+}
+
+/* 設置申請を追加するボタン。追加時に申請名を入力させ tabLabel に設定する。契約が無ければ
+   サーバーが最小契約を併せて生成する。 */
+export function AddApplicationButton({ customerId }: { customerId: string }) {
+  const at = labels.customer.detail.applicationTab;
+  return (
+    <NamedAddButton
+      triggerLabel={at.addApplication}
+      addingLabel={at.addingApplication}
+      dialogTitle={at.addDialogTitle}
+      nameLabel={at.nameLabel}
+      namePlaceholder={at.namePlaceholder}
+      onCreate={(label) => createApplicationAction({ customerId, label: label || undefined })}
+    />
+  );
+}
+
+/* 設置申請を削除するボタン（アクティブな申請対象）。confirm + destructive 配色。 */
+export function DeleteApplicationButton({
+  customerId,
+  applicationId,
+}: {
+  customerId: string;
+  applicationId: string;
+}) {
+  const at = labels.customer.detail.applicationTab;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onDelete() {
+    if (!window.confirm(at.deleteApplicationConfirm)) return;
+    start(async () => {
+      try {
+        await deleteApplicationAction({ customerId, applicationId });
+        toast.success(c.saved);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : c.unknownError);
+      }
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/30"
+      onClick={onDelete}
+      disabled={pending}
+    >
+      <Trash2 className="mr-1 size-4" />
+      {pending ? at.deletingApplication : at.deleteApplicationText}
+    </Button>
+  );
+}
+
+/* ── 設置申請サブタブ（client ラッパー・ConstructionSubTabs と同型）。申請 1 件 = 1 サブタブ。
+   ヘッダ右に「申請を追加」+「申請を削除」（アクティブ申請対象）を並置。各タブ本文は server で
+   生成した React element を content として受け取り描画する。タブ名は右クリックで改名。 ── */
+export function ApplicationSubTabs({
+  customerId,
+  tabs,
+}: {
+  customerId: string;
+  tabs: { id: string; label: string; rawLabel: string | null; content: React.ReactNode }[];
+}) {
+  const [active, setActive] = useState(tabs[0]?.id ?? "");
+  if (tabs.length === 0) return null;
+
+  return (
+    <Tabs value={active} onValueChange={setActive}>
+      <div className="flex items-center justify-between gap-2">
+        <TabsList variant="underline" className="flex-1">
+          {tabs.map((t) => (
+            <EditableTabTrigger
+              key={t.id}
+              value={t.id}
+              label={t.label}
+              customerId={customerId}
+              entity="application"
+              id={t.id}
+              rawLabel={t.rawLabel}
+            />
+          ))}
+        </TabsList>
+        <div className="flex shrink-0 items-center gap-2 pb-1">
+          <AddApplicationButton customerId={customerId} />
+          <DeleteApplicationButton customerId={customerId} applicationId={active} />
         </div>
       </div>
       {tabs.map((t) => (

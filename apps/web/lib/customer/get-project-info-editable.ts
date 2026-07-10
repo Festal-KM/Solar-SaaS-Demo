@@ -144,6 +144,8 @@ export interface ProjectApplicationEditable {
   submittedDate: string | null;
   approvedDate: string | null;
   grantedAmount: number | null;
+  // 設置申請サブタブの表示名（ユーザー編集・業務ラベル）。null はデフォルト表記（申請#N）。
+  tabLabel: string | null;
 }
 
 export interface ProjectInfoEditable {
@@ -296,6 +298,7 @@ export async function getCustomerProjectInfoEditable(
           },
         },
         applications: {
+          orderBy: { createdAt: "asc" },
           select: {
             id: true,
             status: true,
@@ -303,6 +306,7 @@ export async function getCustomerProjectInfoEditable(
             submittedDate: true,
             approvedDate: true,
             grantedAmount: true,
+            tabLabel: true,
           },
         },
       },
@@ -393,6 +397,7 @@ export async function getCustomerProjectInfoEditable(
           submittedDate: isoOrNull(a.submittedDate),
           approvedDate: isoOrNull(a.approvedDate),
           grantedAmount: decimalToNumber(a.grantedAmount),
+          tabLabel: a.tabLabel ?? null,
         });
       }
     }

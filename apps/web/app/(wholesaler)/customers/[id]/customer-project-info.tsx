@@ -10,9 +10,12 @@ import { labels } from "@/lib/i18n/labels";
 import {
   AccessoryInlineEdit,
   AddAccessoryButton,
+  AddApplicationButton,
   AddConstructionButton,
   AddContractButton,
   AddLoanReviewButton,
+  ApplicationInlineEdit,
+  ApplicationSubTabs,
   CallLogAddForm,
   CallLogDeleteButton,
   ConstructionInlineEdit,
@@ -37,6 +40,7 @@ import {
 } from "./project-info-edit";
 
 import type {
+  ProjectApplicationEditable,
   ProjectConstructionEditable,
   ProjectContractEditable,
   ProjectEquipmentEditable,
@@ -46,6 +50,7 @@ import type {
 import type {
   EquipmentCategoryKey,
   EquipmentItemDto,
+  ProjectApplicationDto,
   ProjectConstructionDto,
   ProjectContractDto,
   ProjectHearingDto,
@@ -963,6 +968,92 @@ export function ProjectConstructionList({
               editConstruction={editConstructionById.get(con.constructionId)}
             />
           ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 設置申請 1 件分（Application 行）の read-only 表示。二次店/閲覧のみで使う。
+function ApplicationReadonly({ app }: { app: ProjectApplicationDto }) {
+  const at = labels.customer.detail.applicationTab;
+  const f = p.fields;
+  return (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+      <MetaItem label={at.status} value={at.statusLabels[app.status] ?? app.status} />
+      <MetaItem label={f.applicationType} value={app.type} />
+      <MetaItem label={f.submittedDate} value={fmtDate(app.submittedDate)} />
+      <MetaItem label={f.approvedDate} value={fmtDate(app.approvedDate)} />
+      <MetaItem label={f.grantedAmount} value={fmtYen(app.grantedAmount)} />
+    </dl>
+  );
+}
+
+// 専用「設置申請」タブ — 設置申請（Application）を申請ごとのサブタブ（申請 #1/#2…）で
+// 表示・編集する（施工/ローン審査タブと同型）。編集可能（customer.update）のときは申請
+// レコードごとのサブタブ（右クリックで改名・申請追加/削除導線つき）で各サブタブ内を
+// ApplicationInlineEdit でインライン編集。申請 0 件は空状態 + 「申請を追加」。read-only
+// （二次店/閲覧）では従来どおり申請ごとにカードを縦積み表示（read-only）。
+export function ProjectApplicationList({
+  data,
+  editable = null,
+}: {
+  data: CustomerProjectInfoData;
+  editable?: ProjectInfoEditable | null;
+}) {
+  const at = labels.customer.detail.applicationTab;
+  const applications = data.applications;
+  const customerId = editable?.customerId ?? null;
+  const editApplicationById = new Map<string, ProjectApplicationEditable>(
+    (editable?.applications ?? []).map((a) => [a.applicationId, a]),
+  );
+
+  // 編集可能で申請 0 件のときは空メッセージ + 「申請を追加」。追加でサーバーが Application を
+  // （必要なら最小契約も）生成し、サブタブが現れる（施工/ローン審査タブと同じ挙動）。
+  if (applications.length === 0) {
+    if (customerId) {
+      return (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-mute-light">{at.emptyEditable}</p>
+          <AddApplicationButton customerId={customerId} />
+        </div>
+      );
+    }
+    return (
+      <p className="rounded-md border border-hairline-light p-4 text-sm text-mute-light">
+        {at.empty}
+      </p>
+    );
+  }
+
+  // 編集可能: 申請レコード 1 件 = 1 サブタブ（フラット）。デフォルトは「申請 #N」、
+  // tabLabel があればそれで上書き。右クリック改名（EditableTabTrigger）。
+  if (customerId) {
+    const tabs = applications.map((app, idx) => {
+      const edit = editApplicationById.get(app.applicationId);
+      return {
+        id: app.applicationId,
+        label: app.tabLabel ?? `${at.subtabHeading} #${idx + 1}`,
+        rawLabel: app.tabLabel ?? null,
+        content: edit ? (
+          <ApplicationInlineEdit customerId={customerId} initial={edit} />
+        ) : (
+          <ApplicationReadonly app={app} />
+        ),
+      };
+    });
+    return <ApplicationSubTabs customerId={customerId} tabs={tabs} />;
+  }
+
+  // 読み取り専用（二次店/閲覧）: 申請ごとにカードを縦積み。
+  return (
+    <div className="space-y-4">
+      {applications.map((app, idx) => (
+        <div key={app.applicationId} className="space-y-3 rounded-md border border-hairline-light p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-mute-light">
+            {app.tabLabel ?? `${at.subtabHeading} #${idx + 1}`}
+          </h3>
+          <ApplicationReadonly app={app} />
         </div>
       ))}
     </div>

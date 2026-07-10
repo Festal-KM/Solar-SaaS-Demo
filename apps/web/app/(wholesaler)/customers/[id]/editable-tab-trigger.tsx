@@ -19,7 +19,7 @@ import { labels } from "@/lib/i18n/labels";
 
 import { renameProjectTabAction } from "../actions";
 
-export type TabRenameEntity = "construction" | "contract" | "loanReview";
+export type TabRenameEntity = "construction" | "contract" | "loanReview" | "application";
 
 const MENU_WIDTH = 200;
 const EDITOR_WIDTH = 264;

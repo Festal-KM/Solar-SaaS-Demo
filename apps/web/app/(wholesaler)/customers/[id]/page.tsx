@@ -30,6 +30,7 @@ import { CustomerFiles } from "./customer-files";
 import { CustomerHistory } from "./customer-history";
 import {
   CustomerProjectInfo,
+  ProjectApplicationList,
   ProjectCurrentStateInfo,
   ProjectCallStatusSection,
   ProjectConstructionList,
@@ -43,7 +44,6 @@ import { EditAssigneeDialog } from "./edit-assignee-dialog";
 import { NegotiationStatusPanel } from "./negotiation-status-panel";
 import { NewActivityDialog } from "./new-activity-dialog";
 import { QuoteFiles } from "./quote-files";
-import { SubsidyStatusPanel } from "./status-panels";
 
 import type {
   ContractStatusValue,
@@ -617,19 +617,13 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </Card>
         </TabsContent>
 
-        {/* 設置申請状況 — ステータス（プルダウン）/ 申請種別 / 申請日 / 承認日 + 申請関連ドキュメント */}
+        {/* 設置申請 — 施工/ローン審査タブと同型。申請レコードごとのサブタブをトップに置き、各サブタブで
+            設置申請ステータス / 申請種別 / 申請日 / 交付決定日 / 交付額をインライン編集。
+            申請関連ドキュメントは顧客レベルのため最下部に残す。 */}
         <TabsContent value="subsidy" className="space-y-4">
           <Card className="p-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.subsidy}</h2>
-            <SubsidyStatusPanel
-              customerId={detail.id}
-              initial={{
-                status: detail.subsidy.status,
-                type: detail.subsidy.type,
-                submittedDate: detail.subsidy.submittedDate,
-                grantedDate: detail.subsidy.grantedDate,
-              }}
-            />
+            <ProjectApplicationList data={projectInfo} editable={projectInfoEditable} />
           </Card>
           <Card className="p-5">
             <h2 className="mb-3 text-sm font-semibold text-ink">{d.applicationFiles.title}</h2>

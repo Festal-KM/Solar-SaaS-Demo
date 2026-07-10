@@ -31,6 +31,8 @@ import {
   LoanReviewLogDefectResolveSchema,
   LoanReviewLogDeleteSchema,
   LoanReviewSaveSchema,
+  ProjectApplicationCreateSchema,
+  ProjectApplicationDeleteSchema,
   ProjectApplicationEditSchema,
   ProjectConstructionCreateSchema,
   ProjectConstructionDeleteSchema,
@@ -51,6 +53,8 @@ import { revalidatePath } from "next/cache";
 import { NotFoundError } from "@/lib/errors";
 import { withServerActionContext } from "@/lib/tenancy/server-action";
 
+import { deriveSubsidyStatusValue } from "./constants";
+
 import type { TxClient } from "@/lib/tenancy/with-tenant";
 import type {
   CustomerCallLogCreateInput,
@@ -64,6 +68,8 @@ import type {
   LoanReviewLogDefectResolveInput,
   LoanReviewLogDeleteInput,
   LoanReviewSaveInput,
+  ProjectApplicationCreateInput,
+  ProjectApplicationDeleteInput,
   ProjectApplicationEditInput,
   ProjectConstructionCreateInput,
   ProjectConstructionDeleteInput,
@@ -1419,13 +1425,24 @@ export const renameProjectTabAction = withServerActionContext<
         data: { tabLabel: parsed.label },
         select: { id: true },
       });
-    } else {
+    } else if (parsed.entity === "loanReview") {
       const lr = await tx.loanReview.findFirst({
         where: { id: parsed.id, customerId: parsed.customerId },
         select: { id: true },
       });
       if (!lr) throw new NotFoundError("ローン審査が見つかりません");
       await tx.loanReview.update({
+        where: { id: parsed.id },
+        data: { tabLabel: parsed.label },
+        select: { id: true },
+      });
+    } else {
+      const app = await tx.application.findFirst({
+        where: { id: parsed.id, contract: { customerId: parsed.customerId } },
+        select: { id: true },
+      });
+      if (!app) throw new NotFoundError("申請情報が見つかりません");
+      await tx.application.update({
         where: { id: parsed.id },
         data: { tabLabel: parsed.label },
         select: { id: true },
@@ -1437,7 +1454,138 @@ export const renameProjectTabAction = withServerActionContext<
   },
 );
 
-// 認定・設備（申請）（Application）。
+// 顧客の全 Application（contracts 経由・RLS スコープ内）から代表の設置申請状況を導出し、
+// Customer.subsidyStatus 列へ write-on-save する。一覧(data.ts)は引き続き Customer.subsidyStatus を
+// read/filter するため、この書き戻しで表示・フィルタと申請レコードの整合を保つ。申請 0 件は
+// deriveSubsidyStatusValue が "not_applied" を返す。純関数（enum→値マップ + 代表導出）は
+// constants.ts に集約（deriveSubsidyStatusValue）。
+async function recomputeCustomerSubsidyStatus(
+  tx: TxClient,
+  customerId: string,
+): Promise<void> {
+  const apps = await tx.application.findMany({
+    where: { contract: { customerId } },
+    select: { status: true },
+  });
+  await tx.customer.update({
+    where: { id: customerId },
+    data: { subsidyStatus: deriveSubsidyStatusValue(apps) },
+    select: { id: true },
+  });
+}
+
+// createApplicationAction は設置申請サブタブを 1 件追加する。Application は Contract に属するため、
+// 顧客の既存契約（最古）に紐づける。契約が 1 件も無い場合は最小 Deal+Contract を生成してから
+// Application を作る（createConstructionAction と同型）。status=DRAFT default。作成後に
+// Customer.subsidyStatus を再計算する。三段イディオム（auth→customer.update→withTenant）。
+export interface CreateApplicationResult {
+  customerId: string;
+  applicationId: string;
+}
+
+export const createApplicationAction = withServerActionContext<
+  ProjectApplicationCreateInput,
+  CreateApplicationResult
+>(
+  { action: "customer.update" },
+  async ({ tx, ctx, input }) => {
+    const parsed = ProjectApplicationCreateSchema.parse(input);
+
+    const customer = await tx.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { id: true, wholesalerId: true, ownerRelationshipId: true },
+    });
+    if (!customer) throw new NotFoundError("顧客が見つかりません");
+
+    // 申請を紐づける契約を決める。既存契約（最古）が無ければ最小 Deal+Contract を生成。
+    let contract = await tx.contract.findFirst({
+      where: { customerId: parsed.customerId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (!contract) {
+      const settings = await tx.wholesalerSettings.findUnique({
+        where: { wholesalerId: customer.wholesalerId },
+        select: { cancelDeadlineDays: true },
+      });
+      const seed = buildDemoContractSeed({ cancelDeadlineDays: settings?.cancelDeadlineDays });
+      const ownerType = ctx.dealerId ? "DEALER" : "WHOLESALER";
+      const deal = await tx.deal.create({
+        data: {
+          customerId: parsed.customerId,
+          ownerType,
+          ownerUserId: ctx.actorUserId,
+          ownerRelationshipId: customer.ownerRelationshipId,
+          status: seed.dealStatus,
+        },
+        select: { id: true },
+      });
+      contract = await tx.contract.create({
+        data: {
+          wholesalerId: customer.wholesalerId,
+          dealId: deal.id,
+          customerId: parsed.customerId,
+          ownerRelationshipId: customer.ownerRelationshipId,
+          contractDate: seed.contractDate,
+          contractAmount: seed.contractAmount,
+          cancelDeadline: seed.cancelDeadline,
+          hasBattery: seed.hasBattery,
+          status: seed.status,
+          createdBy: ctx.actorUserId,
+        },
+        select: { id: true },
+      });
+    }
+
+    const created = await tx.application.create({
+      data: {
+        contractId: contract.id,
+        // Application.type は DB 上 NOT NULL。追加時は空で作り、インライン編集で埋める。
+        type: "",
+        status: "DRAFT",
+        // fileKeys は String[] NOT NULL・デフォルト無しのため明示的に空配列で作成。
+        fileKeys: [],
+        tabLabel: parsed.label?.trim() || null,
+      },
+      select: { id: true },
+    });
+
+    await recomputeCustomerSubsidyStatus(tx, parsed.customerId);
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId, applicationId: created.id };
+  },
+);
+
+// 設置申請の削除。applicationId が customerId 配下（contract.customerId）であることを検証してから
+// 削除し、Customer.subsidyStatus を再計算する。
+export const deleteApplicationAction = withServerActionContext<
+  ProjectApplicationDeleteInput,
+  SaveProjectSectionResult
+>(
+  { action: "customer.update" },
+  async ({ tx, input }) => {
+    const parsed = ProjectApplicationDeleteSchema.parse(input);
+
+    const app = await tx.application.findFirst({
+      where: {
+        id: parsed.applicationId,
+        contract: { customerId: parsed.customerId },
+      },
+      select: { id: true },
+    });
+    if (!app) throw new NotFoundError("申請情報が見つかりません");
+
+    await tx.application.delete({ where: { id: parsed.applicationId } });
+
+    await recomputeCustomerSubsidyStatus(tx, parsed.customerId);
+
+    revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
+    return { customerId: parsed.customerId };
+  },
+);
+
+// 認定・設備（申請）（Application）。更新後に Customer.subsidyStatus を再計算する。
 export const saveProjectApplicationAction = withServerActionContext<
   ProjectApplicationEditInput,
   SaveProjectSectionResult
@@ -1474,6 +1622,8 @@ export const saveProjectApplicationAction = withServerActionContext<
       },
       select: { id: true },
     });
+
+    await recomputeCustomerSubsidyStatus(tx, parsed.customerId);
 
     revalidatePath(`${LIST_PATH}/${parsed.customerId}`);
     return { customerId: parsed.customerId };

@@ -2458,6 +2458,35 @@ export const labels = {
         nameLabel: "施工名",
         namePlaceholder: "例）1棟目（空欄で「施工 #N」）",
       },
+      // 設置申請タブ（施工/ローン審査タブと同型）。申請レコードごとのサブタブ。
+      applicationTab: {
+        empty: "設置申請はまだありません。",
+        // 編集可能（customer.update）で申請が 0 件のときの空状態（追加導線つき）。
+        emptyEditable: "設置申請はまだありません。「申請を追加」から作成してください。",
+        // 申請サブタブ見出し（申請 #1 / #2 …）。
+        subtabHeading: "申請",
+        // 申請サブタブの追加/削除。
+        addApplication: "申請を追加",
+        addingApplication: "申請を追加中…",
+        deleteApplication: "この申請を削除",
+        deleteApplicationText: "申請を削除",
+        deletingApplication: "削除中…",
+        deleteApplicationConfirm: "この申請を削除しますか？",
+        // 追加時に申請名を入力するダイアログ。
+        addDialogTitle: "設置申請を追加",
+        nameLabel: "申請名",
+        namePlaceholder: "例）補助金申請（空欄で「申請 #N」）",
+        // 設置申請ステータス（ApplicationStatus enum → ラベル）。select 用。
+        statusLabels: {
+          DRAFT: "申請準備中",
+          SUBMITTED: "申請済",
+          APPROVED: "完了",
+          REJECTED: "修正対応中",
+          CANCELLED: "申請前",
+        } as Record<string, string>,
+        // 設置申請の項目ラベル。
+        status: "設置申請ステータス",
+      },
       // サブタブ名の右クリック改名 UX（施工/ローン審査/契約で共用）。
       tabRename: {
         editTabName: "タブ名を編集する",

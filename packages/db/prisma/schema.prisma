@@ -1726,6 +1726,8 @@ model Application {
   expectedAmount Decimal?          @db.Decimal(14, 2)
   grantedAmount  Decimal?          @db.Decimal(14, 2)
   note           String?
+  // 設置申請サブタブの表示名（ユーザー編集・業務ラベル）。null はデフォルト表記（申請#N）。
+  tabLabel       String?
   fileKeys       String[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt

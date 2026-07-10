@@ -119,6 +119,8 @@ export interface ProjectApplicationDto {
   submittedDate: string | null;
   approvedDate: string | null;
   grantedAmount: number | null;
+  // 設置申請サブタブの表示名（ユーザー編集・業務ラベル）。null はデフォルト表記（申請#N）。
+  tabLabel: string | null;
 }
 
 export interface ProjectActivityDto {

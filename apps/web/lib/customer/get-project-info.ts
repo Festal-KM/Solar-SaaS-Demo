@@ -304,6 +304,7 @@ async function loadProjectInfo(
         },
       },
       applications: {
+        orderBy: { createdAt: "asc" },
         select: {
           id: true,
           status: true,
@@ -311,6 +312,7 @@ async function loadProjectInfo(
           submittedDate: true,
           approvedDate: true,
           grantedAmount: true,
+          tabLabel: true,
         },
       },
       grossProfit: {
@@ -511,6 +513,7 @@ async function loadProjectInfo(
       submittedDate: isoOrNull(a.submittedDate),
       approvedDate: isoOrNull(a.approvedDate),
       grantedAmount: decimalToNumber(a.grantedAmount),
+      tabLabel: a.tabLabel ?? null,
     })),
   );
 

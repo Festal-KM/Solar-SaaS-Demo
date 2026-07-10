@@ -777,7 +777,7 @@ export type ProjectConstructionEditInput = z.infer<typeof ProjectConstructionEdi
 // 表記へフォールバック）。業務ラベルのため PII 非該当。認可は customer.update（呼び出し側）。
 export const ProjectTabRenameSchema = z.object({
   customerId: z.string().min(1),
-  entity: z.enum(["construction", "contract", "loanReview"]),
+  entity: z.enum(["construction", "contract", "loanReview", "application"]),
   id: z.string().min(1),
   label: z
     .string()
@@ -801,6 +801,24 @@ export const ProjectApplicationEditSchema = z.object({
 });
 
 export type ProjectApplicationEditInput = z.infer<typeof ProjectApplicationEditSchema>;
+
+// 設置申請の新規作成（申請サブタブの追加）。customerId + 任意の申請名（tabLabel）。Server Action が
+// 顧客の既存契約に紐づけて Application を生成する（契約が無ければ最小契約も併せて生成）。
+export const ProjectApplicationCreateSchema = z.object({
+  customerId: z.string().min(1),
+  // 追加時に入力する申請名（サブタブ表示名 tabLabel）。空欄はデフォルト表記（申請#N）。
+  label: z.string().max(40, "申請名は 40 文字以内で入力してください").optional(),
+});
+
+export type ProjectApplicationCreateInput = z.infer<typeof ProjectApplicationCreateSchema>;
+
+// 設置申請の削除。applicationId は customerId 配下（contract.customerId）であることを Server Action が検証する。
+export const ProjectApplicationDeleteSchema = z.object({
+  customerId: z.string().min(1),
+  applicationId: z.string().min(1),
+});
+
+export type ProjectApplicationDeleteInput = z.infer<typeof ProjectApplicationDeleteSchema>;
 
 // ---------------------------------------------------------------------------
 // コール状況（コールタブ 4 セクション）（Customer 列）.
