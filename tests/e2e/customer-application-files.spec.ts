@@ -1,24 +1,30 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// 設置申請状況タブ「申請関連ドキュメント」ファイルアップロード機能 (F-031 拡張 / docs/05).
+// 顧客ファイルのカテゴリ分離 (F-031 拡張 / docs/05).
 //
 // 既存の関連ファイル基盤（CustomerFile + R2 pre-signed URL）を流用し、ファイルを用途で
-// 2 カテゴリに分離する:
+// カテゴリ分離する:
 //   - GENERAL     = 「関連ファイル」タブ
-//   - APPLICATION = 「設置申請状況」タブの「申請関連ドキュメント」
+//   - APPLICATION = 「設置申請」タブの各申請サブタブ内「関連ドキュメント」（CustomerFile.applicationId
+//                   で個別の Application に紐づく。顧客レベルの単一カードは撤去済み）。
 //
-// 検証対象:
-//   1. 設置申請状況タブに「申請関連ドキュメント」見出しと APPLICATION ファイルが表示される。
-//      その APPLICATION ファイルは「関連ファイル」タブには出ない。
-//   2. 関連ファイルタブに GENERAL ファイルが表示される。その GENERAL ファイルは
-//      設置申請状況タブの申請関連ドキュメントには出ない（相互排他）。
+// 検証対象（新レイアウト）:
+//   1. 関連ファイルタブに GENERAL ファイルが表示される。同タブには APPLICATION カテゴリの
+//      ファイルは出ない（カテゴリ分離）。
+//   2. 設置申請タブは applicationId 未紐付けの APPLICATION ファイル（孤立）を顧客レベルでは
+//      表示しない。申請を持たない顧客では空状態（emptyEditable）が描画され、旧「申請関連
+//      ドキュメント」カードが存在しないことを確認する。
 //
 // R2 は本環境では placeholder 認証のため実 PUT は通らない。よって E2E では seed が
 // 投入したメタデータのみのファイル行（一覧描画は DB 行だけで成立）でカテゴリ分離を検証する。
-// seed（seedCustomerActivities, i===0）は先頭サンプル顧客「佐藤 一馬」に
-//   GENERAL: 見積書サンプル.pdf / APPLICATION: 設置申請書サンプル.pdf
-// を冪等投入する。一覧の表示名は MASKED（"***様"）だが検索クエリは DB の生 name を
-// contains マッチするため、query=佐藤 一馬 で該当顧客 1 行を決定的に取得できる。
+// seed（seedCustomerFiles）は先頭サンプル顧客「佐藤 一馬」に
+//   GENERAL: 見積書サンプル.pdf / APPLICATION: 設置申請書サンプル.pdf（applicationId=null）
+// を冪等投入する。この顧客は契約前（pre_visit）で Application を持たないため、設置申請タブは
+// 空状態になる。一覧の表示名は MASKED（"***様"）だが検索クエリは DB の生 name を contains
+// マッチするため、query=佐藤 一馬 で該当顧客 1 行を決定的に取得できる。
+//
+// 申請サブタブ内の「関連ドキュメント」section（applicationId 紐付けのアップロード UI）の
+// 描画検証は customer-application-subtabs.spec.ts が担う。
 //
 // 認証は demo@solar-saas.demo / Demo1234!（WHOLESALER_ADMIN, 2FA off, seed 投入済）。
 // Seed は tests/e2e/global-setup.ts で全 spec 起動前に 1 回だけ実行される。
@@ -50,35 +56,31 @@ async function gotoSeededCustomerDetail(page: Page): Promise<void> {
   await page.waitForURL(/\/customers\/[^/]+$/, { timeout: 90_000 });
 }
 
-test.describe("設置申請状況タブ 申請関連ドキュメント（カテゴリ分離）", () => {
+test.describe("顧客ファイル カテゴリ分離（GENERAL / APPLICATION）", () => {
   // dev サーバの cold-compile を吸収するため 30s → 120s に拡張。
   test.describe.configure({ timeout: 120_000 });
 
-  test("設置申請タブに APPLICATION ファイルが表示され、関連ファイルタブには出ない", async ({
+  test("関連ファイルタブに GENERAL のみ表示、設置申請タブは顧客レベルの申請ファイルカードを持たない", async ({
     page,
   }) => {
     await signInAsDemo(page);
     await gotoSeededCustomerDetail(page);
 
-    // 設置申請状況タブへ切り替え。
+    // 設置申請タブへ切り替え。この顧客は Application を持たないため空状態（emptyEditable）。
+    // 旧「申請関連ドキュメント」顧客レベルカードは撤去済み → 見出しも APPLICATION ファイルも出ない。
     await page.getByRole("tab", { name: "設置申請" }).click();
     const subsidyPanel = page.getByRole("tabpanel");
     await expect(subsidyPanel).toBeVisible();
-
-    // 「申請関連ドキュメント」見出し + APPLICATION ファイルが描画される。
-    await expect(
-      subsidyPanel.getByRole("heading", { name: "申請関連ドキュメント" }),
-    ).toBeVisible();
-    await expect(subsidyPanel.getByText(APPLICATION_FILE)).toBeVisible();
-    // GENERAL ファイルは設置申請タブには出ない。
+    await expect(subsidyPanel.getByText("設置申請はまだありません。", { exact: false })).toBeVisible();
+    await expect(subsidyPanel.getByRole("heading", { name: "申請関連ドキュメント" })).toHaveCount(0);
+    // applicationId 未紐付けの APPLICATION ファイルは顧客レベルでは表示されない（孤立）。
+    await expect(subsidyPanel.getByText(APPLICATION_FILE)).toHaveCount(0);
     await expect(subsidyPanel.getByText(GENERAL_FILE)).toHaveCount(0);
 
-    // 関連ファイルタブへ切り替え。
+    // 関連ファイルタブへ切り替え。GENERAL ファイルのみ表示され、APPLICATION ファイルは出ない。
     await page.getByRole("tab", { name: "関連ファイル" }).click();
     const filesPanel = page.getByRole("tabpanel");
     await expect(filesPanel).toBeVisible();
-
-    // 関連ファイルタブには GENERAL ファイルのみ。APPLICATION ファイルは出ない。
     await expect(filesPanel.getByText(GENERAL_FILE)).toBeVisible();
     await expect(filesPanel.getByText(APPLICATION_FILE)).toHaveCount(0);
   });
