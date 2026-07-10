@@ -984,7 +984,6 @@ function ApplicationReadonly({ app }: { app: ProjectApplicationDto }) {
       <MetaItem label={f.applicationType} value={app.type} />
       <MetaItem label={f.submittedDate} value={fmtDate(app.submittedDate)} />
       <MetaItem label={f.approvedDate} value={fmtDate(app.approvedDate)} />
-      <MetaItem label={f.grantedAmount} value={fmtYen(app.grantedAmount)} />
     </dl>
   );
 }

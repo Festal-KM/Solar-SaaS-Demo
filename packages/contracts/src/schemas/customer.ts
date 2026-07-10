@@ -295,6 +295,9 @@ export const CustomerFileRecordSchema = z.object({
   contentType: z.string().nullable().optional(),
   size: z.number().int().nonnegative().nullable().optional(),
   category: CustomerFileCategoryEnum.default("GENERAL"),
+  // 設置申請（Application）に紐づく関連ドキュメントのとき。Server Action 側で当該申請が
+  // 同一 customer 配下か検証する。未指定は顧客レベルの汎用ファイル。
+  applicationId: z.string().min(1).nullable().optional(),
 });
 
 export type CustomerFileRecordInput = z.infer<typeof CustomerFileRecordSchema>;
@@ -494,6 +497,9 @@ export const PresignCustomerFileSchema = z.object({
   fileName: z.string().min(1).max(255),
   contentType: z.string().min(1).max(255),
   category: CustomerFileCategoryEnum.default("GENERAL"),
+  // 設置申請（Application）に紐づく関連ドキュメントのとき。Server Action 側で当該申請が
+  // 同一 customer 配下か検証する。未指定は顧客レベルの汎用ファイル。
+  applicationId: z.string().min(1).nullable().optional(),
 });
 
 export type PresignCustomerFileInput = z.infer<typeof PresignCustomerFileSchema>;

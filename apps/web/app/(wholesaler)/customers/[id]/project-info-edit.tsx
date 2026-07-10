@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { labels } from "@/lib/i18n/labels";
 import { cn } from "@/lib/utils";
 
+import { CustomerFiles } from "./customer-files";
 import { EditableTabTrigger } from "./editable-tab-trigger";
 
 import {
@@ -2631,18 +2632,25 @@ export function ConstructionSubTabs({
   );
 }
 
-// 設置申請ステータス（ApplicationStatus enum）の値域。select の提示順。
-const APPLICATION_STATUS_VALUES = [
-  "DRAFT",
-  "SUBMITTED",
-  "APPROVED",
-  "REJECTED",
-  "CANCELLED",
-] as const;
+// 設置申請ステータスは業務上 4 値（申請前 / 申請済み / 修正対応中 / 完了）。select は
+// 代表 4 値のみ提示し、既存 enum（CANCELLED 含む）を正規化する（施工の
+// normalizeConstructionStatus4 と同要領）:
+//   申請前=DRAFT / 申請済み=SUBMITTED / 修正対応中=REJECTED / 完了=APPROVED /
+//   CANCELLED(legacy) → 申請前(DRAFT)。一覧チップは constants.applicationEnumToSubsidyValue と対応。
+const APPLICATION_STATUS_4 = ["DRAFT", "SUBMITTED", "REJECTED", "APPROVED"] as const;
+function normalizeApplicationStatus4(status: string): (typeof APPLICATION_STATUS_4)[number] {
+  if (status === "SUBMITTED") return "SUBMITTED";
+  if (status === "REJECTED") return "REJECTED";
+  if (status === "APPROVED") return "APPROVED";
+  // DRAFT / CANCELLED(legacy)
+  return "DRAFT";
+}
 
 /* 設置申請 1 件分のインライン編集（ローン審査タブと同型のフラットなインライン編集）。
-   設置申請ステータス / 申請種別 / 申請日 / 交付決定日 / 交付額を編集し saveProjectApplicationAction
-   で保存する。保存後サーバー側で Customer.subsidyStatus を再計算。 */
+   申請ステータス（4 値）/ 申請種別 / 申請日 / 承認日を編集し saveProjectApplicationAction
+   で保存する（交付額は UI から撤去。列・スキーマは残置し save では送らない）。保存後
+   サーバー側で Customer.subsidyStatus を再計算。末尾に各申請に紐づく関連ドキュメントの
+   アップロードセクション（CustomerFiles / applicationId 紐付け）を併設する。 */
 export function ApplicationInlineEdit({
   customerId,
   initial,
@@ -2653,30 +2661,25 @@ export function ApplicationInlineEdit({
   const at = labels.customer.detail.applicationTab;
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [status, setStatus] = useState(initial.status);
+  const [status, setStatus] = useState<string>(normalizeApplicationStatus4(initial.status));
   const [type, setType] = useState(initial.type ?? "");
   const [submittedDate, setSubmittedDate] = useState(toDateInput(initial.submittedDate));
   const [approvedDate, setApprovedDate] = useState(toDateInput(initial.approvedDate));
-  const [grantedAmount, setGrantedAmount] = useState(
-    initial.grantedAmount != null ? String(initial.grantedAmount) : "",
-  );
 
+  const initStatus = normalizeApplicationStatus4(initial.status);
   const initSubmitted = toDateInput(initial.submittedDate);
   const initApproved = toDateInput(initial.approvedDate);
-  const initGranted = initial.grantedAmount != null ? String(initial.grantedAmount) : "";
   const dirty =
-    status !== initial.status ||
+    status !== initStatus ||
     type !== (initial.type ?? "") ||
     submittedDate !== initSubmitted ||
-    approvedDate !== initApproved ||
-    grantedAmount !== initGranted;
+    approvedDate !== initApproved;
 
   function reset() {
-    setStatus(initial.status);
+    setStatus(initStatus);
     setType(initial.type ?? "");
     setSubmittedDate(initSubmitted);
     setApprovedDate(initApproved);
-    setGrantedAmount(initGranted);
   }
 
   function onSave() {
@@ -2686,11 +2689,10 @@ export function ApplicationInlineEdit({
           customerId,
           contractId: initial.contractId,
           applicationId: initial.applicationId,
-          status: status as (typeof APPLICATION_STATUS_VALUES)[number],
+          status: status as (typeof APPLICATION_STATUS_4)[number],
           type: strOrNull(type),
           submittedDate: submittedDate || null,
           approvedDate: approvedDate || null,
-          grantedAmount: numOrNull(grantedAmount),
         });
         toast.success(c.saved);
         router.refresh();
@@ -2702,11 +2704,11 @@ export function ApplicationInlineEdit({
 
   const id = initial.applicationId;
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <FormField label={at.status} htmlFor={`ap-status-${id}`}>
           <select id={`ap-status-${id}`} className={FIELD} value={status} onChange={(e) => setStatus(e.target.value)}>
-            {APPLICATION_STATUS_VALUES.map((v) => (
+            {APPLICATION_STATUS_4.map((v) => (
               <option key={v} value={v}>
                 {at.statusLabels[v]}
               </option>
@@ -2722,11 +2724,21 @@ export function ApplicationInlineEdit({
         <FormField label={f.approvedDate} htmlFor={`ap-approved-${id}`}>
           <input id={`ap-approved-${id}`} type="date" className={FIELD} value={approvedDate} onChange={(e) => setApprovedDate(e.target.value)} />
         </FormField>
-        <FormField label={f.grantedAmount} htmlFor={`ap-granted-${id}`}>
-          <MoneyInput id={`ap-granted-${id}`} value={grantedAmount} onChange={setGrantedAmount} />
-        </FormField>
       </div>
       <InlineFooter onSave={onSave} onCancel={reset} pending={pending} dirty={dirty} />
+
+      {/* 関連ドキュメント — この申請に紐づくファイルのアップロード + 一覧。 */}
+      <section className="border-t border-hairline-light pt-4">
+        <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute-light">
+          {at.relatedDocuments}
+        </h4>
+        <CustomerFiles
+          customerId={customerId}
+          files={initial.files}
+          category="APPLICATION"
+          applicationId={initial.applicationId}
+        />
+      </section>
     </div>
   );
 }

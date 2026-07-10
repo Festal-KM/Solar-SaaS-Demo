@@ -87,22 +87,23 @@ export function deriveConstructionStatusValue(
   return "not_started";
 }
 
-// ApplicationStatus(enum) → 設置申請状況の 5 値（SubsidyStatusValue）マッピング。
-// DRAFT=申請準備中 / SUBMITTED=申請済 / APPROVED=完了 / REJECTED=修正対応中 /
-// CANCELLED=申請前（labels.subsidyStatusLabels と整合）。
+// ApplicationStatus(enum) → 設置申請状況（SubsidyStatusValue）マッピング。設置申請は
+// 業務上 4 値（申請前 / 申請済み / 修正対応中 / 完了）。ApplicationInlineEdit の
+// normalizeApplicationStatus4 と対応させる:
+//   DRAFT=申請前(not_applied) / SUBMITTED=申請済み(applied) / REJECTED=修正対応中(revising) /
+//   APPROVED=完了(completed) / CANCELLED(legacy)=申請前(not_applied)。
 export function applicationEnumToSubsidyValue(status: string): SubsidyStatusValue {
   if (status === "APPROVED") return "completed";
   if (status === "SUBMITTED") return "applied";
   if (status === "REJECTED") return "revising";
-  if (status === "DRAFT") return "preparing";
-  // CANCELLED
+  // DRAFT / CANCELLED
   return "not_applied";
 }
 
 // 顧客の Application 群から代表設置申請の状況を導出する。固定優先順位
-// 「完了(completed) > 申請済(applied) > 修正対応中(revising) > 申請準備中(preparing) >
-// 申請前(not_applied)」で分類する。申請が無ければ "not_applied"。この導出結果を
-// Customer.subsidyStatus に write-on-save で書き込み、一覧(data.ts)の read/filter と整合させる。
+// 「完了(completed) > 申請済み(applied) > 修正対応中(revising) > 申請前(not_applied)」で
+// 分類する。申請が無ければ "not_applied"。この導出結果を Customer.subsidyStatus に
+// write-on-save で書き込み、一覧(data.ts)の read/filter と整合させる。
 export function deriveSubsidyStatusValue(
   applications: { status: string }[],
 ): SubsidyStatusValue {
@@ -111,7 +112,6 @@ export function deriveSubsidyStatusValue(
   if (values.includes("completed")) return "completed";
   if (values.includes("applied")) return "applied";
   if (values.includes("revising")) return "revising";
-  if (values.includes("preparing")) return "preparing";
   return "not_applied";
 }
 

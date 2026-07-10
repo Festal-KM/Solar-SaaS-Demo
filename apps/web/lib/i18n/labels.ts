@@ -2061,7 +2061,7 @@ export const labels = {
           vendorName: "対応事業者名",
           applicationType: "申請種別",
           submittedDate: "申請日",
-          approvedDate: "交付決定日",
+          approvedDate: "承認日",
           grantedAmount: "交付額",
           // コールタブ 4 セクション。
           callMaekakuStatus: "マエカクステータス",
@@ -2476,16 +2476,19 @@ export const labels = {
         addDialogTitle: "設置申請を追加",
         nameLabel: "申請名",
         namePlaceholder: "例）補助金申請（空欄で「申請 #N」）",
-        // 設置申請ステータス（ApplicationStatus enum → ラベル）。select 用。
+        // 設置申請ステータス（ApplicationStatus enum → ラベル）。業務上 4 値
+        // （申請前 / 申請済み / 修正対応中 / 完了）。CANCELLED(legacy) は申請前へ正規化。
         statusLabels: {
-          DRAFT: "申請準備中",
-          SUBMITTED: "申請済",
+          DRAFT: "申請前",
+          SUBMITTED: "申請済み",
           APPROVED: "完了",
           REJECTED: "修正対応中",
           CANCELLED: "申請前",
         } as Record<string, string>,
         // 設置申請の項目ラベル。
         status: "設置申請ステータス",
+        // 各申請に紐づく関連ドキュメント（アップロード）セクションの見出し。
+        relatedDocuments: "関連ドキュメント",
       },
       // サブタブ名の右クリック改名 UX（施工/ローン審査/契約で共用）。
       tabRename: {

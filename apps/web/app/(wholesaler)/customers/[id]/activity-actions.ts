@@ -30,11 +30,30 @@ import { presignDownload, presignUpload } from "@solar/storage";
 import { NotFoundError } from "@/lib/errors";
 import { withServerActionContext } from "@/lib/tenancy/server-action";
 
+import type { TxClient } from "@/lib/tenancy/with-tenant";
+
 const DETAIL_PATH = (id: string) => `/customers/${id}`;
 
 function sanitizeFileName(name: string): string {
   // R2 オブジェクトキーで使えない文字を `_` に潰す（パス区切り含む）。
   return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 200) || "file";
+}
+
+// 設置申請（Application）が当該 customer 配下か検証する（RLS スコープ内で相関 EXISTS）。
+// 越境（他テナント/他顧客）の applicationId は NotFoundError。null/undefined は素通り。
+async function assertApplicationInCustomer(
+  tx: TxClient,
+  applicationId: string | null | undefined,
+  customerId: string,
+): Promise<void> {
+  if (!applicationId) return;
+  const app = await tx.application.findFirst({
+    where: { id: applicationId, contract: { customerId } },
+    select: { id: true },
+  });
+  if (!app) {
+    throw new NotFoundError("設置申請が見つかりません");
+  }
 }
 
 export interface PresignCustomerFileResult {
@@ -58,6 +77,7 @@ export const presignCustomerFileUpload = withServerActionContext<
     if (!customer) {
       throw new NotFoundError("顧客が見つかりません");
     }
+    await assertApplicationInCustomer(tx, parsed.applicationId, parsed.customerId);
 
     const prefix =
       parsed.category === "APPLICATION"
@@ -170,10 +190,12 @@ export const createCustomerFile = withServerActionContext<CustomerFileRecordInpu
     if (!customer) {
       throw new NotFoundError("顧客が見つかりません");
     }
+    await assertApplicationInCustomer(tx, parsed.applicationId, parsed.customerId);
 
     const file = await tx.customerFile.create({
       data: {
         customerId: parsed.customerId,
+        applicationId: parsed.applicationId ?? null,
         fileKey: parsed.fileKey,
         fileName: parsed.fileName,
         contentType: parsed.contentType ?? null,

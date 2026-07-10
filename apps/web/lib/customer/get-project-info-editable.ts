@@ -33,6 +33,26 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+// 表示用のアップロード日時（data.ts の formatDateTime と同形式）。
+function formatFileDateTime(d: Date): string {
+  return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+// 表示用のファイル種別ラベル（拡張子優先、無ければ contentType サブタイプ）。
+function fileTypeLabel(fileName: string, contentType: string | null): string {
+  const m = fileName.match(/\.([a-zA-Z0-9]+)$/);
+  if (m) return m[1]!.toUpperCase();
+  if (contentType) {
+    const sub = contentType.split("/")[1];
+    if (sub) return sub.toUpperCase();
+  }
+  return "FILE";
+}
+
 export interface ProjectOverviewEditable {
   electricBill: string | null;
   household: string | null;
@@ -136,6 +156,15 @@ export interface ProjectLoanReviewEditable {
   reviewedAt: string | null;
 }
 
+// 各申請に紐づく関連ドキュメントの表示メタ（CustomerFiles が受ける RelatedFile と同形状）。
+// ダウンロード URL は開封時に presign する既存方式のため、ここではメタデータのみ。
+export interface ProjectApplicationFile {
+  id: string;
+  name: string;
+  type: string;
+  date: string;
+}
+
 export interface ProjectApplicationEditable {
   applicationId: string;
   contractId: string;
@@ -146,6 +175,8 @@ export interface ProjectApplicationEditable {
   grantedAmount: number | null;
   // 設置申請サブタブの表示名（ユーザー編集・業務ラベル）。null はデフォルト表記（申請#N）。
   tabLabel: string | null;
+  // この申請（CustomerFile.applicationId）に紐づく関連ドキュメント一覧。
+  files: ProjectApplicationFile[];
 }
 
 export interface ProjectInfoEditable {
@@ -398,7 +429,40 @@ export async function getCustomerProjectInfoEditable(
           approvedDate: isoOrNull(a.approvedDate),
           grantedAmount: decimalToNumber(a.grantedAmount),
           tabLabel: a.tabLabel ?? null,
+          files: [],
         });
+      }
+    }
+
+    // 各申請に紐づく関連ドキュメント（CustomerFile.applicationId）を 1 クエリで取得し割当。
+    // customerId スコープで越境を防ぐ（RLS + 明示 where の二重）。
+    if (applications.length > 0) {
+      const appIds = applications.map((a) => a.applicationId);
+      const fileRows = await tx.customerFile.findMany({
+        where: { customerId, applicationId: { in: appIds } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          applicationId: true,
+          fileName: true,
+          contentType: true,
+          createdAt: true,
+        },
+      });
+      const filesByAppId = new Map<string, ProjectApplicationFile[]>();
+      for (const f of fileRows) {
+        if (!f.applicationId) continue;
+        const list = filesByAppId.get(f.applicationId) ?? [];
+        list.push({
+          id: f.id,
+          name: f.fileName,
+          type: fileTypeLabel(f.fileName, f.contentType),
+          date: formatFileDateTime(f.createdAt),
+        });
+        filesByAppId.set(f.applicationId, list);
+      }
+      for (const a of applications) {
+        a.files = filesByAppId.get(a.applicationId) ?? [];
       }
     }
 

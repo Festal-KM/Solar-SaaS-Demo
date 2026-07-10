@@ -26,9 +26,17 @@ interface CustomerFilesProps {
   // GENERAL=関連ファイルタブ、APPLICATION=設置申請タブの申請関連ドキュメント、
   // PV_DRAWING=施工状況タブの PV設置図面、CONTRACT=契約状況タブの契約関連ファイル。
   category?: "GENERAL" | "APPLICATION" | "PV_DRAWING" | "CONTRACT";
+  // 設置申請（Application）ごとに紐づけるとき。指定時は presign/create に渡し
+  // CustomerFile.applicationId に保存する（当該申請が同一 customer 配下かはサーバーが検証）。
+  applicationId?: string;
 }
 
-export function CustomerFiles({ customerId, files, category = "GENERAL" }: CustomerFilesProps) {
+export function CustomerFiles({
+  customerId,
+  files,
+  category = "GENERAL",
+  applicationId,
+}: CustomerFilesProps) {
   const d = labels.customer.detail;
   const c = labels.common;
   const router = useRouter();
@@ -57,6 +65,7 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
           fileName: file.name,
           contentType: file.type || "application/octet-stream",
           category,
+          applicationId: applicationId ?? null,
         });
         const res = await fetch(putUrl, { method: "PUT", headers, body: file });
         if (!res.ok) throw new Error(`アップロードに失敗しました（${res.status}）`);
@@ -67,6 +76,7 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
           contentType: file.type || null,
           size: file.size,
           category,
+          applicationId: applicationId ?? null,
         });
         recorded = true;
       } catch (err) {
@@ -89,7 +99,7 @@ export function CustomerFiles({ customerId, files, category = "GENERAL" }: Custo
     <div className="space-y-4">
       {/* ファイルピッカー */}
       <FileDropzone
-        inputId={`customer-file-input-${category.toLowerCase()}`}
+        inputId={`customer-file-input-${category.toLowerCase()}${applicationId ? `-${applicationId}` : ""}`}
         onFiles={handleFilesSelected}
         uploadingNames={uploadingNames}
         isUploading={uploadingNames.length > 0}

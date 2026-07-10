@@ -618,20 +618,12 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         </TabsContent>
 
         {/* 設置申請 — 施工/ローン審査タブと同型。申請レコードごとのサブタブをトップに置き、各サブタブで
-            設置申請ステータス / 申請種別 / 申請日 / 交付決定日 / 交付額をインライン編集。
-            申請関連ドキュメントは顧客レベルのため最下部に残す。 */}
+            申請ステータス / 申請種別 / 申請日 / 承認日をインライン編集し、末尾で当該申請に紐づく
+            関連ドキュメントをアップロードする（per-application）。 */}
         <TabsContent value="subsidy" className="space-y-4">
           <Card className="p-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">{d.cards.subsidy}</h2>
             <ProjectApplicationList data={projectInfo} editable={projectInfoEditable} />
-          </Card>
-          <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold text-ink">{d.applicationFiles.title}</h2>
-            <CustomerFiles
-              customerId={detail.id}
-              category="APPLICATION"
-              files={detail.applicationFiles}
-            />
           </Card>
         </TabsContent>
 

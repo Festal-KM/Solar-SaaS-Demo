@@ -1230,6 +1230,8 @@ model CustomerFile {
   id               String               @id @default(cuid())
   customerId       String
   activityId       String?
+  // 各設置申請（Application）に紐づく関連ドキュメント。null は顧客レベルの汎用ファイル。
+  applicationId    String?
   fileKey          String
   fileName         String
   contentType      String?
@@ -1238,12 +1240,14 @@ model CustomerFile {
   uploadedByUserId String
   createdAt        DateTime             @default(now())
 
-  customer Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  activity CustomerActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  customer    Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  activity    CustomerActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  application Application?      @relation(fields: [applicationId], references: [id], onDelete: SetNull)
 
   @@index([customerId, createdAt])
   @@index([customerId, category, createdAt])
   @@index([activityId])
+  @@index([applicationId])
 }
 
 // 顧客ごとのチャット（担当者間のやり取り）。テナント分離は Customer.wholesalerId
@@ -1732,7 +1736,8 @@ model Application {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  contract Contract @relation(fields: [contractId], references: [id])
+  contract Contract       @relation(fields: [contractId], references: [id])
+  files    CustomerFile[]
 
   @@index([contractId])
 }
